@@ -1,0 +1,109 @@
+name: infocode
+
+x-app: &app
+  image: infocode-app:local
+  build:
+    context: .
+    args:
+      REQUIREMENTS: requirements-postgres.txt
+  environment: &environment
+    DEBUG: "0"
+    SECRET_KEY: ${SECRET_KEY:?Run deploy/configure.py first}
+    APP_DOMAIN: ${APP_DOMAIN:?Set APP_DOMAIN}
+    ALLOWED_HOSTS: ${APP_DOMAIN}
+    CSRF_TRUSTED_ORIGINS: https://${APP_DOMAIN}
+    DB_ENGINE: postgresql
+    DB_HOST: db
+    DB_NAME: infocode
+    DB_USER: infocode
+    DB_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+    LOG_DIR: /data/logs
+    TRUSTED_PROXY: "*"
+    WEB_THREADS: "12"
+  volumes:
+    - media:/app/uploads
+    - logs:/data
+    - backups:/backups
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "3"
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: infocode
+      POSTGRES_USER: infocode
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U infocode"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+  migrate:
+    <<: *app
+    command: ["python", "manage.py", "migrate", "--noinput"]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+  web:
+    <<: *app
+    # No public web/database port: only Caddy can reach the app from outside.
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "deploy/healthcheck.py"]
+      interval: 30s
+      timeout: 10s
+      start_period: 20s
+      retries: 3
+    restart: unless-stopped
+  maintenance:
+    <<: *app
+    command: ["python", "manage.py", "run_maintenance", "--backup-dir", "/backups", "--keep", "3"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      web:
+        condition: service_healthy
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  pgdata:
+  media:
+  logs:
+  backups:
+  caddy_data:
+  caddy_config:

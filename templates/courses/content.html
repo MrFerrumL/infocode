@@ -1,0 +1,11 @@
+{% load course_text %}
+<div class="course-content">
+{% for block in step.content_blocks.all %}
+  {% if block.kind == 'text' %}<div class="rich-content">{{ block.text|course_html }}</div>
+  {% elif block.kind == 'image' %}<figure><a href="{% url 'download' 'course-block' block.pk %}" target="_blank" rel="noopener"><img loading="lazy" src="{% url 'download' 'course-block' block.pk %}?preview=1" alt="{{ block.caption|default:'Иллюстрация к уроку' }}"></a>{% if block.caption %}<figcaption>{{ block.caption }}</figcaption>{% endif %}</figure>
+  {% elif block.kind == 'video' %}<figure><video class="step-video" data-position-url="{% url 'video_position' step.pk %}?block={{ block.pk }}" controls preload="metadata" src="{% url 'download' 'course-block' block.pk %}"></video>{% if block.caption %}<figcaption>{{ block.caption }}</figcaption>{% endif %}</figure>
+  {% elif block.kind == 'code' %}{% include 'partials/code.html' with code=block.text %}{% if block.caption %}<p class="muted">{{ block.caption }}</p>{% endif %}
+  {% elif block.kind == 'file' %}<a class="file-link" href="{% url 'download' 'course-block' block.pk %}">↓ {{ block.caption|default:'Скачать материал' }}</a>
+  {% elif block.kind == 'divider' %}<hr>{% endif %}
+{% endfor %}
+</div>

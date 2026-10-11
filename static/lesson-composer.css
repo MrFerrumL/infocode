@@ -1,0 +1,24 @@
+.lesson-plan-section{border-top:1px solid #e8e7f0;padding-top:24px;margin-top:8px}
+.slide-palette{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px;margin:20px 0}
+.slide-palette .slide-preset{display:grid;grid-template-columns:32px 1fr;align-content:start;gap:6px 10px;min-width:0;padding:15px;text-align:left;border:1px solid #e4e1f1;border-radius:12px;background:#fcfbff;color:#28243d;text-decoration:none;font:inherit;cursor:pointer;transition:border-color .15s,background .15s}
+.slide-palette .slide-preset:hover{border-color:#7962df;background:#f4f0ff}
+.slide-palette .slide-preset:focus-visible,.assessment-shortcuts button:focus-visible{outline:3px solid #b4a5fc;outline-offset:2px}
+.slide-preset-icon{grid-row:span 2;display:grid;place-items:center;align-self:start;height:32px;background:#ebe5ff;color:#6045c9;border-radius:8px;font-size:16px;font-weight:700}
+.slide-preset small{font-size:12px;line-height:1.45;color:#777184;font-weight:400}
+.plan-heading{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:24px}
+.slide-plan{padding:0;list-style:none;display:grid;gap:9px}
+.slide-plan-row{display:grid;grid-template-columns:20px 30px minmax(145px,1fr) minmax(140px,1.3fr) auto;align-items:center;gap:10px;padding:12px;border:1px solid #e3e0ef;background:#fff;border-radius:12px}
+.slide-plan-row input,.slide-plan-row select{min-width:0;width:100%;padding:10px;font-size:14px}
+.plan-row-actions{display:flex;gap:5px}
+.plan-row-actions button,.assessment-shortcuts button{border:1px solid #ddd7ef;background:white;color:#49405e;border-radius:7px;padding:8px 10px;cursor:pointer;font:inherit;font-size:13px}
+.plan-row-actions button:disabled{opacity:.35;cursor:default}
+.slide-plan-row.dragging{opacity:.5}
+.plan-empty{border:1px dashed #cec7e6;border-radius:12px;padding:24px;text-align:center;color:#777184;background:#faf9fe}
+.mix-note{border-left:3px solid #9178ee;background:#f7f4ff;padding:16px 18px;border-radius:0 10px 10px 0;margin-top:16px}
+.mix-note p{font-size:14px;line-height:1.6;margin:7px 0 0;color:#6e6383}
+.slide-edit-link{display:inline-block;margin-top:6px;font-size:13px}
+.assessment-shortcuts{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.assessment-shortcuts button[aria-pressed=true]{background:#eee8ff;border-color:#927ae9;color:#5337bc}
+[data-assessment-panel][hidden],[data-plan-empty][hidden]{display:none!important}
+@media(max-width:1100px){.slide-plan-row{grid-template-columns:18px 25px 1fr 1fr}.plan-row-actions{grid-column:3/-1;justify-content:flex-end}}
+@media(max-width:650px){.slide-palette{grid-template-columns:repeat(2,minmax(0,1fr))}.slide-palette .slide-preset{padding:11px;grid-template-columns:1fr}.slide-preset-icon{grid-row:auto}.slide-plan-row{grid-template-columns:18px 25px 1fr}.slide-plan-row input{grid-column:3}.plan-row-actions{grid-column:3}.plan-heading{align-items:flex-start;flex-direction:column}}

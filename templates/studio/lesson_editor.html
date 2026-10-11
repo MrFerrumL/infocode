@@ -1,0 +1,30 @@
+{% extends 'base.html' %}
+{% block content %}
+<a class="back-link" href="{% url 'course_editor' section.course_id %}">← Содержание курса</a>
+<div class="page-heading"><div><div class="eyebrow">{{ section.title }} / СВОБОДНЫЙ КОНСТРУКТОР</div><h1>{{ lesson.title|default:'Новый урок' }}</h1><p>Вы выбираете, что будет на каждом слайде и в каком порядке.</p></div>{% if first_step %}<a class="button secondary" href="{% url 'learn_step' first_step.pk %}" target="_blank" rel="noopener">Предпросмотр ↗</a>{% endif %}</div>
+<details class="panel course-settings" {% if not lesson.pk or form.errors %}open{% endif %}>
+<summary>{% if lesson.pk %}Настройки урока{% else %}Название и содержание урока{% endif %}</summary>
+<form data-autosave {% if not lesson.pk %}data-lesson-composer{% endif %} method="post" class="stack section">{% csrf_token %}
+{{ form.non_field_errors }}{{ form.title.as_field_group }}
+<div class="form-grid"><div>{{ form.minutes.as_field_group }}</div><div class="check-field">{{ form.published }}{{ form.published.label_tag }}{{ form.published.errors }}</div></div>
+{% if not lesson.pk %}
+{{ form.slide_plan }}{{ form.slide_plan.errors }}
+<section class="lesson-plan-section" aria-labelledby="plan-heading"><span class="eyebrow">СЛАЙДЫ УРОКА</span><h2 id="plan-heading">Начните с того, что нужно вам</h2><p class="muted">Нажимайте на карточки в любом порядке. Один тип можно добавить несколько раз: например, тест → практика → практика. Содержание заполните после сохранения урока.</p>
+<div class="slide-palette">{% for type in slide_types %}<button type="button" class="slide-preset" data-add-slide="{{ type.key }}"><span class="slide-preset-icon" aria-hidden="true">{{ type.icon }}</span><strong>{{ type.label }}</strong><small>{{ type.hint }}</small></button>{% endfor %}</div>
+<div class="plan-heading"><h3>Ваша последовательность</h3><span class="muted" data-plan-count>0 слайдов</span></div>
+<ol class="slide-plan" data-slide-plan aria-label="Порядок новых слайдов"></ol>
+<p class="plan-empty" data-plan-empty>Пока пусто. Выберите первый слайд выше или сохраните пустой урок и добавьте слайды позже.</p>
+<p class="composer-status" role="status" data-plan-status></p>
+<div class="mix-note"><strong>Всё вместе на одном слайде</strong><p>«Теория + задание» открывает общий редактор: текст, фото, видео, файлы и задача находятся на одной странице ученика. В любом слайде можно включить тест или поменять тип задания.</p></div>
+<noscript><p class="notice">Сохраните урок, затем добавляйте слайды по ссылкам в редакторе. Для сборки последовательности на этой странице включите JavaScript.</p></noscript>
+</section>{% endif %}
+<button class="button">Сохранить урок</button>
+</form></details>
+{% if lesson.pk %}
+<details class="panel lesson-add-panel section" {% if not steps %}open{% endif %}><summary>+ Добавить слайд: теория, тест, практика или материалы</summary><p class="muted">Любой порядок и любое количество повторений. В каждом слайде можно совместить материалы и задание.</p>
+<div class="slide-palette">{% for type in slide_types %}<a class="slide-preset" href="{% url 'step_create' lesson.pk %}?kind={{ type.kind }}{% if type.key == 'boolean' or type.key == 'multiple' %}&amp;preset={{ type.key }}{% endif %}"><span class="slide-preset-icon" aria-hidden="true">{{ type.icon }}</span><strong>{{ type.label }}</strong><small>{{ type.hint }}</small></a>{% endfor %}</div></details>
+<div class="section-heading section"><h2>Слайды урока · {{ steps|length }}</h2><span class="muted">Меняйте порядок за ⠿ или стрелками. «Копия» повторяет слайд.</span></div>
+<div class="panel" data-reorder="step" data-parent="{{ lesson.pk }}">{% for step in steps %}<div class="structure-row" data-row-id="{{ step.pk }}"><span class="step-type">{{ forloop.counter }}</span><div><a href="{% url 'step_editor' lesson.pk step.pk %}"><strong>{{ step.title }}</strong></a><small>{{ step.get_kind_display }} · {{ step.points }} балл. · {% if step.published %}Опубликован{% else %}Черновик{% endif %}</small><a class="slide-edit-link" href="{% url 'step_editor' lesson.pk step.pk %}">Собрать содержимое →</a></div>
+<form class="inline-actions" method="post" action="{% url 'structure_action' 'step' step.pk %}">{% csrf_token %}<button name="action" value="up" aria-label="Слайд вверх">↑</button><button name="action" value="down" aria-label="Слайд вниз">↓</button><button name="action" value="duplicate">Копия</button><button name="action" value="archive">В корзину</button><button name="action" value="toggle">{% if step.published %}Скрыть{% else %}Опубликовать{% endif %}</button></form></div>{% empty %}<p class="muted">Добавьте первый слайд: выберите карточку выше.</p>{% endfor %}</div>
+{% else %}{{ slide_types|json_script:'slide-types-data' }}{% endif %}
+{% endblock %}

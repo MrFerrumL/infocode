@@ -1,0 +1,462 @@
+import csv
+import math
+import re
+from datetime import timedelta
+from pathlib import Path
+from django.conf import settings
+from django.contrib import messages
+from django.contrib.auth import login
+from django.contrib.auth.decorators import login_required, user_passes_test
+from django.core.exceptions import ValidationError
+from django.core.paginator import Paginator
+from django.db import transaction
+from django.db.models import Count, Q
+from django.http import FileResponse, Http404, HttpResponse, StreamingHttpResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
+from django.views.decorators.http import require_POST
+from .forms import RegisterForm, AnswerForm, VariantForm, TaskForm
+from .models import Topic, Task, Practice, Bookmark, Variant, ExamAttempt, ExamAnswer, Section, Lesson, LessonProgress, LessonFile, VariantItem, TaskBlock, Course, Step, StudentAssignment
+from .security import form_token, claim_submission
+from .services import check_answer, create_variant, finish_attempt, expire_attempts
+
+staff_required = user_passes_test(lambda u: u.is_active and u.is_staff)
+
+
+def visible_variants(user):
+    qs = Variant.objects.all()
+    if not user.is_staff:
+        qs = qs.filter(published=True).filter(Q(assigned_only=False) & (Q(group__isnull=True) | Q(group__students=user)) | Q(assigned_only=True, assignment__recipients__student=user))
+    elif not user.is_superuser:
+        qs = qs.filter(Q(assigned_only=False) | Q(creator=user))
+    return qs.distinct()
+
+
+def register(request):
+    if request.user.is_authenticated:
+        return redirect('dashboard')
+    form = RegisterForm(request.POST or None)
+    if request.method == 'POST' and form.is_valid():
+        user = form.save()
+        login(request, user)
+        from django.utils.http import url_has_allowed_host_and_scheme
+        target = request.GET.get('next', '')
+        return redirect(target if url_has_allowed_host_and_scheme(target, allowed_hosts={request.get_host()}) else 'dashboard')
+    return render(request, 'registration/register.html', {'form': form, 'next': request.GET.get('next', '')})
+
+
+def topic_stats(user):
+    solved = set(Practice.objects.filter(user=user, correct=True).values_list('task_id', flat=True))
+    topics = list(Topic.objects.annotate(total=Count('tasks', filter=Q(tasks__published=True, tasks__archived_at=None))))
+    task_map = dict(Task.objects.filter(published=True).values_list('id', 'topic_id'))
+    for topic in topics:
+        topic.solved = sum(1 for pk in solved if task_map.get(pk) == topic.id)
+        topic.percent = round(topic.solved / topic.total * 100) if topic.total else 0
+    return topics, solved
+
+
+@login_required
+def dashboard(request):
+    expire_attempts(request.user)
+    topics, solved = topic_stats(request.user)
+    attempts = Practice.objects.filter(user=request.user)
+    total = attempts.count()
+    accuracy = round(attempts.filter(correct=True).count() / total * 100) if total else 0
+    from .course_services import available_courses, current_progress
+    completed_steps = set(current_progress(request.user).values_list('step_id', flat=True))
+    available_lessons = Lesson.objects.filter(published=True, section__course__in=available_courses(request.user)).prefetch_related('steps')
+    done = [lesson.pk for lesson in available_lessons if (ids := {s.pk for s in lesson.steps.all() if s.published}) and ids.issubset(completed_steps)]
+    next_lesson = available_lessons.exclude(id__in=done).first()
+    return render(request, 'dashboard.html', {'topics': topics, 'solved_count': len(solved), 'accuracy': accuracy, 'total': total, 'completed_lessons': len(done), 'next_lesson': next_lesson, 'recent': ExamAttempt.objects.filter(user=request.user, submitted_at__isnull=False).select_related('variant')[:4], 'nav': 'dashboard'})
+
+
+@login_required
+def catalog(request):
+    topics, solved = topic_stats(request.user)
+    qs = Task.objects.filter(published=True).select_related('topic')
+    number = request.GET.get('number', '')
+    if number.isdigit():
+        qs = qs.filter(topic__number=int(number))
+    difficulty = request.GET.get('difficulty', '')
+    if difficulty:
+        qs = qs.filter(difficulty=difficulty)
+    query = request.GET.get('q', '').strip()
+    if query:
+        qs = qs.filter(Q(title__icontains=query) | Q(tags__icontains=query) | Q(subtopic__icontains=query) | Q(statement__icontains=query) | Q(content_blocks__text__icontains=query, content_blocks__purpose='statement') | (Q(id=int(query)) if query.isdigit() else Q(pk__isnull=True))).distinct()
+    state = request.GET.get('state', '')
+    saved = set(Bookmark.objects.filter(user=request.user).values_list('task_id', flat=True))
+    if state == 'saved':
+        qs = qs.filter(id__in=saved)
+    elif state == 'mistakes':
+        # Latest practice answer must be wrong; a later correct answer clears the mistake.
+        latest = {}
+        for task_id, correct in Practice.objects.filter(user=request.user).values_list('task_id', 'correct'):
+            latest.setdefault(task_id, correct)
+        qs = qs.filter(id__in=[pk for pk, correct in latest.items() if not correct])
+    elif state == 'new':
+        qs = qs.exclude(id__in=solved)
+    page = Paginator(qs, 12).get_page(request.GET.get('page'))
+    for task in page:
+        task.solved = task.id in solved
+        task.saved = task.id in saved
+    params = request.GET.copy()
+    params.pop('page', None)
+    return render(request, 'catalog.html', {'levels': Task.LEVELS, 'topics': topics, 'page': page, 'number': number, 'difficulty': difficulty, 'query': query, 'state': state, 'params': params.urlencode(), 'nav': 'catalog'})
+
+
+@login_required
+@transaction.atomic
+def task_detail(request, pk):
+    tasks = Task.objects.select_related('topic')
+    if not request.user.is_staff:
+        tasks = tasks.filter(published=True)
+    task = get_object_or_404(tasks, pk=pk)
+    latest = Practice.objects.filter(user=request.user, task=task).first() if task.code_mode != 'off' else None
+    form = AnswerForm(request.POST or None, mode=task.code_mode, initial={'python_code': latest.python_code if latest else ''})
+    result = None
+    if request.method == 'POST' and form.is_valid() and claim_submission(request, f'task:{pk}'):
+        result = Practice.objects.create(user=request.user, task=task, answer=form.cleaned_data['answer'], python_code=form.cleaned_data.get('python_code', ''), correct=check_answer(form.cleaned_data['answer'], task.answer))
+    history = Practice.objects.filter(user=request.user, task=task)[:5]
+    can_reveal = request.user.is_staff or result is not None or history.exists()
+    return render(request, 'task.html', {'submit_token': form_token(request.user, f'task:{pk}'), 'task': task, 'form': form, 'result': result, 'history': history, 'can_reveal': can_reveal, 'saved': Bookmark.objects.filter(user=request.user, task=task).exists(), 'nav': 'catalog'})
+
+
+@login_required
+@require_POST
+def bookmark(request, pk):
+    task = get_object_or_404(Task, pk=pk, published=True)
+    obj, created = Bookmark.objects.get_or_create(user=request.user, task=task)
+    if not created:
+        obj.delete()
+    return redirect('task', pk=pk)
+
+
+@login_required
+def variants(request):
+    kind = 'test' if request.path.startswith('/tests') else 'exam'
+    qs = visible_variants(request.user).filter(kind=kind).annotate(task_count=Count('items')).prefetch_related('topics')
+    return render(request, 'variants.html', {'variants': qs, 'kind': kind, 'nav': 'tests' if kind == 'test' else 'variants'})
+
+
+@login_required
+def variant_detail(request, pk):
+    expire_attempts(request.user)
+    variant = get_object_or_404(visible_variants(request.user), pk=pk)
+    return render(request, 'variant.html', {'variant': variant, 'attempts': ExamAttempt.objects.filter(user=request.user, variant=variant), 'nav': 'variants'})
+
+
+@login_required
+@require_POST
+@transaction.atomic
+def start_exam(request, pk):
+    variant = get_object_or_404(visible_variants(request.user), pk=pk)
+    if not variant.items.exists():
+        messages.error(request, 'В работе пока нет заданий.')
+        return redirect('variant', pk=pk)
+    from .models import AssignmentRecipient
+    from .assignments import assignment_block
+    expire_attempts(request.user)
+    deadline = timezone.now() + timedelta(minutes=variant.duration)
+    if variant.assigned_only:
+        recipient = get_object_or_404(AssignmentRecipient.objects.select_for_update().select_related('assignment'), assignment__variant=variant, student=request.user)
+        blocked = assignment_block(recipient)
+        if blocked:
+            messages.error(request, blocked)
+            return redirect('assignment_detail', pk=recipient.assignment_id)
+        if not recipient.assignment.allow_late:
+            deadline = min(deadline, recipient.assignment.due_at)
+    # Unique constraint also prevents two simultaneous active attempts.
+    attempt, _ = ExamAttempt.objects.get_or_create(user=request.user, variant=variant, submitted_at=None, defaults={'deadline': deadline})
+    return redirect('exam', pk=attempt.pk)
+
+
+@login_required
+@transaction.atomic
+def exam(request, pk):
+    from .python_answers import PythonCodeForm
+    attempt = get_object_or_404(ExamAttempt.objects.select_for_update().select_related('variant'), pk=pk, user=request.user)
+    if attempt.submitted_at:
+        return redirect('result', pk=pk)
+    if timezone.now() >= attempt.deadline:
+        finish_attempt(attempt)
+        messages.info(request, 'Время закончилось. Проверены последние сохранённые ответы.')
+        return redirect('result', pk=pk)
+    items = list(attempt.variant.items.all())
+    if attempt.variant.assigned_only:
+        from .models import AssignmentRecipient
+        recipient = get_object_or_404(AssignmentRecipient.objects.select_related('assignment'), assignment__variant=attempt.variant, student=request.user)
+        if not recipient.assignment.active:
+            messages.error(request, 'Назначение закрыто преподавателем.')
+            return redirect('assignment_detail', pk=recipient.assignment_id)
+    answers = {a.item_id: a for a in attempt.answers.all()}
+    valid_code = True
+    for item in items:
+        saved = answers.get(item.pk)
+        item.value = request.POST.get(f'answer_{item.pk}', '')[:250] if request.method == 'POST' else saved.answer if saved else ''
+        required_code = request.method == 'POST' and request.POST.get('action') == 'submit' and bool(item.value.strip()) and item.code_mode == 'required'
+        # Required only on final submission; browser validation must still allow saving drafts.
+        item.code_form = PythonCodeForm(request.POST if request.method == 'POST' else None, mode=item.code_mode, required=required_code, use_required_attribute=False, prefix=f'code_{item.pk}', initial={'python_code': saved.python_code if saved else ''})
+        if request.method == 'POST' and not item.code_form.is_valid():
+            valid_code = False
+    if request.method == 'POST' and valid_code:
+        if not claim_submission(request, f'exam:{pk}'):
+            return redirect('exam', pk=pk)
+        for item in items:
+            ExamAnswer.objects.update_or_create(attempt=attempt, item=item, defaults={'answer': item.value, 'python_code': item.code_form.cleaned_data.get('python_code', '')})
+        if request.POST.get('action') == 'submit':
+            finish_attempt(attempt)
+            return redirect('result', pk=pk)
+        messages.success(request, 'Ответы сохранены. Можно продолжить позже до окончания времени.')
+        return redirect('exam', pk=pk)
+    if request.method == 'POST' and not valid_code:
+        messages.error(request, 'Проверьте Python-код в отмеченных заданиях. Ответы пока не сохранены; введённые данные остались в форме.')
+    remaining = max(0, math.ceil((attempt.deadline - timezone.now()).total_seconds() / 60))
+    return render(request, 'exam.html', {'submit_token': form_token(request.user, f'exam:{pk}'), 'attempt': attempt, 'items': items, 'remaining': remaining, 'nav': 'variants'})
+
+
+@login_required
+def result(request, pk):
+    qs = ExamAttempt.objects.select_related('variant', 'user')
+    if not request.user.is_staff:
+        qs = qs.filter(user=request.user)
+    elif not request.user.is_superuser:
+        qs = qs.filter(Q(user=request.user) | Q(user__assigned_teachers__teacher=request.user)).distinct()
+    attempt = get_object_or_404(qs, pk=pk, submitted_at__isnull=False)
+    total = attempt.variant.items.count()
+    return render(request, 'result.html', {'attempt': attempt, 'answers': attempt.answers.select_related('item'), 'total': total, 'percent': round(attempt.score / total * 100) if total else 0, 'nav': 'variants'})
+
+
+@login_required
+def course(request):
+    sections = Section.objects.prefetch_related('lessons')
+    completed = set(LessonProgress.objects.filter(user=request.user, passed=True).values_list('lesson_id', flat=True))
+    count = Lesson.objects.filter(published=True).count()
+    return render(request, 'course.html', {'sections': sections, 'completed': completed, 'count': count, 'percent': round(len(completed) / count * 100) if count else 0, 'nav': 'course'})
+
+
+@login_required
+def lesson(request, pk):
+    from .course_services import can_edit, available_courses
+    from .course_views import player
+    lesson_obj = get_object_or_404(Lesson.objects.select_related('section__course'), pk=pk)
+    course_obj = lesson_obj.section.course
+    if course_obj:
+        if not available_courses(request.user).filter(pk=course_obj.pk).exists():
+            raise Http404
+        first = lesson_obj.steps.first() if can_edit(request.user, course_obj) else lesson_obj.steps.filter(published=True).first()
+        if first:
+            from .models import Enrollment
+            if not can_edit(request.user, course_obj) and not Enrollment.objects.filter(user=request.user, course=course_obj).exists():
+                return redirect('course_overview', pk=course_obj.pk)
+            return player(request, first.pk)
+    lesson = get_object_or_404(Lesson, pk=pk, published=True)
+    questions = list(lesson.questions.all())
+    feedback = None
+    if request.method == 'POST' and questions:
+        feedback = []
+        for q in questions:
+            selected = request.POST.get(f'q_{q.pk}', '')
+            correct = selected == str(q.correct_index)
+            feedback.append({'question': q, 'correct': correct})
+        score = sum(row['correct'] for row in feedback)
+        progress, _ = LessonProgress.objects.get_or_create(user=request.user, lesson=lesson)
+        progress.score = max(progress.score, score)
+        progress.passed = progress.passed or score == len(questions)
+        progress.save()
+    return render(request, 'lesson.html', {'lesson': lesson, 'questions': questions, 'feedback': feedback, 'passed': LessonProgress.objects.filter(user=request.user, lesson=lesson, passed=True).exists(), 'nav': 'course'})
+
+
+@login_required
+def stats(request):
+    expire_attempts(request.user)
+    topics, solved = topic_stats(request.user)
+    return render(request, 'stats.html', {'topics': topics, 'solved_count': len(solved), 'attempts': ExamAttempt.objects.filter(user=request.user, submitted_at__isnull=False).select_related('variant'), 'nav': 'stats'})
+
+
+@staff_required
+def teacher(request):
+    expire_attempts()
+    results = ExamAttempt.objects.filter(submitted_at__isnull=False).select_related('user', 'variant')
+    results = results.filter(user__assigned_teachers__teacher=request.user).distinct().annotate(item_count=Count('variant__items', distinct=True)).order_by('-submitted_at', '-pk')
+    if request.GET.get('export') == 'csv':
+        response = HttpResponse(content_type='text/csv; charset=utf-8')
+        response['Content-Disposition'] = 'attachment; filename="results.csv"'
+        response.write('\ufeff')
+        writer = csv.writer(response, delimiter=';')
+        writer.writerow(['Ученик', 'Работа', 'Верно', 'Всего', 'Сдано'])
+        def safe_cell(value):
+            s = str(value)
+            return "'" + s if s.startswith(('=', '+', '-', '@', '\t', '\r')) else s
+        for a in results:
+            writer.writerow([safe_cell(a.user.username), safe_cell(a.variant.title), a.score, a.item_count, timezone.localtime(a.submitted_at).isoformat()])
+        return response
+    from .workspace import home_context
+    context = home_context(request.user)
+    context.update({'variants': Variant.objects.filter(creator=request.user, assigned_only=False).annotate(task_count=Count('items'))[:12], 'results': results[:8], 'nav': 'teacher'})
+    return render(request, 'teacher.html', context)
+
+
+@staff_required
+def variant_create(request):
+    form = VariantForm(request.POST or None, initial={'kind': request.GET.get('kind', 'exam')})
+    from .assignments import own_groups
+    form.fields['group'].queryset = own_groups(request.user)
+    if request.method == 'POST' and form.is_valid():
+        try:
+            variant = create_variant(creator=request.user, **form.cleaned_data)
+        except ValidationError as exc:
+            form.add_error(None, exc)
+        else:
+            messages.success(request, 'Работа создана. Её можно открыть или распечатать.')
+            return redirect('variant', pk=variant.pk)
+    return render(request, 'variant_form.html', {'form': form, 'nav': 'teacher'})
+
+
+@staff_required
+def task_create(request):
+    form = TaskForm(request.POST or None, request.FILES or None)
+    if request.method == 'POST' and form.is_valid():
+        task = form.save()
+        messages.success(request, f'Задание #{task.pk} добавлено.')
+        return redirect('teacher')
+    return render(request, 'task_form.html', {'form': form, 'nav': 'teacher'})
+
+
+@staff_required
+@require_POST
+def publish_variant(request, pk):
+    variant = get_object_or_404(Variant.objects.all() if request.user.is_superuser else Variant.objects.filter(creator=request.user), pk=pk)
+    variant.published = not variant.published
+    variant.save(update_fields=['published'])
+    return redirect('teacher')
+
+
+@staff_required
+def print_variant(request, pk):
+    variant = get_object_or_404(Variant.objects.all() if request.user.is_superuser else Variant.objects.filter(creator=request.user), pk=pk)
+    return render(request, 'print.html', {'variant': variant, 'answers': request.GET.get('answers') == '1'})
+
+
+@login_required
+def download(request, kind, pk):
+    video = False
+    inline_image = False
+    if kind in ('homework-image', 'homework-file'):
+        from .models import HomeworkSubmission
+        obj = get_object_or_404(HomeworkSubmission.objects.select_related('recipient__assignment'), pk=pk)
+        if request.user.pk not in (obj.recipient.student_id, obj.recipient.assignment.teacher_id) and not request.user.is_superuser:
+            raise Http404
+        f = obj.image if kind == 'homework-image' else obj.file
+        inline_image = kind == 'homework-image'
+    elif kind == 'library':
+        from .models import MediaAsset
+        if not request.user.is_staff:
+            raise Http404
+        obj = get_object_or_404(MediaAsset.objects.all() if request.user.is_superuser else MediaAsset.objects.filter(owner=request.user), pk=pk)
+        f, video, inline_image = obj.file, obj.kind == 'video', obj.kind == 'image'
+    elif kind == 'course-block':
+        from .models import StepContentBlock
+        from .course_views import step_access
+        obj = get_object_or_404(StepContentBlock.objects.select_related('step__lesson__section__course'), pk=pk)
+        step_access(request.user, obj.step)
+        if not obj.step.use_blocks or obj.kind not in ('image', 'video', 'file'):
+            raise Http404
+        f = getattr(obj, obj.kind)
+        video, inline_image = obj.kind == 'video', obj.kind == 'image'
+    elif kind in ('step-video', 'step-image', 'step-file'):
+        from .course_views import step_access
+        obj = get_object_or_404(Step.objects.select_related('lesson__section__course'), pk=pk)
+        step_access(request.user, obj)
+        if obj.use_blocks:
+            raise Http404
+        f = obj.video if kind == 'step-video' else obj.image if kind == 'step-image' else obj.file
+        video = kind == 'step-video'
+        inline_image = kind == 'step-image'
+    elif kind == 'cover':
+        from .course_services import available_courses
+        obj = get_object_or_404(available_courses(request.user), pk=pk)
+        f = obj.cover
+        inline_image = True
+    elif kind == 'block':
+        qs = TaskBlock.objects.all() if request.user.is_staff else TaskBlock.objects.filter(task__published=True)
+        obj = get_object_or_404(qs, pk=pk)
+        if obj.purpose == 'solution' and not request.user.is_staff and not Practice.objects.filter(user=request.user, task=obj.task).exists():
+            raise Http404
+        f = obj.image if obj.kind == 'image' else obj.file
+        inline_image = obj.kind == 'image'
+    elif kind == 'snapshot':
+        obj = get_object_or_404(VariantItem, pk=pk, variant__in=visible_variants(request.user))
+        try:
+            index = int(request.GET.get('block', '-1'))
+            if index < 0:
+                raise ValueError
+            block = obj.blocks[index]
+        except (ValueError, IndexError):
+            raise Http404
+        if block.get('purpose') == 'solution' and not request.user.is_staff and not ExamAttempt.objects.filter(user=request.user, variant=obj.variant, submitted_at__isnull=False).exists():
+            raise Http404
+        inline_image = block['kind'] == 'image'
+        f = block.get('image') if inline_image else block.get('file')
+    elif kind == 'task':
+        obj = get_object_or_404(Task, pk=pk, published=True)
+        f = obj.attachment
+    elif kind == 'lesson':
+        obj = get_object_or_404(LessonFile, pk=pk, lesson__published=True)
+        f = obj.file
+        from .course_services import available_courses
+        if obj.lesson.section.course_id and not available_courses(request.user).filter(pk=obj.lesson.section.course_id).exists():
+            raise Http404
+    elif kind == 'video':
+        obj = get_object_or_404(Lesson, pk=pk, published=True)
+        f = obj.video
+        video = True
+        from .course_services import available_courses
+        if obj.section.course_id and not available_courses(request.user).filter(pk=obj.section.course_id).exists():
+            raise Http404
+    elif kind == 'item':
+        obj = get_object_or_404(VariantItem, pk=pk, variant__in=visible_variants(request.user))
+        f = obj.attachment
+    else:
+        raise Http404
+    if not f:
+        raise Http404
+    name = str(f)
+    root = Path(settings.MEDIA_ROOT).resolve()
+    path = (root / name).resolve()
+    if not path.is_relative_to(root) or not path.is_file():
+        raise Http404
+    if inline_image and request.GET.get('preview') == '1':
+        from .images import preview_path
+        path = preview_path(path, root)
+    size = path.stat().st_size
+    byte_range = request.headers.get('Range', '') if video else ''
+    if byte_range:
+        match = re.fullmatch(r'bytes=(\d*)-(\d*)', byte_range)
+        if not match or not any(match.groups()) or not size:
+            return HttpResponse(status=416, headers={'Content-Range': f'bytes */{size}'})
+        start_text, end_text = match.groups()
+        start = int(start_text) if start_text else max(0, size - int(end_text))
+        end = min(int(end_text), size - 1) if start_text and end_text else size - 1
+        if start >= size or start > end or (not start_text and int(end_text) == 0):
+            return HttpResponse(status=416, headers={'Content-Range': f'bytes */{size}'})
+        def chunks():
+            with path.open('rb') as stream:
+                stream.seek(start)
+                remaining = end - start + 1
+                while remaining > 0:
+                    data = stream.read(min(65536, remaining))
+                    if not data:
+                        break
+                    remaining -= len(data)
+                    yield data
+        response = StreamingHttpResponse(chunks(), status=206)
+        response['Content-Range'] = f'bytes {start}-{end}/{size}'
+        response['Content-Length'] = end - start + 1
+    else:
+        response = FileResponse(path.open('rb'), as_attachment=not (video or inline_image), filename=path.name)
+    if video:
+        response['Accept-Ranges'] = 'bytes'
+        response['Content-Type'] = 'video/mp4' if path.suffix.lower() == '.mp4' else 'video/webm'
+    response['X-Content-Type-Options'] = 'nosniff'
+    response['Cache-Control'] = 'private, no-store'
+    return response

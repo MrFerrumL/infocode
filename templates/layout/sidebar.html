@@ -1,0 +1,28 @@
+<aside class="sidebar" id="workspace-sidebar" aria-label="Боковое меню">
+  <a class="brand" href="{% if teacher_workspace %}{% url 'teacher' %}{% else %}{% url 'dashboard' %}{% endif %}"><span class="brand-icon">и<span>:</span></span>инфокод<span class="brand-dot">.</span></a>
+  <div class="workspace-label">{% if teacher_workspace %}КАБИНЕТ ПРЕПОДАВАТЕЛЯ{% else %}МОЯ ПОДГОТОВКА К ЕГЭ{% endif %}</div>
+  <nav aria-label="Главная навигация">
+  {% if teacher_workspace %}
+    <a {% if workspace_section == 'home' %}class="active" aria-current="page"{% endif %} href="{% url 'teacher' %}"><span class="nav-icon" aria-hidden="true">◫</span>Главная</a>
+    <a {% if workspace_section == 'courses' %}class="active" aria-current="page"{% endif %} href="{% url 'teacher_courses' %}"><span class="nav-icon" aria-hidden="true">▷</span>Курсы</a>
+    <a {% if workspace_section == 'tasks' %}class="active" aria-current="page"{% endif %} href="{% url 'teacher_tasks' %}"><span class="nav-icon" aria-hidden="true">▦</span>Банк задач</a>
+    <a {% if workspace_section == 'works' %}class="active" aria-current="page"{% endif %} href="{% url 'journal' %}"><span class="nav-icon" aria-hidden="true">☑</span>КР и задания</a>
+    <a {% if workspace_section == 'students' %}class="active" aria-current="page"{% endif %} href="{% url 'teacher_students' %}"><span class="nav-icon" aria-hidden="true">◎</span>Ученики</a>
+    <details class="sidebar-more" {% if workspace_section == 'more' %}open{% endif %}><summary>Ещё <span aria-hidden="true">⌄</span></summary>
+      <a href="{% url 'analytics' %}">Аналитика</a><a href="{% url 'teacher_groups' %}">Группы и приглашения</a><a href="{% url 'media_library' %}">Медиатека</a><a href="{% url 'import_tasks' %}">Импорт задач</a><a href="{% url 'duplicates' %}">Поиск дубликатов</a><a href="{% url 'trash' %}">Корзина</a><a href="{% url 'audit' %}">История изменений</a><a href="/admin/">Полная админка ↗</a>
+    </details>
+  {% else %}
+    <a class="{% if nav == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}"><span class="nav-icon" aria-hidden="true">◫</span>Моя подготовка</a>
+    <a class="{% if nav == 'catalog' %}active{% endif %}" href="{% url 'catalog' %}"><span class="nav-icon" aria-hidden="true">▦</span>Каталог заданий<span class="nav-count">27</span></a>
+    <a class="{% if nav == 'course' %}active{% endif %}" href="{% url 'course' %}"><span class="nav-icon" aria-hidden="true">▷</span>Курсы</a>
+    <a class="{% if nav == 'assignments' %}active{% endif %}" href="{% url 'my_assignments' %}"><span class="nav-icon" aria-hidden="true">☑</span>Мои задания и КР</a>
+    <a class="{% if nav == 'variants' %}active{% endif %}" href="{% url 'variants' %}"><span class="nav-icon" aria-hidden="true">▤</span>Варианты</a>
+    <a class="{% if nav == 'tests' %}active{% endif %}" href="{% url 'tests' %}"><span class="nav-icon" aria-hidden="true">◎</span>КР по темам</a>
+    <a class="{% if nav == 'stats' %}active{% endif %}" href="{% url 'stats' %}"><span class="nav-icon" aria-hidden="true">▥</span>Мой прогресс</a>
+  {% endif %}
+  </nav>
+  <div class="sidebar-bottom">
+    {% if user.is_staff %}<a class="workspace-switch" href="{% if teacher_workspace %}{% url 'dashboard' %}{% else %}{% url 'teacher' %}{% endif %}">⇄ {% if teacher_workspace %}Кабинет ученика{% else %}Кабинет преподавателя{% endif %}</a>{% endif %}
+    <div class="profile"><span class="avatar">{{ user.first_name|default:user.username|slice:':1'|upper }}</span><div><strong>{{ user.first_name|default:user.username }}</strong><a href="{% url 'password' %}">Изменить пароль</a></div><form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="icon-button" title="Выйти" aria-label="Выйти">↪</button></form></div>
+  </div>
+</aside>

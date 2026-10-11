@@ -1,0 +1,4 @@
+{% if code_form.python_code %}<section class="python-answer-box">
+  <div class="python-answer-heading"><strong>Решение на Python</strong><span class="pill">{% if code_mode == 'required' %}Обязательно с ответом{% else %}По желанию{% endif %}</span></div>
+  {{ code_form.non_field_errors }}{{ code_form.python_code.as_field_group }}
+</section>{% endif %}

@@ -1,0 +1,72 @@
+name: Application checks
+on:
+  push:
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  tests:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        database: [sqlite, postgresql]
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: infocode
+          POSTGRES_USER: infocode
+          POSTGRES_PASSWORD: ci-test-only
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U infocode"
+          --health-interval 5s --health-timeout 5s --health-retries 15
+    env:
+      DEBUG: "1"
+      DB_ENGINE: ${{ matrix.database }}
+      DB_HOST: 127.0.0.1
+      DB_NAME: infocode
+      DB_USER: infocode
+      DB_PASSWORD: ci-test-only
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements*.txt
+      - run: python -m pip install -r requirements-postgres.txt
+      - run: python manage.py check
+      - run: python manage.py makemigrations --check --dry-run
+      - run: python manage.py test learning --noinput
+      - name: Validate deployment configuration
+        env:
+          APP_DOMAIN: ege.example.org
+          ACME_EMAIL: ci@example.org
+          SECRET_KEY: build-check-not-a-production-secret-00000000000000000000000
+        run: docker compose -f compose.production.yaml config --quiet
+      - name: Build and validate the production image
+        if: matrix.database == 'sqlite'
+        run: |
+          docker build --build-arg REQUIREMENTS=requirements-postgres.txt -t infocode-check .
+          docker run --rm -e SECRET_KEY=build-check-not-a-production-secret-00000000000000000000000 -e ALLOWED_HOSTS=ege.example.org infocode-check python manage.py check --deploy --fail-level WARNING
+          APP_DOMAIN=ege.example.org ACME_EMAIL=ci@example.org docker run --rm -e APP_DOMAIN -e ACME_EMAIL -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile
+      - name: Start the production app, migrations and maintenance
+        if: matrix.database == 'sqlite'
+        env:
+          APP_DOMAIN: ege.example.org
+          ACME_EMAIL: ci@example.org
+          SECRET_KEY: build-check-not-a-production-secret-00000000000000000000000
+        run: |
+          docker tag infocode-check infocode-app:local
+          docker compose -f compose.production.yaml up --no-build -d --wait --wait-timeout 120 db web maintenance
+          docker compose -f compose.production.yaml exec -T web python deploy/healthcheck.py
+      - name: Clean up the CI-only containers
+        if: always() && matrix.database == 'sqlite'
+        env:
+          APP_DOMAIN: ege.example.org
+          ACME_EMAIL: ci@example.org
+          SECRET_KEY: build-check-not-a-production-secret-00000000000000000000000
+        run: |
+          docker compose -f compose.production.yaml logs --tail=50
+          docker compose -f compose.production.yaml down -v
