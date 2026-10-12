@@ -55,3 +55,4 @@ html[data-theme="dark"]{--purple:#b6a7ff;--purple-dark:#c6baff;--ink:#eeeef5;--m
 .workspace-ui .topic-strip a,.workspace-ui .studio-nav a,.workspace-ui .block-kind-tabs a,.workspace-ui .add-blocks,.workspace-ui .add-blocks a,.workspace-ui .plan-row-actions button,.workspace-ui .inline-actions a,.workspace-ui .delete-menu summary,.workspace-ui .task-number,.workspace-ui .lesson-symbol{background:var(--soft);color:var(--purple);border-color:var(--line)}
 .workspace-ui .quiz-option:has(input:checked),.workspace-ui .topic-checkboxes label:has(input:checked){background:var(--soft);color:var(--ink);border-color:var(--purple)}
 .workspace-ui.course-mode{background:var(--surface)}.workspace-ui .mobile-logout{background:var(--paper);color:var(--ink)}
+.workspace-ui .button.secondary{background:var(--paper);color:var(--ink);border-color:var(--line)}.workspace-ui .button.secondary:hover{background:var(--soft)}

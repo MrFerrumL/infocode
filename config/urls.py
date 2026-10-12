@@ -7,6 +7,8 @@ from learning import studio_views as studio, course_views as courses
 from learning import workspace
 from learning import accounts
 from learning.health import health
+from learning.task_management import delete_task
+from learning.readiness import platform_check
 
 urlpatterns = [
     path('health/', health, name='health'),
@@ -54,9 +56,11 @@ urlpatterns = [
     path('lessons/<int:pk>/', v.lesson, name='lesson'),
     path('stats/', v.stats, name='stats'),
     path('teacher/', v.teacher, name='teacher'),
+    path('teacher/check/', platform_check, name='platform_check'),
     path('teacher/variants/new/', v.variant_create, name='variant_create'),
     path('teacher/tasks/', studio.task_bank, name='teacher_tasks'),
     path('teacher/tasks/new/', studio.task_editor, name='task_create'),
+    path('teacher/tasks/<int:pk>/delete/', delete_task, name='task_delete'),
     path('teacher/tasks/<int:pk>/edit/', studio.task_editor, name='task_editor'),
     path('teacher/tasks/<int:pk>/copy/', studio.duplicate_task, name='duplicate_task'),
     path('teacher/tasks/<int:task_pk>/blocks/new/', studio.block_editor, name='block_create'),

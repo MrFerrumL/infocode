@@ -143,39 +143,71 @@ def join(request, token):
 ARCHIVABLE = {m._meta.label_lower: m for m in (Task, TaskBlock, Course, Section, Lesson, Step)}
 
 
+@transaction.atomic
 def archive(user, obj):
-    obj.archived_at = timezone.now()
-    if hasattr(obj, 'published'):
-        obj.published = False
-    obj.save()
-    TrashEntry.objects.create(user=user, model=obj._meta.label_lower, object_id=obj.pk, title=str(obj)[:240])
+    current = type(obj).all_objects.select_for_update().get(pk=obj.pk)
+    if current.archived_at:
+        return False
+    current.archived_at = timezone.now()
+    fields = ['archived_at']
+    if hasattr(current, 'published'):
+        current.published = False
+        fields.append('published')
+    current.save(update_fields=fields)
+    obj.archived_at = current.archived_at
+    if hasattr(current, 'published'):
+        obj.published = current.published
+    TrashEntry.objects.create(user=user, model=current._meta.label_lower, object_id=current.pk, title=str(current)[:240])
+    return True
 
 
 @staff_required
 @transaction.atomic
 def trash(request):
+    from urllib.parse import urlencode
+    labels = {'learning.task': 'Задания', 'learning.taskblock': 'Блоки заданий',
+              'learning.course': 'Курсы', 'learning.section': 'Разделы',
+              'learning.lesson': 'Уроки', 'learning.step': 'Слайды'}
     rows = TrashEntry.objects.filter(restored_at=None)
     if not request.user.is_superuser:
         rows = rows.filter(user=request.user)
     if request.method == 'POST':
         entry = get_object_or_404(rows.select_for_update(), pk=request.POST.get('pk'))
         model = ARCHIVABLE.get(entry.model)
-        obj = get_object_or_404(model.all_objects, pk=entry.object_id) if model else None
+        obj = get_object_or_404(model.all_objects.select_for_update(), pk=entry.object_id) if model else None
         if not obj:
             raise Http404
         # Ownership is rechecked because the object may have changed hands.
         course = obj if isinstance(obj, Course) else obj.course if isinstance(obj, Section) else obj.section.course if isinstance(obj, Lesson) else obj.lesson.section.course if isinstance(obj, Step) else None
         if course and not can_edit(request.user, course):
             raise PermissionDenied
-        obj.archived_at = None
-        if hasattr(obj, 'published'):
-            obj.published = False
-        obj.save()
+        if obj.archived_at:
+            obj.archived_at = None
+            fields = ['archived_at']
+            if hasattr(obj, 'published'):
+                obj.published = False
+                fields.append('published')
+            obj.save(update_fields=fields)
         entry.restored_at = timezone.now()
         entry.save(update_fields=['restored_at'])
         messages.success(request, 'Восстановлено. Проверьте содержимое и опубликуйте его заново. Если родитель в корзине, сначала восстановите его.')
-        return redirect('trash')
-    return render(request, 'platform/trash.html', {'page': Paginator(rows.order_by('-deleted_at'), 30).get_page(request.GET.get('page')), 'nav': 'teacher'})
+        params = {key: request.GET[key][:200] for key in ('q', 'kind') if request.GET.get(key)}
+        return redirect(reverse('trash') + ('?' + urlencode(params) if params else ''))
+    query = request.GET.get('q', '').strip()[:200]
+    kind = request.GET.get('kind', '')
+    if query:
+        rows = rows.filter(title__icontains=query)
+    if kind in labels:
+        rows = rows.filter(model=kind)
+    else:
+        kind = ''
+    page = Paginator(rows.order_by('-deleted_at'), 30).get_page(request.GET.get('page'))
+    for entry in page:
+        entry.type_label = labels.get(entry.model, 'Материал')
+    return render(request, 'platform/trash.html', {
+        'page': page, 'query': query, 'kind': kind, 'types': labels.items(),
+        'pagination_query': urlencode({key: value for key, value in {'q': query, 'kind': kind}.items() if value}), 'nav': 'teacher',
+    })
 
 
 @staff_required
@@ -190,15 +222,27 @@ def audit(request):
 @require_POST
 @transaction.atomic
 def bulk_tasks(request):
+    from .task_management import task_return_url
+    return_to = task_return_url(request)
     ids = request.POST.getlist('selected')
     if len(ids)>100 or any(not pk.isdigit() for pk in ids):
         raise PermissionDenied
     tasks = list(Task.objects.select_for_update().filter(pk__in=ids).prefetch_related('content_blocks'))
     action = request.POST.get('action')
     level = request.POST.get('difficulty')
+    if action not in ('archive', 'publish', 'draft', 'difficulty') or (action == 'difficulty' and level not in dict(Task.LEVELS)):
+        messages.error(request, 'Выберите допустимое действие и сложность.')
+        return redirect(return_to)
+    if not tasks:
+        messages.error(request, 'Выберите хотя бы одно доступное задание.')
+        return redirect(return_to)
+    if action == 'archive' and request.POST.get('confirm') != 'yes':
+        return render(request, 'studio/task_delete.html', {
+            'tasks': tasks, 'bulk': True, 'return_to': return_to, 'nav': 'teacher',
+        })
     if action == 'publish' and any(not (t.statement or t.attachment or any(b.purpose == 'statement' for b in t.content_blocks.all())) for t in tasks):
         messages.error(request, 'В выборке есть пустые задания. Сначала добавьте условия.')
-        return redirect('teacher_tasks')
+        return redirect(return_to)
     for t in tasks:
         if action == 'archive':
             archive(request.user, t)
@@ -209,7 +253,7 @@ def bulk_tasks(request):
             t.difficulty = level
             t.save(update_fields=['difficulty'])
     messages.success(request, f'Обработано заданий: {len(tasks)}.')
-    return redirect('teacher_tasks')
+    return redirect(return_to)
 
 
 @staff_required

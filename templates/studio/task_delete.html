@@ -1,0 +1,17 @@
+{% extends 'base.html' %}{% load static %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'task-bank.css' %}">{% endblock %}
+{% block content %}
+<a class="back-link" href="{{ return_to }}">← Вернуться в банк задач</a>
+<div class="page-heading"><div><div class="eyebrow">БАНК ЗАДАЧ · КОРЗИНА</div><h1>Удалить {% if tasks|length == 1 %}задание{% else %}выбранные задания{% endif %}?</h1><p>Они исчезнут из каталога и подбора новых вариантов.</p></div></div>
+<section class="panel deletion-confirmation">
+  <ul class="deletion-list">{% for task in tasks %}<li><strong>{{ task.title }}</strong><span class="muted">ID {{ task.pk }} · № {{ task.topic.number }} · {{ task.get_difficulty_display }}</span></li>{% endfor %}</ul>
+  <p>Уже выданные КР, ответы, Python-код и результаты учеников сохранятся. Фото и файлы также останутся доступными в выданных работах.</p>
+  {% if variants_count or practices_count %}<p class="muted">Используется в вариантах и КР: {{ variants_count }}. Решений в практике: {{ practices_count }}.</p>{% endif %}
+  <p>Задание можно вернуть через <a href="{% url 'trash' %}">корзину</a>. После восстановления оно станет черновиком — проверьте его и опубликуйте заново.</p>
+  <form method="post" {% if bulk %}action="{% url 'bulk_tasks' %}"{% endif %}>
+    {% csrf_token %}<input type="hidden" name="confirm" value="yes"><input type="hidden" name="return_to" value="{{ return_to }}">
+    {% if bulk %}<input type="hidden" name="action" value="archive">{% for task in tasks %}<input type="hidden" name="selected" value="{{ task.pk }}">{% endfor %}{% endif %}
+    <div class="editor-actions"><button class="button danger-button" type="submit">Удалить в корзину</button><a class="button secondary" href="{{ return_to }}">Отмена</a></div>
+  </form>
+</section>
+{% endblock %}

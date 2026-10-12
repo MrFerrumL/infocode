@@ -42,6 +42,8 @@ git push
 
 ## Если Git сообщает об ошибке
 
+- `detected dubious ownership`: проект мог быть создан под служебным пользователем. Для этой конкретной папки выполните `git config --global --add safe.directory C:/Users/tgpro/Documents/Codex/2026-09-28/yf/outputs/infocode`, затем повторите команду Git. Не добавляйте исключение `*` для всех каталогов.
+
 - `git` не найден: установите [Git for Windows](https://git-scm.com/downloads/win) и заново откройте терминал.
 - `remote origin already exists`: выполните `git remote -v`. Если там ваш правильный репозиторий, сразу переходите к `git push -u origin main`.
 - `Repository not found`: проверьте адрес, существование репозитория и вход именно в аккаунт с доступом к нему.

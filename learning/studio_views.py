@@ -7,7 +7,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 from .views import staff_required, topic_stats
 from .forms import TaskForm, TaskBlockForm, AssignmentForm, CourseForm, SectionForm, LessonForm, StepForm, QuizOptionFormSet
-from .models import Task, TaskBlock, StudentAssignment, Practice, ExamAttempt, StepProgress, StepSubmission, Course, Section, Lesson, Step, Enrollment, StepComment
+from .models import Task, TaskBlock, Topic, StudentAssignment, Practice, ExamAttempt, StepProgress, StepSubmission, Course, Section, Lesson, Step, Enrollment, StepComment
 from .course_services import editable_courses, can_edit, current_progress
 
 
@@ -59,17 +59,29 @@ def student_detail(request, pk):
 
 @staff_required
 def task_bank(request):
-    query = request.GET.get('q', '').strip()
+    from urllib.parse import urlencode
+    query = request.GET.get('q', '').strip()[:200]
     tasks = Task.objects.select_related('topic')
     if query:
         tasks = tasks.filter(Q(title__icontains=query) | Q(tags__icontains=query) | Q(subtopic__icontains=query) | (Q(pk=int(query)) if query.isdigit() else Q(pk__isnull=True)))
     level = request.GET.get('difficulty', '')
     status = request.GET.get('status', '')
+    number = request.GET.get('topic', '')
+    if number.isdigit() and 1 <= int(number) <= 27:
+        tasks = tasks.filter(topic__number=int(number))
+    else:
+        number = ''
     if level in dict(Task.LEVELS):
         tasks = tasks.filter(difficulty=level)
     if status in ('draft', 'published'):
         tasks = tasks.filter(published=status == 'published')
-    return render(request, 'studio/tasks.html', {'page': Paginator(tasks, 20).get_page(request.GET.get('page')), 'query': query, 'levels': Task.LEVELS, 'difficulty': level, 'status': status, 'nav': 'teacher'})
+    page = Paginator(tasks, 20).get_page(request.GET.get('page'))
+    params = {key: value for key, value in {'q': query, 'topic': number, 'difficulty': level, 'status': status}.items() if value}
+    return render(request, 'studio/tasks.html', {
+        'page': page, 'query': query, 'levels': Task.LEVELS, 'difficulty': level,
+        'status': status, 'topic_number': number, 'topics': Topic.objects.all(),
+        'pagination_query': urlencode(params), 'return_to': request.get_full_path(), 'nav': 'teacher',
+    })
 
 
 def clone_row(obj, **overrides):

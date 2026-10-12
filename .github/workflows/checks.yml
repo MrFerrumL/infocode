@@ -61,6 +61,7 @@ jobs:
           docker tag infocode-check infocode-app:local
           docker compose -f compose.production.yaml up --no-build -d --wait --wait-timeout 120 db web maintenance
           docker compose -f compose.production.yaml exec -T web python deploy/healthcheck.py
+          docker compose -f compose.production.yaml exec -T web python manage.py check_content --strict
       - name: Clean up the CI-only containers
         if: always() && matrix.database == 'sqlite'
         env:

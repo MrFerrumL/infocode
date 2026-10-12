@@ -1,0 +1,12 @@
+{% extends 'admin/base_site.html' %}{% load i18n admin_urls %}
+{% block content_title %}<h1>Переместить в корзину?</h1>{% endblock %}
+{% block content %}
+<p>Материалы исчезнут из каталога и новых подборок. Уже выданные варианты, ответы, прогресс, фото и файлы сохранятся.</p>
+<p>Восстановление доступно в <a href="{% url 'trash' %}">корзине кабинета преподавателя</a>. После восстановления материал нужно проверить и опубликовать.</p>
+{% if object %}<p><strong>{{ object }}</strong></p>{% else %}<ul>{% for obj in queryset %}<li>{{ obj }}</li>{% endfor %}</ul>{% endif %}
+<form method="post">{% csrf_token %}<input type="hidden" name="post" value="yes">
+{% if action_checkbox_name %}{% for obj in queryset %}<input type="hidden" name="{{ action_checkbox_name }}" value="{{ obj.pk }}">{% endfor %}<input type="hidden" name="action" value="delete_selected"><input type="hidden" name="select_across" value="{{ select_across }}">{% endif %}
+{% if is_popup %}<input type="hidden" name="_popup" value="1">{% endif %}{% if to_field %}<input type="hidden" name="_to_field" value="{{ to_field }}">{% endif %}
+<div class="submit-row"><input type="submit" value="Переместить в корзину"><a href="{% url opts|admin_urlname:'changelist' %}" class="button cancel-link">Отмена</a></div>
+</form>
+{% endblock %}

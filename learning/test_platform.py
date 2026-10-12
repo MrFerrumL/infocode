@@ -302,7 +302,7 @@ class PlatformTests(TestCase):
 
     def test_archive_restores_draft_and_preserves_snapshot(self):
         variant=create_variant(creator=self.teacher,title='Issued',topics=[self.topic])
-        self.client.post('/teacher/bulk/',{'selected':[self.task.pk],'action':'archive'})
+        self.client.post('/teacher/bulk/',{'selected':[self.task.pk],'action':'archive','confirm':'yes'})
         self.assertFalse(Task.objects.filter(pk=self.task.pk).exists())
         self.assertTrue(Task.all_objects.filter(pk=self.task.pk).exists())
         self.assertEqual(variant.items.get().statement,'Сколько?')

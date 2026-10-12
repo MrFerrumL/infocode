@@ -60,7 +60,12 @@ class Command(BaseCommand):
             try:
                 # Same filesystem: atomic visibility, and an existing target is
                 # never replaced even if another backup finished concurrently.
-                os.link(temporary, target)
+                if os.name == 'nt':
+                    # Windows rename is atomic and fails when the target exists.
+                    # It also works in accounts/filesystems that forbid hard links.
+                    os.rename(temporary, target)
+                else:
+                    os.link(temporary, target)
             except FileExistsError as exc:
                 raise CommandError('Another backup already created this filename; choose a new one.') from exc
         self.stdout.write('Backup created and verified: ' + str(target))

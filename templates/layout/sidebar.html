@@ -9,7 +9,7 @@
     <a {% if workspace_section == 'works' %}class="active" aria-current="page"{% endif %} href="{% url 'journal' %}"><span class="nav-icon" aria-hidden="true">☑</span>КР и задания</a>
     <a {% if workspace_section == 'students' %}class="active" aria-current="page"{% endif %} href="{% url 'teacher_students' %}"><span class="nav-icon" aria-hidden="true">◎</span>Ученики</a>
     <details class="sidebar-more" {% if workspace_section == 'more' %}open{% endif %}><summary>Ещё <span aria-hidden="true">⌄</span></summary>
-      <a href="{% url 'analytics' %}">Аналитика</a><a href="{% url 'teacher_groups' %}">Группы и приглашения</a><a href="{% url 'media_library' %}">Медиатека</a><a href="{% url 'import_tasks' %}">Импорт задач</a><a href="{% url 'duplicates' %}">Поиск дубликатов</a><a href="{% url 'trash' %}">Корзина</a><a href="{% url 'audit' %}">История изменений</a><a href="/admin/">Полная админка ↗</a>
+      <a href="{% url 'analytics' %}">Аналитика</a><a href="{% url 'teacher_groups' %}">Группы и приглашения</a><a href="{% url 'media_library' %}">Медиатека</a><a href="{% url 'import_tasks' %}">Импорт задач</a><a href="{% url 'duplicates' %}">Поиск дубликатов</a><a href="{% url 'trash' %}">Корзина</a><a href="{% url 'audit' %}">История изменений</a>{% if user.is_superuser %}<a href="{% url 'platform_check' %}">Проверка платформы</a>{% endif %}<a href="/admin/">Полная админка ↗</a>
     </details>
   {% else %}
     <a class="{% if nav == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}"><span class="nav-icon" aria-hidden="true">◫</span>Моя подготовка</a>

@@ -1,12 +1,28 @@
 from django.contrib import admin
+from django.db import transaction
 from .models import Topic, Task, StudyGroup, Variant, VariantItem, Section, Lesson, QuizQuestion, LessonFile, Practice, ExamAttempt, LessonProgress
 from .models import TaskBlock, StudentAssignment, Course, Step
 
 class ArchiveAdmin(admin.ModelAdmin):
     exclude = ['archived_at']
+    delete_confirmation_template = 'admin/archive_confirmation.html'
+    delete_selected_confirmation_template = 'admin/archive_confirmation.html'
+    def get_deleted_objects(self, objs, request):
+        # Django's hard-delete collector follows PROTECT/CASCADE relationships.
+        # Archiving affects only visibility, so related answers and issued work
+        # must neither block the action nor appear as records to be deleted.
+        rows = list(objs)
+        return ([str(obj) for obj in rows], {str(self.opts.verbose_name_plural): len(rows)}, set(), [])
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+        if 'delete_selected' in actions:
+            function, name, _ = actions['delete_selected']
+            actions['delete_selected'] = (function, name, 'Переместить выбранные в корзину')
+        return actions
     def delete_model(self, request, obj):
         from .platform_views import archive
         archive(request.user, obj)
+    @transaction.atomic
     def delete_queryset(self, request, queryset):
         from .platform_views import archive
         for obj in queryset:

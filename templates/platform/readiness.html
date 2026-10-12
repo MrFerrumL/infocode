@@ -1,0 +1,8 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-heading"><div><div class="eyebrow">АДМИНИСТРАТОР</div><h1>Проверка платформы<span class="accent">.</span></h1><p>Проверка содержимого и загруженных материалов перед запуском.</p></div><a class="button secondary" href="{% url 'platform_check' %}">Проверить ещё раз</a></div>
+{% if report.has_errors %}<div class="notice error" role="status">Есть ошибки, которые нужно исправить перед запуском.</div>{% else %}<div class="notice success" role="status">Критических ошибок содержимого не найдено. Просмотрите рекомендации ниже.</div>{% endif %}
+<section class="panel">{% for item in report.checks %}<div class="history-row"><div><strong>{{ item.title }}</strong><p>{{ item.detail }}</p>{% if item.link %}<a href="{{ item.link }}">Открыть раздел →</a>{% endif %}</div><span class="pill {% if item.level == 'ok' %}easy{% elif item.level == 'warning' %}medium{% else %}grave{% endif %}">{% if item.level == 'ok' %}В порядке{% elif item.level == 'warning' %}Рекомендация{% else %}Исправить{% endif %}</span></div>{% endfor %}</section>
+{% if report.missing %}<section class="panel section"><h2>Недостающие материалы</h2><p>Показаны первые {{ report.missing|length }} из {{ report.missing_count }}. Найдите эти файлы в резервной копии и восстановите их.</p>{% for item in report.missing %}<div class="history-row"><div><strong style="overflow-wrap:anywhere">{{ item.name }}</strong><small>{{ item.source }}</small></div></div>{% endfor %}</section>{% endif %}
+<p class="muted section">Эта проверка не меняет данные. Соединение с доменом, HTTPS и нагрузку проверяйте после размещения на сервере.</p>
+{% endblock %}

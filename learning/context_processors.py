@@ -7,7 +7,7 @@ def platform_context(request):
     categories = {
         'home': {'teacher'},
         'courses': {'teacher_courses', 'course_create', 'course_editor', 'course_report', 'section_create', 'section_editor', 'lesson_create', 'lesson_editor', 'step_create', 'step_editor'},
-        'tasks': {'teacher_tasks', 'task_create', 'task_editor', 'block_create', 'block_editor', 'import_tasks', 'duplicates'},
+        'tasks': {'teacher_tasks', 'task_create', 'task_editor', 'task_delete', 'bulk_tasks', 'block_create', 'block_editor', 'import_tasks', 'duplicates'},
         'works': {'journal', 'assignment_create', 'assignment_detail', 'review_homework', 'review_queue', 'variant_create', 'result', 'print_variant'},
         'students': {'student_account_create', 'student_password_reset', 'teacher_students', 'teacher_student', 'analytics', 'teacher_groups'},
     }
