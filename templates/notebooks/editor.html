@@ -1,0 +1,22 @@
+{% extends 'base.html' %}
+{% block title %}{{ notebook.title|default:'Новый конспект' }} · Редактор{% endblock %}
+{% block content %}
+<a class="back-link" href="{% url 'teacher_notebooks' %}">← Конспекты</a>
+<div class="page-heading"><div><div class="eyebrow">РЕДАКТОР КОНСПЕКТА</div><h1>{{ notebook.title|default:'Новый конспект' }}</h1><p>Как в блокноте: объяснение, код, картинка — и снова объяснение.</p></div>{% if notebook.pk %}<a class="button secondary" href="{% url 'notebook_detail' notebook.pk %}">Посмотреть ↗</a>{% endif %}</div>
+<div class="notebook-workspace">
+<aside class="notebook-outline panel"><h3>Ячейки</h3><nav data-notebook-outline aria-label="Ячейки конспекта"></nav><details class="outline-help"><summary>Подсказки</summary><p>Жирный, курсив, подчёркивание, заголовки и списки доступны в текстовой ячейке.</p><p>Картинку можно загрузить отдельной ячейкой или вставить из буфера в месте курсора.</p><p>В коде: Tab — 4 пробела, Enter — строка с отступом. Python-код сохраняется и показывается ученикам.</p><p>До 40 ячеек. Черновик сохраняет текст; новые файлы загружаются кнопкой «Сохранить».</p></details>{% if notebook.pk %}<a class="notebook-delete-link" href="{% url 'notebook_delete' notebook.pk %}">Переместить в корзину</a>{% endif %}</aside>
+<form method="post" enctype="multipart/form-data" class="stack notebook-editor" data-autosave data-course-editor data-notebook-editor data-cell-label="ячейки">{% csrf_token %}{{ form.non_field_errors }}<input type="hidden" name="edit_version" value="{{ editor_version }}">
+<section class="panel notebook-settings">{{ form.title.as_field_group }}<details {% if form.group.errors or form.description.errors %}open{% endif %}><summary>Описание и доступ</summary>{{ form.description.as_field_group }}{{ form.group.as_field_group }}</details></section>
+<section class="notebook-document"><div class="notebook-document-bar"><span class="notebook-mark" aria-hidden="true">▤</span><span>Конспект</span><span class="composer-counter" data-block-count></span><button type="button" class="button secondary" data-local-preview>Предпросмотр</button></div>
+{{ blocks.management_form }}{{ blocks.non_form_errors }}
+<div class="content-blocks" data-content-blocks>{% for block in blocks %}{% include 'studio/content_block.html' with block_download_kind='notebook-cell' %}{% endfor %}</div>
+<template id="empty-content-block">{% include 'studio/content_block.html' with block=blocks.empty_form block_download_kind='notebook-cell' %}</template>
+<div class="block-palette notebook-palette" data-block-palette aria-label="Добавить ячейку"><span>+ Ячейка</span><button type="button" data-add-block="text">Тт Текст</button><button type="button" data-add-block="code">{ } Код</button><button type="button" data-add-block="image">▧ Фото</button><button type="button" data-add-block="video">▷ Видео</button><button type="button" data-add-block="file">↓ Файл</button><button type="button" data-add-block="divider">― Линия</button></div>
+<p class="composer-status" role="status" data-composer-status></p>
+<noscript><p class="notice">Включите JavaScript для добавления ячеек и форматирования. Существующие ячейки можно редактировать обычными полями.</p></noscript>
+</section>
+<section class="panel notebook-save"><div class="check-field">{{ form.published }}{{ form.published.label_tag }}{{ form.published.errors }}</div><p class="muted">Изменения появятся во всех связанных уроках. Если снять публикацию, связанные слайды перейдут в черновики.</p><div class="editor-actions"><button class="button" name="action" value="save">Сохранить конспект</button><button class="button secondary" name="action" value="preview">Сохранить и посмотреть ↗</button></div></section>
+{% if linked %}<section class="panel"><h3>Используется в курсах</h3><ul>{% for block in linked %}<li><a href="{% url 'step_editor' block.step.lesson_id block.step_id %}">{{ block.step.lesson.section.course.title }} / {{ block.step.title }}</a></li>{% endfor %}</ul></section>{% endif %}
+</form></div>
+<dialog class="content-preview-dialog"><div class="preview-heading"><h2>Предпросмотр конспекта</h2><button type="button" data-close-preview aria-label="Закрыть предпросмотр">×</button></div><div data-preview-body></div></dialog>
+{% endblock %}

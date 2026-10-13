@@ -9,8 +9,15 @@ from learning import accounts
 from learning.health import health
 from learning.task_management import delete_task
 from learning.readiness import platform_check
+from learning import notebooks
 
 urlpatterns = [
+    path('notebooks/', notebooks.library, name='notebooks'),
+    path('notebooks/<int:pk>/', notebooks.detail, name='notebook_detail'),
+    path('teacher/notebooks/', notebooks.library, name='teacher_notebooks'),
+    path('teacher/notebooks/new/', notebooks.editor, name='notebook_create'),
+    path('teacher/notebooks/<int:pk>/edit/', notebooks.editor, name='notebook_editor'),
+    path('teacher/notebooks/<int:pk>/delete/', notebooks.delete, name='notebook_delete'),
     path('health/', health, name='health'),
     path('assignments/', work.mine, name='my_assignments'),
     path('assignments/<int:pk>/', work.detail, name='assignment_detail'),

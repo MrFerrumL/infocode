@@ -1,7 +1,7 @@
 from django.contrib import admin
 from django.db import transaction
 from .models import Topic, Task, StudyGroup, Variant, VariantItem, Section, Lesson, QuizQuestion, LessonFile, Practice, ExamAttempt, LessonProgress
-from .models import TaskBlock, StudentAssignment, Course, Step
+from .models import TaskBlock, StudentAssignment, Course, Step, Notebook
 
 class ArchiveAdmin(admin.ModelAdmin):
     exclude = ['archived_at']
@@ -27,6 +27,26 @@ class ArchiveAdmin(admin.ModelAdmin):
         from .platform_views import archive
         for obj in queryset:
             archive(request.user, obj)
+
+
+@admin.register(Notebook)
+class NotebookAdmin(ArchiveAdmin):
+    list_display = ['title', 'owner', 'group', 'published', 'updated_at']
+    list_filter = ['published']
+    search_fields = ['title', 'description']
+
+    def get_queryset(self, request):
+        qs = super().get_queryset(request)
+        return qs if request.user.is_superuser else qs.filter(owner=request.user)
+
+    def add_view(self, request, form_url='', extra_context=None):
+        from django.shortcuts import redirect
+        return redirect('notebook_create')
+
+    def change_view(self, request, object_id, form_url='', extra_context=None):
+        from django.shortcuts import get_object_or_404, redirect
+        obj = get_object_or_404(self.get_queryset(request), pk=object_id)
+        return redirect('notebook_editor', pk=obj.pk)
 
 
 class BlockInline(admin.StackedInline):

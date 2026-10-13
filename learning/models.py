@@ -231,7 +231,7 @@ class Course(models.Model):
 class Step(models.Model):
     objects = ActiveManager()
     all_objects = models.Manager()
-    KINDS = [('text', 'Текст и иллюстрация'), ('video', 'Видео'), ('quiz', 'Выбор ответа'), ('answer', 'Короткий ответ'), ('numeric', 'Числовой ответ'), ('gaps', 'Заполнение пропусков'), ('matching', 'Сопоставление пар'), ('file', 'Файл')]
+    KINDS = [('text', 'Текст и иллюстрация'), ('video', 'Видео'), ('quiz', 'Выбор ответа'), ('answer', 'Короткий ответ'), ('numeric', 'Числовой ответ'), ('gaps', 'Заполнение пропусков'), ('matching', 'Сопоставление пар'), ('file', 'Файл'), ('notebook', 'Конспект')]
     lesson = models.ForeignKey('Lesson', on_delete=models.CASCADE, related_name='steps')
     title = models.CharField('Название шага', max_length=180)
     kind = models.CharField('Тип шага', max_length=12, choices=KINDS, default='text')
@@ -291,7 +291,18 @@ class Step(models.Model):
                 raise ValidationError('Добавьте блок с файлом перед публикацией.')
             if self.published and self.kind == 'text' and not kinds:
                 raise ValidationError('Добавьте хотя бы один блок материала.')
+            if self.published and self.kind == 'notebook' and 'notebook' not in kinds:
+                raise ValidationError('Выберите конспект перед публикацией слайда.')
+            if self.published:
+                notebooks = getattr(self, '_content_notebooks', None)
+                if notebooks is None:
+                    notebooks = list(self.content_blocks.filter(kind='notebook').select_related('notebook')) if self.pk else []
+                    notebooks = [block.notebook for block in notebooks]
+                if any(not book or not book.published or book.archived_at for book in notebooks):
+                    raise ValidationError('Опубликуйте выбранные конспекты перед публикацией слайда.')
             return
+        if self.published and self.kind == 'notebook':
+            raise ValidationError('Добавьте блок с конспектом через редактор слайда.')
         if self.kind == 'video' and self.published and not self.video:
             raise ValidationError({'video': 'Для публикации видеошага загрузите видео.'})
         if self.kind == 'file' and self.published and not self.file:
@@ -303,8 +314,9 @@ class Step(models.Model):
 
 
 class StepContentBlock(models.Model):
-    KINDS = [('text', 'Текст'), ('image', 'Фото'), ('video', 'Видео'), ('code', 'Python-код'), ('file', 'Файл'), ('divider', 'Разделитель')]
+    KINDS = [('text', 'Текст'), ('image', 'Фото'), ('video', 'Видео'), ('code', 'Python-код'), ('file', 'Файл'), ('divider', 'Разделитель'), ('notebook', 'Конспект')]
     step = models.ForeignKey(Step, on_delete=models.CASCADE, related_name='content_blocks')
+    notebook = models.ForeignKey('learning.Notebook', null=True, blank=True, on_delete=models.PROTECT, related_name='course_blocks', verbose_name='Конспект')
     kind = models.CharField('Блок', choices=KINDS, max_length=12, default='text')
     position = models.PositiveIntegerField('Порядок', default=1)
     text = models.TextField('Текст', blank=True)
@@ -329,6 +341,8 @@ class StepContentBlock(models.Model):
             raise ValidationError({'text': 'Добавьте код.'})
         if self.kind in ('image', 'video', 'file') and not getattr(self, self.kind):
             raise ValidationError({self.kind: 'Загрузите материал или выберите его из медиатеки.'})
+        if self.kind == 'notebook' and not self.notebook_id:
+            raise ValidationError({'notebook': 'Выберите конспект.'})
 
     def save(self, *args, **kwargs):
         if self.kind == 'text':
@@ -436,3 +450,4 @@ class LessonFile(models.Model):
 
 # Import extension models so Django registers their migrations and relations.
 from .platform_models import (LoginBucket, StudentAccess, ActionReceipt, TeacherNote, LearningAssignment, AssignmentRecipient, HomeworkSubmission, Notification, GroupInvite, InviteUse, EditorDraft, VideoPosition, MediaAsset, AuditEvent, TrashEntry, ImportBatch)
+from .notebook_models import Notebook, NotebookCell

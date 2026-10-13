@@ -5,6 +5,7 @@
   {% if teacher_workspace %}
     <a {% if workspace_section == 'home' %}class="active" aria-current="page"{% endif %} href="{% url 'teacher' %}"><span class="nav-icon" aria-hidden="true">◫</span>Главная</a>
     <a {% if workspace_section == 'courses' %}class="active" aria-current="page"{% endif %} href="{% url 'teacher_courses' %}"><span class="nav-icon" aria-hidden="true">▷</span>Курсы</a>
+    <a {% if workspace_section == 'notebooks' %}class="active" aria-current="page"{% endif %} href="{% url 'teacher_notebooks' %}"><span class="nav-icon" aria-hidden="true">▤</span>Конспекты</a>
     <a {% if workspace_section == 'tasks' %}class="active" aria-current="page"{% endif %} href="{% url 'teacher_tasks' %}"><span class="nav-icon" aria-hidden="true">▦</span>Банк задач</a>
     <a {% if workspace_section == 'works' %}class="active" aria-current="page"{% endif %} href="{% url 'journal' %}"><span class="nav-icon" aria-hidden="true">☑</span>КР и задания</a>
     <a {% if workspace_section == 'students' %}class="active" aria-current="page"{% endif %} href="{% url 'teacher_students' %}"><span class="nav-icon" aria-hidden="true">◎</span>Ученики</a>
@@ -15,6 +16,7 @@
     <a class="{% if nav == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}"><span class="nav-icon" aria-hidden="true">◫</span>Моя подготовка</a>
     <a class="{% if nav == 'catalog' %}active{% endif %}" href="{% url 'catalog' %}"><span class="nav-icon" aria-hidden="true">▦</span>Каталог заданий<span class="nav-count">27</span></a>
     <a class="{% if nav == 'course' %}active{% endif %}" href="{% url 'course' %}"><span class="nav-icon" aria-hidden="true">▷</span>Курсы</a>
+    <a class="{% if nav == 'notebooks' %}active{% endif %}" href="{% url 'notebooks' %}"><span class="nav-icon" aria-hidden="true">▤</span>Конспекты</a>
     <a class="{% if nav == 'assignments' %}active{% endif %}" href="{% url 'my_assignments' %}"><span class="nav-icon" aria-hidden="true">☑</span>Мои задания и КР</a>
     <a class="{% if nav == 'variants' %}active{% endif %}" href="{% url 'variants' %}"><span class="nav-icon" aria-hidden="true">▤</span>Варианты</a>
     <a class="{% if nav == 'tests' %}active{% endif %}" href="{% url 'tests' %}"><span class="nav-icon" aria-hidden="true">◎</span>КР по темам</a>

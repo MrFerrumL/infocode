@@ -57,7 +57,7 @@ def content_report():
         for row in model._base_manager.values_list('pk', *(field.name for field in fields)).iterator(chunk_size=200):
             for field, name in zip(fields, row[1:]):
                 inspect_file(field.storage, name, f'{model._meta.verbose_name} · ID {row[0]}')
-    from .models import VariantItem, Task, Lesson
+    from .models import VariantItem, Task, Lesson, Notebook, StepContentBlock
     for pk, attachment, blocks in VariantItem.objects.values_list('pk', 'attachment', 'blocks').iterator(chunk_size=200):
         source = f'задание в выданном варианте · ID {pk}'
         inspect_file(default_storage, attachment, source)
@@ -78,6 +78,12 @@ def content_report():
         slides_count=Count('steps', filter=Q(steps__published=True, steps__archived_at=None))).filter(slides_count=0).count()
     check('Опубликованные уроки', 'warning' if empty_lessons else 'ok',
           f'Без опубликованных слайдов: {empty_lessons}. Добавьте слайды или снимите публикацию урока.' if empty_lessons else 'У всех опубликованных уроков есть слайды.', '/teacher/courses/')
+    empty_notebooks = Notebook.objects.filter(published=True).annotate(cell_count=Count('cells')).filter(cell_count=0).count()
+    broken_notebooks = StepContentBlock.objects.filter(kind='notebook', step__published=True, step__archived_at=None).filter(
+        Q(notebook__isnull=True) | Q(notebook__published=False) | Q(notebook__archived_at__isnull=False)).count()
+    check('Конспекты', 'warning' if empty_notebooks or broken_notebooks else 'ok',
+          f'Пустых опубликованных конспектов: {empty_notebooks}. Недоступных конспектов в опубликованных слайдах: {broken_notebooks}.'
+          if empty_notebooks or broken_notebooks else 'Конспекты и их связи с курсами проверены.', '/teacher/notebooks/')
     static_ready = all((Path(settings.STATIC_ROOT)/name).is_file() for name in ('app.css', 'workspace.css', 'task-bank.js'))
     check('Файлы оформления', 'ok' if static_ready else 'warning',
           'Собранные файлы оформления на месте.' if static_ready else 'После обновления выполните collectstatic или перезапустите start_local.py.')

@@ -1,6 +1,7 @@
 """Presentation presets for a freely ordered lesson, not fixed lesson templates."""
 SLIDE_TYPES = [
     {'key': 'text', 'label': 'Теория', 'icon': 'Тт', 'kind': 'text', 'hint': 'Текст, фото и любые материалы'},
+    {'key': 'notebook', 'label': 'Конспект', 'icon': '▤', 'kind': 'notebook', 'hint': 'Готовый конспект с текстом и Python-ячейками'},
     {'key': 'quiz', 'label': 'Тест', 'icon': '☑', 'kind': 'quiz', 'quiz_mode': 'single', 'hint': 'Один правильный ответ'},
     {'key': 'multiple', 'label': 'Несколько ответов', 'icon': '☷', 'kind': 'quiz', 'quiz_mode': 'multiple', 'hint': 'Выбор нескольких вариантов'},
     {'key': 'boolean', 'label': 'Верно / неверно', 'icon': '✓', 'kind': 'quiz', 'quiz_mode': 'single', 'hint': 'Два варианта ответа'},

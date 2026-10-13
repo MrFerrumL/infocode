@@ -19,7 +19,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST, require_http_methods
 from .views import staff_required
 from .models import (Task, TaskBlock, Course, Section, Lesson, Step, Topic, StudyGroup, StudentAssignment,
-    Notification, MediaAsset, GroupInvite, InviteUse, TrashEntry, AuditEvent, ImportBatch, EditorDraft, VideoPosition, file_size, video_size)
+    Notification, MediaAsset, GroupInvite, InviteUse, TrashEntry, AuditEvent, ImportBatch, EditorDraft, VideoPosition, Notebook, file_size, video_size)
 from .assignments import own_groups, recipients_for, notify
 from .course_services import can_edit, editable_courses
 from .forms import UploadModelForm
@@ -140,7 +140,7 @@ def join(request, token):
     return render(request, 'platform/join.html', {'invite': invite, 'valid': valid, 'already': already})
 
 
-ARCHIVABLE = {m._meta.label_lower: m for m in (Task, TaskBlock, Course, Section, Lesson, Step)}
+ARCHIVABLE = {m._meta.label_lower: m for m in (Task, TaskBlock, Course, Section, Lesson, Step, Notebook)}
 
 
 @transaction.atomic
@@ -153,7 +153,14 @@ def archive(user, obj):
     if hasattr(current, 'published'):
         current.published = False
         fields.append('published')
+    if isinstance(current, Notebook):
+        current.revision += 1
+        current.edit_version += 1
+        fields.extend(['revision', 'edit_version'])
     current.save(update_fields=fields)
+    if isinstance(current, Notebook):
+        from .notebooks import invalidate_notebook_steps
+        invalidate_notebook_steps(current, unpublish=True)
     obj.archived_at = current.archived_at
     if hasattr(current, 'published'):
         obj.published = current.published
@@ -167,7 +174,7 @@ def trash(request):
     from urllib.parse import urlencode
     labels = {'learning.task': 'Задания', 'learning.taskblock': 'Блоки заданий',
               'learning.course': 'Курсы', 'learning.section': 'Разделы',
-              'learning.lesson': 'Уроки', 'learning.step': 'Слайды'}
+              'learning.lesson': 'Уроки', 'learning.step': 'Слайды', 'learning.notebook': 'Конспекты'}
     rows = TrashEntry.objects.filter(restored_at=None)
     if not request.user.is_superuser:
         rows = rows.filter(user=request.user)
@@ -181,12 +188,17 @@ def trash(request):
         course = obj if isinstance(obj, Course) else obj.course if isinstance(obj, Section) else obj.section.course if isinstance(obj, Lesson) else obj.lesson.section.course if isinstance(obj, Step) else None
         if course and not can_edit(request.user, course):
             raise PermissionDenied
+        if isinstance(obj, Notebook) and not (request.user.is_superuser or obj.owner_id == request.user.pk):
+            raise PermissionDenied
         if obj.archived_at:
             obj.archived_at = None
             fields = ['archived_at']
             if hasattr(obj, 'published'):
                 obj.published = False
                 fields.append('published')
+            if isinstance(obj, Notebook):
+                obj.edit_version += 1
+                fields.append('edit_version')
             obj.save(update_fields=fields)
         entry.restored_at = timezone.now()
         entry.save(update_fields=['restored_at'])
@@ -337,7 +349,7 @@ def editor_path(user, path):
         match = resolve(path)
     except Resolver404:
         raise PermissionDenied
-    allowed = {'task_create','task_editor','block_create','block_editor','course_create','course_editor','section_create','section_editor','lesson_create','lesson_editor','step_create','step_editor'}
+    allowed = {'task_create','task_editor','block_create','block_editor','course_create','course_editor','section_create','section_editor','lesson_create','lesson_editor','step_create','step_editor','notebook_create','notebook_editor'}
     if match.url_name not in allowed:
         raise PermissionDenied
     k = match.kwargs
@@ -347,6 +359,9 @@ def editor_path(user, path):
         get_object_or_404(Section, pk=k['section_pk'], course__in=editable_courses(user))
     if match.url_name in ('step_create','step_editor'):
         get_object_or_404(Lesson, pk=k['lesson_pk'], section__course__in=editable_courses(user))
+    if match.url_name == 'notebook_editor':
+        from .notebooks import editable_notebooks
+        get_object_or_404(editable_notebooks(user), pk=k['pk'])
     return path
 
 

@@ -2,11 +2,11 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
-from django.db.models import F
+from django.db.models import F, Q, Prefetch
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
-from .models import Course, Lesson, Step, Enrollment, StepProgress, StepSubmission, StepComment
+from .models import Course, Lesson, Step, StepContentBlock, Enrollment, StepProgress, StepSubmission, StepComment
 from .course_services import available_courses, can_edit, published_steps, current_progress, sync_lesson_progress
 from .services import check_answer
 from .security import form_token, claim_submission
@@ -49,6 +49,9 @@ def step_access(user, step):
     if can_edit(user, course):
         return course
     if not available_courses(user).filter(pk=course.pk).exists() or not step.published or not step.lesson.published:
+        raise Http404
+    if step.use_blocks and step.content_blocks.filter(kind='notebook').filter(
+            Q(notebook__isnull=True) | Q(notebook__published=False) | Q(notebook__archived_at__isnull=False)).exists():
         raise Http404
     if not Enrollment.objects.filter(user=user, course=course).exists():
         raise PermissionDenied('Сначала запишитесь на курс.')
@@ -109,7 +112,8 @@ def player(request, pk):
     if request.method == 'POST':
         from django.contrib.auth import get_user_model
         get_user_model().objects.select_for_update().get(pk=request.user.pk)
-    step = get_object_or_404(Step.objects.select_related('lesson__section__course'), pk=pk)
+    step = get_object_or_404(Step.objects.select_related('lesson__section__course').prefetch_related(
+        Prefetch('content_blocks', queryset=StepContentBlock.objects.select_related('notebook').prefetch_related('notebook__cells'))), pk=pk)
     course = step_access(request.user, step)
     editor = can_edit(request.user, course)
     steps = list(step.lesson.steps.all() if editor else step.lesson.steps.filter(published=True))

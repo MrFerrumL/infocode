@@ -59,7 +59,7 @@
       if (kind === 'text' && !host.firstChild) buildRich(row);
     });
     active().forEach((row, i, list) => row.querySelector('[data-block-down]').disabled = i === list.length - 1);
-    form.querySelector('[data-block-count]').textContent = `${n} / 40 блоков`;
+    form.querySelector('[data-block-count]').textContent = `${n} / 40 ${form.dataset.cellLabel || 'блоков'}`;
   }
   function newRow(kind='text', after=null, notify=true) {
     if (+total.value >= 40) {tell('До 40 блоков на шаг. Сохраните шаг после удаления блоков или разделите материал на несколько шагов.'); return null;}
@@ -154,7 +154,13 @@
     changed();
   }
   function initialize(row) {
-    field(row, 'kind').addEventListener('change', () => {const host = row.querySelector('.rich-host'); if (field(row, 'kind').value === 'text') host.replaceChildren(); refresh(); changed();});
+    field(row, 'kind').addEventListener('change', () => {
+      const kind = field(row, 'kind').value, host = row.querySelector('.rich-host');
+      if (kind === 'text') host.replaceChildren();
+      field(row, 'asset').value = '';
+      if (kind !== 'notebook' && field(row, 'notebook')) field(row, 'notebook').value = '';
+      refresh(); changed();
+    });
     row.querySelector('[data-block-up]').onclick = () => {const list = active(), at = list.indexOf(row); if (at > 0) list[at-1].before(row); refresh(); changed();};
     row.querySelector('[data-block-down]').onclick = () => {const list = active(), at = list.indexOf(row); if (at < list.length-1) list[at+1].after(row); refresh(); changed();};
     row.querySelector('[data-block-delete]').onclick = () => {
@@ -164,6 +170,7 @@
     row.querySelector('[data-block-copy]').onclick = () => {
       const copy = newRow(field(row, 'kind').value, row); if (!copy) return;
       ['text', 'caption', 'asset'].forEach(name => field(copy, name).value = field(row, name).value);
+      if (field(copy, 'notebook')) field(copy, 'notebook').value = field(row, 'notebook').value;
       field(copy, 'copy_from').value = field(row, 'id').value || field(row, 'copy_from').value;
       ['image', 'video', 'file'].forEach(name => {if (field(row, name).files.length) {field(copy, name).files = field(row, name).files; showUpload(copy, name);}});
       copy.querySelector('.rich-host').replaceChildren(); refresh(); changed();
@@ -200,6 +207,7 @@
       if (kind === 'text') {const div = document.createElement('div'); div.className = 'rich-content'; div.innerHTML = cleanHTML(field(row, 'text').value); body.append(div);}
       else if (kind === 'code') {const pre = document.createElement('pre'); pre.textContent = field(row, 'text').value; body.append(pre);}
       else if (kind === 'divider') body.append(document.createElement('hr'));
+      else if (kind === 'notebook') {const note = document.createElement('p'); note.className = 'notice'; note.textContent = 'Конспект: ' + (field(row, 'notebook')?.selectedOptions[0]?.textContent || 'не выбран') + '. Все ячейки появятся после сохранения.'; body.append(note);}
       else {const original = row.querySelector('.block-media-preview'); body.append(original.cloneNode(true)); if (!original.children.length) {const note = document.createElement('p'); note.className='notice'; note.textContent = 'Материал из медиатеки будет доступен после сохранения.'; body.append(note);}}
       if (field(row, 'caption').value && kind !== 'text') {const p = document.createElement('figcaption'); p.textContent = field(row, 'caption').value; body.append(p);}
     });

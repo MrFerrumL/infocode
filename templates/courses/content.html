@@ -7,5 +7,6 @@
   {% elif block.kind == 'code' %}{% include 'partials/code.html' with code=block.text %}{% if block.caption %}<p class="muted">{{ block.caption }}</p>{% endif %}
   {% elif block.kind == 'file' %}<a class="file-link" href="{% url 'download' 'course-block' block.pk %}">↓ {{ block.caption|default:'Скачать материал' }}</a>
   {% elif block.kind == 'divider' %}<hr>{% endif %}
+  {% if block.kind == 'notebook' and block.notebook and not block.notebook.archived_at %}<section class="notebook-embedded"><div class="notebook-embedded-heading"><div><span class="eyebrow">КОНСПЕКТ</span><h2>{{ block.notebook.title }}</h2></div><a href="{% url 'notebook_detail' block.notebook_id %}?step={{ step.pk }}">Открыть отдельно ↗</a></div>{% include 'notebooks/cells.html' with notebook=block.notebook step_context=step embed_id=block.pk %}</section>{% endif %}
 {% endfor %}
 </div>

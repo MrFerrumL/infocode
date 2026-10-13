@@ -1,6 +1,7 @@
 {% load course_text %}
+{% with download_kind=block_download_kind|default:'course-block' %}
 <article class="content-block" data-content-row>
-  <header class="content-block-head"><span class="block-grip" draggable="true" title="Перетащить блок">⠿</span><span class="block-index"></span><div class="block-kind">{{ block.kind }}</div><div class="block-actions"><button type="button" data-block-up title="Выше" aria-label="Переместить блок выше">↑</button><button type="button" data-block-down title="Ниже" aria-label="Переместить блок ниже">↓</button><button type="button" data-block-copy title="Дублировать">Копия</button><button type="button" data-block-delete title="Удалить">×</button></div></header>
+  <header class="content-block-head"><span class="block-grip" draggable="true" title="Перетащить блок">⠿</span><span class="block-index"></span><div class="block-kind">{{ block.kind }}</div><div class="block-actions"><button type="button" data-block-up title="Выше" aria-label="Переместить блок выше">↑</button><button type="button" data-block-down title="Ниже" aria-label="Переместить блок ниже">↓</button><button type="button" data-block-copy title="Дублировать">Копия</button><button type="button" data-block-delete title="Удалить" aria-label="Удалить">×</button></div></header>
   {{ block.non_field_errors }}{{ block.id }}{{ block.id.errors }}{{ block.copy_from }}{{ block.copy_from.errors }}{{ block.kind.errors }}
   <div class="block-position">{{ block.position.as_field_group }}</div>
   <div data-block-field="text code" class="block-writing">{{ block.text.errors }}<label class="source-label" for="{{ block.text.id_for_label }}">Текст / код</label>{{ block.text }}<div class="rich-host"></div></div>
@@ -10,11 +11,13 @@
     <div data-block-upload="file">{{ block.file.as_field_group }}<small>PDF, TXT, CSV, XLSX, ZIP, DOCX, Python · до 20 МБ</small></div>
     <details><summary>Выбрать из медиатеки</summary>{{ block.asset.as_field_group }}</details>
     <div class="block-media-preview">
-    {% if block.instance.pk %}{% if block.instance.kind == 'image' and block.instance.image %}<img src="{% url 'download' 'course-block' block.instance.pk %}?preview=1" alt="{{ block.instance.caption }}" loading="lazy">{% elif block.instance.kind == 'video' and block.instance.video %}<video controls preload="metadata" src="{% url 'download' 'course-block' block.instance.pk %}"></video>{% elif block.instance.file %}<a href="{% url 'download' 'course-block' block.instance.pk %}">Открыть сохранённый файл ↗</a>{% endif %}{% endif %}
+    {% if block.instance.pk %}{% if block.instance.kind == 'image' and block.instance.image %}<img src="{% url 'download' download_kind block.instance.pk %}?preview=1" alt="{{ block.instance.caption }}" loading="lazy">{% elif block.instance.kind == 'video' and block.instance.video %}<video controls preload="metadata" src="{% url 'download' download_kind block.instance.pk %}"></video>{% elif block.instance.file %}<a href="{% url 'download' download_kind block.instance.pk %}">Открыть сохранённый файл ↗</a>{% endif %}{% endif %}
     </div>
   </div>
+  {% if block.notebook %}<div data-block-field="notebook" class="block-notebook-picker">{{ block.notebook.as_field_group }}<a href="{% url 'notebook_create' %}" target="_blank" rel="noopener">+ Создать конспект в отдельной вкладке ↗</a><p class="muted">После создания обновите список: сначала сохраните текущий слайд как черновик, затем откройте его заново.</p></div>{% endif %}
   <div data-block-field="image video file code">{{ block.caption.as_field_group }}</div>
   <div data-block-field="divider" class="block-divider-sample"><hr></div>
   <div class="block-delete-field"><label>{{ block.DELETE }} Удалить блок при сохранении</label></div>
   <button type="button" class="insert-here" data-insert-here>+ Вставить блок после этого</button>
 </article>
+{% endwith %}

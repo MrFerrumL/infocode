@@ -354,6 +354,15 @@ def download(request, kind, pk):
             raise Http404
         obj = get_object_or_404(MediaAsset.objects.all() if request.user.is_superuser else MediaAsset.objects.filter(owner=request.user), pk=pk)
         f, video, inline_image = obj.file, obj.kind == 'video', obj.kind == 'image'
+    elif kind == 'notebook-cell':
+        from .models import NotebookCell
+        from .notebooks import notebook_access
+        obj = get_object_or_404(NotebookCell.objects.select_related('notebook'), pk=pk)
+        notebook_access(request.user, obj.notebook, request.GET.get('step'))
+        if obj.kind not in ('image', 'video', 'file'):
+            raise Http404
+        f = getattr(obj, obj.kind)
+        video, inline_image = obj.kind == 'video', obj.kind == 'image'
     elif kind == 'course-block':
         from .models import StepContentBlock
         from .course_views import step_access

@@ -4,7 +4,7 @@ from django.utils import timezone
 from .middleware import active_actor
 from .models import AuditEvent
 
-TRACKED = {'Task', 'TaskBlock', 'StepContentBlock', 'Course', 'Section', 'Lesson', 'Step', 'StudyGroup', 'LearningAssignment', 'HomeworkSubmission'}
+TRACKED = {'Task', 'TaskBlock', 'StepContentBlock', 'Notebook', 'NotebookCell', 'Course', 'Section', 'Lesson', 'Step', 'StudyGroup', 'LearningAssignment', 'HomeworkSubmission'}
 
 
 @receiver(pre_save)
@@ -31,7 +31,7 @@ def record_change(sender, instance, created, **kwargs):
             changes[field.name] = {'before': before, 'after': after}
     if changes:
         AuditEvent.objects.create(user=actor, action='Создание' if created else 'Изменение', model=instance._meta.label_lower, object_id=instance.pk, title=str(instance)[:240], changes=changes)
-    if actor.is_staff and sender.__name__ in {'Task', 'TaskBlock', 'Step', 'StepContentBlock', 'Course'}:
+    if actor.is_staff and sender.__name__ in {'Task', 'TaskBlock', 'Step', 'StepContentBlock', 'NotebookCell', 'Course'}:
         from .models import MediaAsset
         for field in ('image', 'video', 'file', 'cover', 'attachment'):
             value = getattr(instance, field, None)

@@ -295,6 +295,7 @@ def step_editor(request, lesson_pk, pk=None):
         step.use_blocks = True
         if request.method == 'POST':
             step._content_kinds = [f.cleaned_data.get('kind') for f in blocks.active_forms()] if blocks_valid else ['text', 'video', 'file']
+            step._content_notebooks = [f.cleaned_data.get('notebook') for f in blocks.active_forms() if f.cleaned_data.get('kind') == 'notebook'] if blocks_valid else []
     kind = request.POST.get('kind') if request.method == 'POST' else request.GET.get('kind', step.kind)
     if kind not in dict(Step.KINDS):
         from django.http import Http404

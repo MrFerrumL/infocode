@@ -1,7 +1,7 @@
 from django import forms
 from django.forms import BaseModelFormSet, modelformset_factory
 from .forms import AssetForm
-from .models import StepContentBlock
+from .models import StepContentBlock, Notebook
 from .rich_text import plain_html, sanitize_html
 
 
@@ -21,18 +21,24 @@ def legacy_content(step):
 
 
 class ContentBlockForm(AssetForm):
+    text = forms.CharField(label='Текст / Python-код', required=False, strip=False, max_length=100000,
+                          widget=forms.Textarea(attrs={'rows': 5, 'class': 'block-text-source', 'spellcheck': 'false'}))
     copy_from = forms.ModelChoiceField(queryset=StepContentBlock.objects.none(), required=False, widget=forms.HiddenInput)
 
     class Meta:
         model = StepContentBlock
-        fields = ['kind', 'position', 'text', 'caption', 'image', 'video', 'file']
+        fields = ['kind', 'position', 'text', 'caption', 'image', 'video', 'file', 'notebook']
         widgets = {'text': forms.Textarea(attrs={'rows': 5, 'class': 'block-text-source', 'spellcheck': 'false'}),
                    'caption': forms.TextInput(attrs={'placeholder': 'Необязательная подпись'}),
                    'position': forms.NumberInput(attrs={'min': 1, 'max': 40})}
 
     def __init__(self, *args, step=None, **kwargs):
+        user = kwargs.get('user')
         super().__init__(*args, **kwargs)
         self.fields['copy_from'].queryset = StepContentBlock.objects.filter(step=step) if step and step.pk else StepContentBlock.objects.none()
+        if 'notebook' in self.fields:
+            self.fields['notebook'].queryset = Notebook.objects.all() if user and user.is_superuser else Notebook.objects.filter(owner=user) if user else Notebook.objects.none()
+            self.fields['notebook'].help_text = 'Конспект появится целиком на этом слайде. Для публикации слайда конспект тоже должен быть опубликован.'
         self.fields['text'].strip = False
         self.fields['text'].max_length = 100000
         self.fields['position'].max_value = 40
@@ -49,16 +55,23 @@ class ContentBlockForm(AssetForm):
             self.add_error('asset', 'Тип материала должен совпадать с типом блока.')
         if kind == 'text':
             data['text'] = sanitize_html(data.get('text', ''))
+        if kind == 'code':
+            # HTML form submissions normalize newlines to CRLF. Store a stable
+            # source format so browser round trips do not change code revisions.
+            data['text'] = data.get('text', '').replace('\r\n', '\n').replace('\r', '\n')
         # Keep only the fields belonging to this kind; switching type cannot leak old media.
         for field in ('image', 'video', 'file'):
             if field != kind:
                 data[field] = ''
         if kind not in ('text', 'code'):
             data['text'] = ''
+        if 'notebook' in self.fields and kind != 'notebook':
+            data['notebook'] = None
         return data
 
 
 class ContentFormSet(BaseModelFormSet):
+    parent_field = 'step'
     def clean(self):
         super().clean()
         if any(self.errors):
@@ -72,20 +85,23 @@ class ContentFormSet(BaseModelFormSet):
         return sorted((f for f in self.forms if f.cleaned_data and not f.cleaned_data.get('DELETE')),
                       key=lambda f: f.cleaned_data.get('position', 1))
 
-    def persist(self, step):
+    def persist(self, parent):
         for form in self.forms:
             if form.cleaned_data.get('DELETE') and form.instance.pk:
                 form.instance.delete()
         for position, form in enumerate(self.active_forms(), 1):
             block = form.save(commit=False)
-            block.step, block.position = step, position
+            setattr(block, self.parent_field, parent)
+            block.position = position
             block.save()
 
 
 def block_formset(request, step):
     initial = legacy_content(step) if not step.use_blocks else []
     if not step.pk and not initial:
-        initial = [{'kind': request.GET.get('kind', 'text') if request.GET.get('kind') in ('video', 'file') else 'text', 'position': 1}]
+        initial = [{'kind': request.GET.get('kind', 'text') if request.GET.get('kind') in ('video', 'file', 'notebook') else 'text', 'position': 1}]
+    if step.pk and not initial and not step.content_blocks.exists() and step.kind == 'notebook':
+        initial = [{'kind': 'notebook', 'position': 1}]
     factory = modelformset_factory(StepContentBlock, form=ContentBlockForm, formset=ContentFormSet,
                                   extra=len(initial), max_num=40, validate_max=True,
                                   absolute_max=40, can_delete=True)
@@ -99,4 +115,5 @@ def block_formset(request, step):
 
 def content_signature(rows):
     fields = ('kind', 'text', 'caption', 'image', 'video', 'file')
-    return [tuple(str(row.get(field) or '') for field in fields) for row in rows]
+    return [tuple(str(row.get(field) or '') for field in fields) +
+            (str(getattr(row.get('notebook'), 'pk', row.get('notebook_id')) or '') if row.get('kind') == 'notebook' else '',) for row in rows]

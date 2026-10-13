@@ -1,0 +1,12 @@
+{% load course_text %}
+<div class="notebook-reader" data-notebook-reader>
+{% for cell in notebook.cells.all %}
+<section class="notebook-cell notebook-cell-{{ cell.kind }}" id="notebook-{{ notebook.pk }}-cell-{{ cell.pk }}{% if embed_id %}-{{ embed_id }}{% endif %}" data-notebook-cell><div class="notebook-cell-gutter"><span>[{{ forloop.counter }}]</span></div><div class="notebook-cell-body">
+{% if cell.kind == 'text' %}<div class="rich-content">{{ cell.text|course_html }}</div>
+{% elif cell.kind == 'code' %}<div class="notebook-code" data-notebook-code><div class="notebook-code-heading"><span>Python</span><button type="button" data-copy-notebook-code hidden>Копировать код</button></div><pre><code>{{ cell.text }}</code></pre></div>{% if cell.caption %}<p class="muted">{{ cell.caption }}</p>{% endif %}
+{% elif cell.kind == 'image' %}<figure><a href="{% url 'download' 'notebook-cell' cell.pk %}{% if step_context %}?step={{ step_context.pk }}{% endif %}" target="_blank" rel="noopener"><img loading="lazy" src="{% url 'download' 'notebook-cell' cell.pk %}?preview=1{% if step_context %}&step={{ step_context.pk }}{% endif %}" alt="{{ cell.caption|default:'Иллюстрация к конспекту' }}"></a>{% if cell.caption %}<figcaption>{{ cell.caption }}</figcaption>{% endif %}</figure>
+{% elif cell.kind == 'video' %}<figure><video controls preload="metadata" src="{% url 'download' 'notebook-cell' cell.pk %}{% if step_context %}?step={{ step_context.pk }}{% endif %}"></video>{% if cell.caption %}<figcaption>{{ cell.caption }}</figcaption>{% endif %}</figure>
+{% elif cell.kind == 'file' %}<a class="file-link" href="{% url 'download' 'notebook-cell' cell.pk %}{% if step_context %}?step={{ step_context.pk }}{% endif %}">↓ {{ cell.caption|default:'Скачать материал' }}</a>
+{% elif cell.kind == 'divider' %}<hr>{% endif %}
+</div></section>{% empty %}<p class="notice">В этом конспекте пока нет ячеек.</p>{% endfor %}
+</div>

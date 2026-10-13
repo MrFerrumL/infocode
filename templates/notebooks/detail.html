@@ -1,0 +1,7 @@
+{% extends 'base.html' %}
+{% block title %}{{ notebook.title }} · Конспект{% endblock %}
+{% block content %}
+<a class="back-link" href="{% if step_context %}{% url 'learn_step' step_context.pk %}{% elif can_edit_notebook %}{% url 'teacher_notebooks' %}{% else %}{% url 'notebooks' %}{% endif %}">← {% if step_context %}Вернуться в урок{% else %}Конспекты{% endif %}</a>
+<div class="page-heading"><div><div class="eyebrow">КОНСПЕКТ · {% if notebook.published %}ОПУБЛИКОВАН{% else %}ЧЕРНОВИК{% endif %}</div><h1>{{ notebook.title }}</h1>{% if notebook.description %}<p>{{ notebook.description|linebreaksbr }}</p>{% endif %}<p class="notebook-meta">Автор: {{ notebook.owner.first_name|default:notebook.owner.username }} · Обновлён {{ notebook.updated_at|date:'d.m.Y' }}</p></div><div class="notebook-heading-tools">{% if can_edit_notebook %}<a class="button" href="{% url 'notebook_editor' notebook.pk %}">Редактировать</a>{% endif %}<button type="button" class="button secondary" data-print-notebook hidden>Печать / PDF</button></div></div>
+<div class="notebook-workspace notebook-view"><aside class="notebook-outline panel"><h3>Содержание</h3><nav data-notebook-read-outline aria-label="Содержание конспекта"></nav><p class="muted">Python-код показан как пример. Его можно скопировать.</p></aside><article class="notebook-document">{% include 'notebooks/cells.html' %}</article></div>
+{% endblock %}
