@@ -10,8 +10,21 @@ from learning.health import health
 from learning.task_management import delete_task
 from learning.readiness import platform_check
 from learning import notebooks
+from learning import homework, schedule_views as schedule
 
 urlpatterns = [
+    path('homework/', homework.index, name='homework'),
+    path('teacher/homework/', homework.index, name='teacher_homework'),
+    path('teacher/homework/new/', work.create, name='homework_create'),
+    path('schedule/', schedule.calendar, name='schedule'),
+    path('teacher/schedule/', schedule.calendar, name='teacher_schedule'),
+    path('schedule/events/', schedule.events, name='schedule_events'),
+    path('schedule/export/', schedule.export, name='schedule_export'),
+    path('schedule/<int:pk>/', schedule.detail, name='schedule_detail'),
+    path('teacher/schedule/new/', schedule.create, name='schedule_create'),
+    path('teacher/schedule/<int:pk>/edit/', schedule.edit, name='schedule_edit'),
+    path('teacher/schedule/<int:pk>/cancel/', schedule.cancel, name='schedule_cancel'),
+    path('teacher/schedule/<int:pk>/move/', schedule.move, name='schedule_move'),
     path('notebooks/', notebooks.library, name='notebooks'),
     path('notebooks/<int:pk>/', notebooks.detail, name='notebook_detail'),
     path('teacher/notebooks/', notebooks.library, name='teacher_notebooks'),

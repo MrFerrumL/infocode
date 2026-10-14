@@ -1,5 +1,5 @@
-{% extends 'base.html' %}{% block content %}{% include 'layout/work_tabs.html' %}
-<div class="page-heading"><div><div class="eyebrow">НАЗНАЧЕНИЯ</div><h1>Работа для учеников</h1><p>Соберите задания, выберите учеников и установите правила сдачи.</p></div></div>
+{% extends 'base.html' %}{% block content %}{% if homework_mode %}<a class="back-link" href="{% url 'teacher_homework' %}">← Домашние задания</a>{% else %}{% include 'layout/work_tabs.html' %}{% endif %}
+<div class="page-heading"><div><div class="eyebrow">НАЗНАЧЕНИЯ</div><h1>{% if homework_mode %}Новое домашнее задание{% else %}Работа для учеников{% endif %}</h1><p>Соберите задания, выберите учеников и установите правила сдачи.</p></div></div>
 <form method="post" class="work-wizard" data-work-wizard>{% csrf_token %}<input type="hidden" name="submit_token" value="{{ submit_token }}">
 <ol class="wizard-progress" aria-label="Создание работы" hidden data-wizard-progress><li><button type="button" data-wizard-go="0"><span>1</span>Содержание</button></li><li><button type="button" data-wizard-go="1"><span>2</span>Ученики и сроки</button></li><li><button type="button" data-wizard-go="2"><span>3</span>Правила и отправка</button></li></ol>
 <div class="panel">{{ form.non_field_errors }}

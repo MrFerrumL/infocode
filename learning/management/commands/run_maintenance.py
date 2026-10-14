@@ -34,6 +34,7 @@ class Command(BaseCommand):
         last_backup = None
         while True:
             try:
+                call_command('send_schedule_reminders', verbosity=0)
                 last_backup = self.cycle(folder, keep, last_backup)
             except Exception as exc:
                 if once:

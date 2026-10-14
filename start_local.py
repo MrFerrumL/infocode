@@ -42,7 +42,28 @@ def main():
     print('\nOpen http://127.0.0.1:8000/\nPress Ctrl+C to stop.\n', flush=True)
     from config.wsgi import application
     from waitress import serve
-    serve(application, host='127.0.0.1', port=8000, threads=8, max_request_body_size=525_000_000)
+    from threading import Event, Thread
+    from django.db import close_old_connections
+    import logging
+    stop_reminders = Event()
+    def reminder_loop():
+        from learning.schedule_services import send_reminders
+        while not stop_reminders.is_set():
+            try:
+                close_old_connections()
+                send_reminders()
+            except Exception:
+                logging.getLogger('platform').exception('Local schedule reminders failed')
+            finally:
+                close_old_connections()
+            stop_reminders.wait(60)
+    reminders = Thread(target=reminder_loop, name='schedule-reminders', daemon=True)
+    reminders.start()
+    try:
+        serve(application, host='127.0.0.1', port=8000, threads=8, max_request_body_size=525_000_000)
+    finally:
+        stop_reminders.set()
+        reminders.join(timeout=2)
     return 0
 
 

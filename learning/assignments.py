@@ -155,12 +155,20 @@ def recipient_status(r):
 
 @staff_required
 def create(request):
+    homework_mode = request.resolver_match.url_name == 'homework_create'
     initial = {k: request.GET[k] for k in ('kind', 'source', 'task_ids') if k in request.GET}
+    if homework_mode:
+        initial['kind'] = 'homework'
     if request.GET.get('student', '').isdigit():
         initial['students'] = [request.GET['student']]
     if request.GET.get('topic', '').isdigit():
         initial['topics'] = list(Topic.objects.filter(number=request.GET['topic']).values_list('pk', flat=True))
-    form = WorkForm(request.POST or None, user=request.user, initial=initial)
+    data = request.POST.copy() if request.method == 'POST' else None
+    if homework_mode and data is not None:
+        data['kind'] = 'homework'
+    form = WorkForm(data, user=request.user, initial=initial)
+    if homework_mode:
+        form.fields['kind'].widget = forms.HiddenInput()
     if request.method == 'POST' and form.is_valid():
         try:
             with transaction.atomic():
@@ -194,7 +202,9 @@ def create(request):
             return redirect('assignment_detail', pk=a.pk)
         except ValidationError as exc:
             form.add_error(None, exc)
-    return render(request, 'platform/work_form.html', {'form': form, 'submit_token': form_token(request.user, 'assignment-new'), 'nav': 'teacher'})
+    return render(request, 'platform/work_form.html', {'form': form, 'homework_mode': homework_mode,
+        'submit_token': form_token(request.user, 'assignment-new'), 'nav': 'teacher',
+        'workspace_section': 'homework' if homework_mode else 'works'})
 
 
 @login_required
@@ -256,7 +266,7 @@ def detail(request, pk):
     for recipient in recipients:
         recipient.state = recipient_status(recipient)
         recipient.exam_attempts = attempts_by_student.get(recipient.student_id, [])
-    return render(request, 'platform/work_detail.html', {'work': a, 'recipient': r, 'teacher': teacher, 'recipients': recipients, 'form': form, 'blocked': block, 'submissions': r.submissions.all() if r else [], 'attempts': ExamAttempt.objects.filter(variant=a.variant, user=request.user) if a.variant_id else [], 'submit_token': form_token(request.user, f'homework:{pk}'), 'nav': 'teacher' if teacher else 'assignments'})
+    return render(request, 'platform/work_detail.html', {'work': a, 'recipient': r, 'teacher': teacher, 'recipients': recipients, 'form': form, 'blocked': block, 'submissions': r.submissions.all() if r else [], 'attempts': ExamAttempt.objects.filter(variant=a.variant, user=request.user) if a.variant_id else [], 'submit_token': form_token(request.user, f'homework:{pk}'), 'nav': 'homework' if a.kind == 'homework' else 'teacher' if teacher else 'assignments', 'workspace_section': 'homework' if a.kind == 'homework' else 'works'})
 
 
 @staff_required

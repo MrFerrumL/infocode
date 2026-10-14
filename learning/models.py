@@ -451,3 +451,4 @@ class LessonFile(models.Model):
 # Import extension models so Django registers their migrations and relations.
 from .platform_models import (LoginBucket, StudentAccess, ActionReceipt, TeacherNote, LearningAssignment, AssignmentRecipient, HomeworkSubmission, Notification, GroupInvite, InviteUse, EditorDraft, VideoPosition, MediaAsset, AuditEvent, TrashEntry, ImportBatch)
 from .notebook_models import Notebook, NotebookCell
+from .schedule_models import ScheduleEvent, ScheduleOccurrence, ScheduleReminder

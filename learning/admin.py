@@ -195,3 +195,42 @@ class StepAdmin(ArchiveAdmin):
         if db_field.name == 'lesson' and not request.user.is_superuser:
             kwargs['queryset'] = Lesson.objects.filter(section__course__owner=request.user)
         return super().formfield_for_foreignkey(db_field, request, **kwargs)
+
+
+from .models import ScheduleEvent
+
+
+@admin.register(ScheduleEvent)
+class ScheduleEventAdmin(admin.ModelAdmin):
+    list_display = ['title', 'teacher', 'starts_at', 'ends_at', 'recurrence', 'cancelled']
+    list_filter = ['cancelled', 'recurrence']
+    search_fields = ['title']
+    actions = None
+
+    def get_queryset(self, request):
+        from .schedule_services import editable_events
+        return editable_events(request.user).select_related('teacher')
+
+    def has_module_permission(self, request):
+        return request.user.is_active and request.user.is_staff
+
+    def has_view_permission(self, request, obj=None):
+        return self.has_change_permission(request, obj)
+
+    def has_add_permission(self, request):
+        return self.has_module_permission(request)
+
+    def has_change_permission(self, request, obj=None):
+        return self.has_module_permission(request) and (obj is None or request.user.is_superuser or obj.teacher_id == request.user.pk)
+
+    def has_delete_permission(self, request, obj=None):
+        return False
+
+    def add_view(self, request, form_url='', extra_context=None):
+        from django.shortcuts import redirect
+        return redirect('schedule_create')
+
+    def change_view(self, request, object_id, form_url='', extra_context=None):
+        from django.shortcuts import get_object_or_404, redirect
+        event = get_object_or_404(self.get_queryset(request), pk=object_id)
+        return redirect('schedule_edit', pk=event.pk)
