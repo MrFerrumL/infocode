@@ -16,7 +16,7 @@ from .models import (LearningAssignment, AssignmentRecipient, HomeworkSubmission
 from .forms import UploadModelForm
 from .views import staff_required
 from .security import claim_submission, form_token
-from .python_answers import work_code_policy_field
+from .python_answers import work_code_policy_field, code_field, normalize_code
 
 
 def own_groups(user):
@@ -57,6 +57,10 @@ class WorkForm(forms.ModelForm):
         self.fields['lesson'].label = 'Урок курса'
         self.initial.setdefault('starts_at', timezone.localtime().replace(second=0, microsecond=0))
         self.initial.setdefault('due_at', timezone.localtime().replace(second=0, microsecond=0) + timedelta(days=7))
+        if not self.instance.pk and 'max_attempts' not in kwargs.get('initial', {}):
+            kind = self.data.get('kind') if self.is_bound else self.initial.get('kind', 'homework')
+            self.initial['max_attempts'] = 0 if kind == 'homework' else 1
+        self.fields['code_policy'].help_text += ' В ДЗ код можно приложить к каждой задаче, даже если в банке он отключён.'
     def clean(self):
         d = super().clean()
         if d.get('due_at') and d.get('starts_at') and d['due_at'] <= d['starts_at']:
@@ -80,14 +84,17 @@ class WorkForm(forms.ModelForm):
 
 
 class SubmissionForm(UploadModelForm):
+    python_code = code_field()
     class Meta:
         model = HomeworkSubmission
-        fields = ['text', 'image', 'file']
+        fields = ['text', 'python_code', 'image', 'file']
         widgets = {'text': forms.Textarea(attrs={'rows': 6})}
     def clean(self):
         d = super().clean()
-        if not any(d.get(k) for k in ('text', 'image', 'file')):
-            raise ValidationError('Добавьте текст, фотографию или файл решения.')
+        if 'python_code' in d:
+            d['python_code'] = normalize_code(d['python_code'], False)
+        if not any(d.get(k) for k in ('text', 'python_code', 'image', 'file')):
+            raise ValidationError('Добавьте текст, Python-код, фотографию или файл решения.')
         return d
 
 
@@ -106,6 +113,25 @@ class ReviewForm(forms.ModelForm):
         return d
 
 
+class AttemptLimitForm(forms.Form):
+    max_attempts = forms.IntegerField(label='Лимит попыток ДЗ', min_value=0, max_value=100,
+        help_text='0 — без ограничения. Уже сохранённые попытки и зачёт остаются в истории.')
+
+
+def number_history(rows):
+    rows = list(rows)
+    for index, row in enumerate(rows):
+        row.number = len(rows) - index
+    return rows
+
+
+def history_summary(attempts):
+    submitted = [a for a in attempts if a.submitted_at]
+    return {'count': len(attempts), 'finished': len(submitted),
+            'best': max((a.score for a in submitted), default=None),
+            'latest': submitted[0].score if submitted else None}
+
+
 def assignment_block(recipient, now=None):
     now = now or timezone.now()
     a = recipient.assignment
@@ -115,13 +141,13 @@ def assignment_block(recipient, now=None):
         return 'Работа ещё не открыта.'
     if now >= a.due_at and not a.allow_late:
         return 'Срок сдачи истёк.'
-    if recipient.completed_at:
+    if recipient.completed_at and (a.kind != 'homework' or a.target == 'lesson'):
         return 'Работа уже зачтена.'
     used = ExamAttempt.objects.filter(user=recipient.student, variant=a.variant).count() if a.target == 'variant' else recipient.submissions.count() if a.target == 'manual' else 0
     active = a.target == 'variant' and ExamAttempt.objects.filter(user=recipient.student, variant=a.variant, submitted_at=None, deadline__gt=now).exists()
-    if used >= a.max_attempts + recipient.extra_attempts and not active:
+    if not a.unlimited_attempts and used >= a.max_attempts + recipient.extra_attempts and not active:
         return 'Попытки закончились. Преподаватель может выдать дополнительную.'
-    if a.target == 'manual' and recipient.submissions.filter(status='pending').exists():
+    if a.target == 'manual' and a.kind != 'homework' and recipient.submissions.filter(status='pending').exists():
         return 'Решение уже на проверке.'
     return ''
 
@@ -227,10 +253,18 @@ def detail(request, pk):
     if not teacher and not r:
         raise PermissionDenied
     form = SubmissionForm(request.POST or None, request.FILES or None)
+    limit_form = AttemptLimitForm(request.POST if teacher and request.POST.get('action') == 'limit' else None,
+                                  initial={'max_attempts': a.max_attempts})
     block = assignment_block(r) if r else ''
     if request.method == 'POST':
         action = request.POST.get('action', 'submit')
-        if teacher and action in ('extra', 'close', 'open'):
+        if teacher and action == 'limit' and a.kind == 'homework':
+            if limit_form.is_valid():
+                a.max_attempts = limit_form.cleaned_data['max_attempts']
+                a.save(update_fields=['max_attempts'])
+                messages.success(request, 'Лимит обновлён. Все предыдущие попытки сохранены.')
+                return redirect('assignment_detail', pk=pk)
+        elif teacher and action in ('extra', 'close', 'open'):
             if action == 'extra':
                 recipient = get_object_or_404(AssignmentRecipient.objects.select_for_update(), pk=request.POST.get('recipient'), assignment=a)
                 recipient.extra_attempts += 1
@@ -240,7 +274,7 @@ def detail(request, pk):
                 a.active = action == 'open'
                 a.save(update_fields=['active'])
             return redirect('assignment_detail', pk=pk)
-        if not r or block:
+        elif not r or block:
             messages.error(request, block or 'Эта форма доступна получателю задания.')
         elif a.target == 'manual' and form.is_valid() and claim_submission(request, f'homework:{pk}'):
             s = form.save(commit=False)
@@ -261,12 +295,21 @@ def detail(request, pk):
     attempts_by_student = {}
     if teacher and a.variant_id:
         for attempt in ExamAttempt.objects.filter(variant=a.variant, user_id__in=[r.student_id for r in recipients]).annotate(
-                code_count=Count('answers', filter=~Q(answers__python_code=''))):
+                code_count=Count('answers', filter=~Q(answers__python_code='')),
+                comment_count=Count('answers', filter=~Q(answers__comment=''))).order_by('-started_at', '-pk'):
             attempts_by_student.setdefault(attempt.user_id, []).append(attempt)
     for recipient in recipients:
         recipient.state = recipient_status(recipient)
-        recipient.exam_attempts = attempts_by_student.get(recipient.student_id, [])
-    return render(request, 'platform/work_detail.html', {'work': a, 'recipient': r, 'teacher': teacher, 'recipients': recipients, 'form': form, 'blocked': block, 'submissions': r.submissions.all() if r else [], 'attempts': ExamAttempt.objects.filter(variant=a.variant, user=request.user) if a.variant_id else [], 'submit_token': form_token(request.user, f'homework:{pk}'), 'nav': 'homework' if a.kind == 'homework' else 'teacher' if teacher else 'assignments', 'workspace_section': 'homework' if a.kind == 'homework' else 'works'})
+        recipient.exam_attempts = number_history(attempts_by_student.get(recipient.student_id, []))
+        recipient.attempt_summary = history_summary(recipient.exam_attempts)
+        recipient.submission_history = number_history(recipient.submissions.all())
+    attempts = number_history(ExamAttempt.objects.filter(variant=a.variant, user=request.user).order_by('-started_at', '-pk')) if r and a.variant_id else []
+    return render(request, 'platform/work_detail.html', {'work': a, 'recipient': r, 'teacher': teacher, 'recipients': recipients, 'form': form,
+        'limit_form': limit_form, 'blocked': block, 'recipient_state': recipient_status(r) if r else '',
+        'submissions': number_history(r.submissions.all()) if r else [], 'attempts': attempts, 'attempt_summary': history_summary(attempts),
+        'active_attempt': next((attempt for attempt in attempts if not attempt.submitted_at), None),
+        'start_token': form_token(request.user, f'start-exam:{a.variant_id}'), 'submit_token': form_token(request.user, f'homework:{pk}'),
+        'nav': 'homework' if a.kind == 'homework' else 'teacher' if teacher else 'assignments', 'workspace_section': 'homework' if a.kind == 'homework' else 'works'})
 
 
 @staff_required
@@ -285,13 +328,15 @@ def review(request, pk):
         s.save()
         r = AssignmentRecipient.objects.select_for_update().get(pk=s.recipient_id)
         if s.status == 'accepted':
-            r.completed_at = s.created_at
+            r.completed_at = r.completed_at or s.created_at
         else:
-            r.extra_attempts += 1  # A return always permits one revised submission within the deadline.
+            if not r.assignment.unlimited_attempts:
+                r.extra_attempts += 1  # A return permits a revision when attempts are limited.
         r.save(update_fields=['completed_at', 'extra_attempts'])
         notify(r.student, f'{s.get_status_display()}: {s.recipient.assignment.title}', s.feedback, reverse('assignment_detail', args=[r.assignment_id]))
         return redirect('assignment_detail', pk=r.assignment_id)
-    return render(request, 'platform/review.html', {'submission': s, 'form': form, 'nav': 'teacher'})
+    return render(request, 'platform/review.html', {'submission': s, 'form': form,
+        'attempt_number': HomeworkSubmission.objects.filter(recipient=s.recipient, pk__lte=s.pk).count(), 'nav': 'teacher'})
 
 
 def safe_cell(value):

@@ -1,6 +1,7 @@
 import secrets
 import uuid
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.core.validators import MinValueValidator, MaxValueValidator, FileExtensionValidator
 from .models import file_size
@@ -53,7 +54,7 @@ class LearningAssignment(models.Model):
     group = models.ForeignKey('learning.StudyGroup', null=True, blank=True, on_delete=models.SET_NULL)
     starts_at = models.DateTimeField('Открыть с')
     due_at = models.DateTimeField('Сдать до')
-    max_attempts = models.PositiveSmallIntegerField('Число попыток', default=1, validators=[MinValueValidator(1), MaxValueValidator(100)])
+    max_attempts = models.PositiveSmallIntegerField('Лимит попыток', default=1, validators=[MinValueValidator(0), MaxValueValidator(100)], help_text='0 — без ограничения для ДЗ. Для обязательной КР укажите от 1 до 100.')
     pass_percent = models.PositiveSmallIntegerField('Для зачёта, %', default=60, validators=[MaxValueValidator(100)])
     allow_late = models.BooleanField('Разрешить сдачу после срока', default=False)
     active = models.BooleanField(default=True)
@@ -63,6 +64,15 @@ class LearningAssignment(models.Model):
         indexes = [models.Index(fields=['teacher', 'due_at'])]
     def __str__(self):
         return self.title
+
+    @property
+    def unlimited_attempts(self):
+        return self.kind == 'homework' and self.max_attempts == 0
+
+    def clean(self):
+        super().clean()
+        if self.kind == 'required_test' and self.max_attempts == 0:
+            raise ValidationError({'max_attempts': 'Для обязательной КР укажите хотя бы одну попытку.'})
 
 
 class AssignmentRecipient(models.Model):
@@ -78,6 +88,7 @@ class AssignmentRecipient(models.Model):
 class HomeworkSubmission(models.Model):
     recipient = models.ForeignKey(AssignmentRecipient, on_delete=models.CASCADE, related_name='submissions')
     text = models.TextField('Решение / комментарий', blank=True, max_length=20000)
+    python_code = models.TextField('Python-код ученика', blank=True, max_length=20000)
     image = models.ImageField('Фото решения', upload_to='homework-images/', blank=True, validators=[file_size, FileExtensionValidator(['png', 'jpg', 'jpeg', 'webp'])])
     file = models.FileField('Файл решения', upload_to='homework-files/', blank=True, validators=[file_size, FileExtensionValidator(['txt', 'pdf', 'py', 'zip', 'csv', 'xlsx', 'docx'])])
     status = models.CharField(max_length=12, choices=[('pending', 'На проверке'), ('accepted', 'Зачтено'), ('returned', 'На доработку')], default='pending')

@@ -147,6 +147,7 @@ class ExamAnswer(models.Model):
     item = models.ForeignKey(VariantItem, on_delete=models.PROTECT)
     answer = models.CharField(max_length=250, blank=True)
     python_code = models.TextField('Python-код ученика', blank=True, max_length=MAX_CODE_LENGTH)
+    comment = models.TextField('Комментарий ученика', blank=True, max_length=3000)
     correct = models.BooleanField(default=False)
     class Meta:
         constraints = [models.UniqueConstraint(fields=['attempt', 'item'], name='unique_exam_answer')]

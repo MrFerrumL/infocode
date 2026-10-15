@@ -120,7 +120,7 @@ def student(request, pk):
     for p in ExamAttempt.objects.filter(user=s, submitted_at__gte=lower, submitted_at__lt=upper).select_related('variant').annotate(total=Count('variant__items'))[:100]:
         timeline.append({'time': p.submitted_at, 'title': p.variant.title, 'text': 'Вариант / контрольная', 'result': f'{p.score}/{p.total}', 'url': f'/results/{p.pk}/'})
     for p in HomeworkSubmission.objects.filter(recipient__student=s, recipient__assignment__teacher=request.user, created_at__gte=lower, created_at__lt=upper).select_related('recipient__assignment')[:100]:
-        timeline.append({'time': p.created_at, 'title': p.recipient.assignment.title, 'text': p.text[:300], 'result': p.get_status_display(), 'url': f'/teacher/review/{p.pk}/'})
+        timeline.append({'time': p.created_at, 'title': p.recipient.assignment.title, 'text': p.text[:300], 'python_code': p.python_code, 'result': p.get_status_display(), 'url': f'/teacher/review/{p.pk}/'})
     timeline = sorted(timeline, key=lambda x: x['time'], reverse=True)[:100]
     assignments = list(AssignmentRecipient.objects.filter(student=s, assignment__teacher=request.user).select_related('assignment').prefetch_related('submissions'))
     for r in assignments:

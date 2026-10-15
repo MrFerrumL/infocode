@@ -142,7 +142,7 @@ def variants(request):
 def variant_detail(request, pk):
     expire_attempts(request.user)
     variant = get_object_or_404(visible_variants(request.user), pk=pk)
-    return render(request, 'variant.html', {'variant': variant, 'attempts': ExamAttempt.objects.filter(user=request.user, variant=variant), 'nav': 'variants'})
+    return render(request, 'variant.html', {'variant': variant, 'attempts': ExamAttempt.objects.filter(user=request.user, variant=variant), 'start_token': form_token(request.user, f'start-exam:{pk}'), 'nav': 'variants'})
 
 
 @login_required
@@ -165,6 +165,11 @@ def start_exam(request, pk):
             return redirect('assignment_detail', pk=recipient.assignment_id)
         if not recipient.assignment.allow_late:
             deadline = min(deadline, recipient.assignment.due_at)
+    active = ExamAttempt.objects.filter(user=request.user, variant=variant, submitted_at=None).first()
+    if active:
+        return redirect('exam', pk=active.pk)
+    if not claim_submission(request, f'start-exam:{pk}'):
+        return redirect('assignment_detail', pk=recipient.assignment_id) if variant.assigned_only else redirect('variant', pk=pk)
     # Unique constraint also prevents two simultaneous active attempts.
     attempt, _ = ExamAttempt.objects.get_or_create(user=request.user, variant=variant, submitted_at=None, defaults={'deadline': deadline})
     return redirect('exam', pk=attempt.pk)
@@ -173,7 +178,7 @@ def start_exam(request, pk):
 @login_required
 @transaction.atomic
 def exam(request, pk):
-    from .python_answers import PythonCodeForm
+    from .python_answers import ExamAnswerForm
     attempt = get_object_or_404(ExamAttempt.objects.select_for_update().select_related('variant'), pk=pk, user=request.user)
     if attempt.submitted_at:
         return redirect('result', pk=pk)
@@ -182,6 +187,7 @@ def exam(request, pk):
         messages.info(request, 'Время закончилось. Проверены последние сохранённые ответы.')
         return redirect('result', pk=pk)
     items = list(attempt.variant.items.all())
+    recipient = None
     if attempt.variant.assigned_only:
         from .models import AssignmentRecipient
         recipient = get_object_or_404(AssignmentRecipient.objects.select_related('assignment'), assignment__variant=attempt.variant, student=request.user)
@@ -193,25 +199,28 @@ def exam(request, pk):
     for item in items:
         saved = answers.get(item.pk)
         item.value = request.POST.get(f'answer_{item.pk}', '')[:250] if request.method == 'POST' else saved.answer if saved else ''
+        # Homework always accepts an optional program; required-code tasks retain their rule.
+        if recipient and recipient.assignment.kind == 'homework' and item.code_mode == 'off':
+            item.code_mode = 'optional'
         required_code = request.method == 'POST' and request.POST.get('action') == 'submit' and bool(item.value.strip()) and item.code_mode == 'required'
         # Required only on final submission; browser validation must still allow saving drafts.
-        item.code_form = PythonCodeForm(request.POST if request.method == 'POST' else None, mode=item.code_mode, required=required_code, use_required_attribute=False, prefix=f'code_{item.pk}', initial={'python_code': saved.python_code if saved else ''})
+        item.code_form = ExamAnswerForm(request.POST if request.method == 'POST' else None, mode=item.code_mode, required=required_code, use_required_attribute=False, prefix=f'code_{item.pk}', initial={'python_code': saved.python_code if saved else '', 'comment': saved.comment if saved else ''})
         if request.method == 'POST' and not item.code_form.is_valid():
             valid_code = False
     if request.method == 'POST' and valid_code:
         if not claim_submission(request, f'exam:{pk}'):
             return redirect('exam', pk=pk)
         for item in items:
-            ExamAnswer.objects.update_or_create(attempt=attempt, item=item, defaults={'answer': item.value, 'python_code': item.code_form.cleaned_data.get('python_code', '')})
+            ExamAnswer.objects.update_or_create(attempt=attempt, item=item, defaults={'answer': item.value, 'python_code': item.code_form.cleaned_data.get('python_code', ''), 'comment': item.code_form.cleaned_data['comment']})
         if request.POST.get('action') == 'submit':
             finish_attempt(attempt)
             return redirect('result', pk=pk)
         messages.success(request, 'Ответы сохранены. Можно продолжить позже до окончания времени.')
         return redirect('exam', pk=pk)
     if request.method == 'POST' and not valid_code:
-        messages.error(request, 'Проверьте Python-код в отмеченных заданиях. Ответы пока не сохранены; введённые данные остались в форме.')
+        messages.error(request, 'Проверьте код и комментарии в отмеченных заданиях. Ответы пока не сохранены; введённые данные остались в форме.')
     remaining = max(0, math.ceil((attempt.deadline - timezone.now()).total_seconds() / 60))
-    return render(request, 'exam.html', {'submit_token': form_token(request.user, f'exam:{pk}'), 'attempt': attempt, 'items': items, 'remaining': remaining, 'nav': 'variants'})
+    return render(request, 'exam.html', {'submit_token': form_token(request.user, f'exam:{pk}'), 'attempt': attempt, 'items': items, 'remaining': remaining, 'work': recipient.assignment if recipient else None, 'attempt_number': ExamAttempt.objects.filter(user=attempt.user, variant=attempt.variant, pk__lte=attempt.pk).count(), 'nav': 'homework' if recipient and recipient.assignment.kind == 'homework' else 'variants'})
 
 
 @login_required
@@ -220,10 +229,18 @@ def result(request, pk):
     if not request.user.is_staff:
         qs = qs.filter(user=request.user)
     elif not request.user.is_superuser:
-        qs = qs.filter(Q(user=request.user) | Q(user__assigned_teachers__teacher=request.user)).distinct()
+        qs = qs.filter(Q(user=request.user) | Q(variant__assigned_only=True, variant__assignment__teacher=request.user) | Q(variant__assigned_only=False, user__assigned_teachers__teacher=request.user)).distinct()
     attempt = get_object_or_404(qs, pk=pk, submitted_at__isnull=False)
     total = attempt.variant.items.count()
-    return render(request, 'result.html', {'attempt': attempt, 'answers': attempt.answers.select_related('item'), 'total': total, 'percent': round(attempt.score / total * 100) if total else 0, 'nav': 'variants'})
+    recipient = None
+    if attempt.variant.assigned_only:
+        from .models import AssignmentRecipient
+        recipient = AssignmentRecipient.objects.select_related('assignment').filter(assignment__variant=attempt.variant, student=attempt.user).first()
+    from .assignments import assignment_block
+    return render(request, 'result.html', {'attempt': attempt, 'answers': attempt.answers.select_related('item'), 'total': total, 'percent': round(attempt.score / total * 100) if total else 0,
+        'work': recipient.assignment if recipient else None, 'retry_block': assignment_block(recipient) if recipient else '',
+        'attempt_number': ExamAttempt.objects.filter(user=attempt.user, variant=attempt.variant, pk__lte=attempt.pk).count(),
+        'start_token': form_token(request.user, f'start-exam:{attempt.variant_id}'), 'nav': 'homework' if recipient and recipient.assignment.kind == 'homework' else 'variants'})
 
 
 @login_required

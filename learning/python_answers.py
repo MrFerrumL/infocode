@@ -44,3 +44,9 @@ class PythonCodeForm(forms.Form):
         if field and 'python_code' in data:
             data['python_code'] = normalize_code(data['python_code'], field.required)
         return data
+
+
+class ExamAnswerForm(PythonCodeForm):
+    comment = forms.CharField(label='Комментарий к задаче', required=False, max_length=3000,
+        help_text='Поясните решение или напишите, где возник вопрос. Комментарий увидит преподаватель.',
+        widget=forms.Textarea(attrs={'rows': 3, 'placeholder': 'Как решали задачу, что получилось или осталось непонятным…'}))

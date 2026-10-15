@@ -68,6 +68,9 @@
   const back = form.querySelector('[data-wizard-back]');
   const target = form.elements.target;
   const kind = form.elements.kind;
+  const attemptLimit = form.elements.max_attempts;
+  let attemptLimitEdited = false;
+  attemptLimit.addEventListener('input', () => { attemptLimitEdited = true; });
   const mode = form.querySelector('#work-source-mode');
   let current = 0;
   form.noValidate = true;
@@ -83,11 +86,17 @@
   const updatePanels = () => {
     form.querySelectorAll('[data-work-target]').forEach(panel => enablePanel(panel, panel.dataset.workTarget === target.value));
     form.querySelectorAll('[data-source-panel]').forEach(panel => enablePanel(panel, target.value === 'variant' && panel.dataset.sourcePanel === mode.value));
+    attemptLimit.min = kind.value === 'homework' ? '0' : '1';
+    const offOption = form.elements.code_policy.querySelector('option[value="off"]');
+    offOption.disabled = kind.value === 'homework';
+    offOption.hidden = kind.value === 'homework';
+    if (offOption.disabled && form.elements.code_policy.value === 'off') form.elements.code_policy.value = 'optional';
   };
   target.addEventListener('change', updatePanels);
   mode.addEventListener('change', updatePanels);
   kind.addEventListener('change', () => {
     if (kind.value === 'required_test') target.value = 'variant';
+    if (!attemptLimitEdited) attemptLimit.value = kind.value === 'homework' ? '0' : '1';
     updatePanels();
   });
   updatePanels();
@@ -97,9 +106,10 @@
     box.hidden = false;
     box.replaceChildren();
     const checked = form.querySelectorAll('[name=students]:checked').length;
+    const limitLabel = kind.value === 'homework' && attemptLimit.value === '0' ? 'без ограничения' : attemptLimit.value;
     const lines = [form.elements.title.value || 'Без названия', `${selection(kind)} · ${selection(target)}`,
       `Получатели: ${checked} выбрано отдельно${form.elements.group.value ? ' + группа «' + selection(form.elements.group) + '»' : ''}.`,
-      `Сдать до: ${form.elements.due_at.value.replace('T', ' ')}. Попыток: ${form.elements.max_attempts.value}. Для зачёта: ${form.elements.pass_percent.value}%.`];
+      `Сдать до: ${form.elements.due_at.value.replace('T', ' ')}. Попытки: ${limitLabel}. Для зачёта: ${form.elements.pass_percent.value}%.`];
     if (target.value === 'variant') lines.push(`Python: ${selection(form.elements.code_policy)}.`);
     for (const line of lines) { const p = document.createElement('p'); p.textContent = line; box.append(p); }
   };
