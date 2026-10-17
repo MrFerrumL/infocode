@@ -14,6 +14,32 @@
   let submitting = false;
   station.classList.add('js');
 
+  // Layout preferences: hide the site menu (hidden by default during an exam), the number column, condition zoom.
+  const tools = station.querySelector('[data-station-tools]');
+  const store = {get: (k, d) => { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
+                 set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* private mode */ } }};
+  const zooms = [0.75, 1, 1.25, 1.5, 1.75, 2];
+  let zoom = Math.max(0, zooms.indexOf(Number(store.get('station-zoom', '1'))));
+  const applyLayout = () => {
+    const menu = store.get('station-menu', 'hidden') === 'shown';
+    const nav = store.get('station-nav', 'shown') === 'shown';
+    document.body.classList.toggle('station-focus', !menu);
+    station.classList.toggle('nav-hidden', !nav);
+    tools.querySelector('[data-toggle-menu]').setAttribute('aria-pressed', String(menu));
+    tools.querySelector('[data-toggle-nav]').setAttribute('aria-pressed', String(nav));
+    station.style.setProperty('--station-zoom', zooms[zoom]);
+    tools.querySelector('[data-zoom-value]').textContent = Math.round(zooms[zoom] * 100) + '%';
+  };
+  tools.hidden = false;
+  tools.addEventListener('click', event => {
+    if (event.target.closest('[data-toggle-menu]')) store.set('station-menu', document.body.classList.contains('station-focus') ? 'shown' : 'hidden');
+    if (event.target.closest('[data-toggle-nav]')) store.set('station-nav', station.classList.contains('nav-hidden') ? 'shown' : 'hidden');
+    const step = event.target.closest('[data-zoom]');
+    if (step) { zoom = Math.max(0, Math.min(zooms.length - 1, zoom + Number(step.dataset.zoom))); store.set('station-zoom', String(zooms[zoom])); }
+    applyLayout();
+  });
+  applyLayout();
+
   const filled = task => [...task.querySelectorAll('.answer-grid input')].some(input => input.value.trim());
   const refreshCount = () => { counter.textContent = tasks.filter(task => task.dataset.saved === 'yes').length; };
   tasks.forEach(task => { task.dataset.saved = filled(task) ? 'yes' : 'empty'; });

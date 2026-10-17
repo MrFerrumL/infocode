@@ -6,6 +6,11 @@
 <div class="station" data-station data-save-url="{% url 'exam_save' attempt.pk %}" data-deadline="{{ attempt.deadline|date:'c' }}">
   <header class="station-head">
     <div><span class="eyebrow">ЕГЭ ПО ИНФОРМАТИКЕ · ПОПЫТКА №{{ attempt_number }}{% if attempt.variant.external_id %} · КИМ № {{ attempt.variant.external_id }}{% endif %}</span><h1>{{ attempt.variant.title }}</h1></div>
+    <div class="station-tools" data-station-tools hidden>
+      <button type="button" class="button secondary" data-toggle-menu aria-pressed="false">☰ Меню</button>
+      <button type="button" class="button secondary" data-toggle-nav aria-pressed="true">Номера</button>
+      <span class="station-zoom" role="group" aria-label="Масштаб условия"><button type="button" class="button secondary" data-zoom="-1" aria-label="Уменьшить условие">−</button><output data-zoom-value>100%</output><button type="button" class="button secondary" data-zoom="1" aria-label="Увеличить условие">+</button></span>
+    </div>
     <div class="station-clock" aria-live="off"><span>Осталось</span><strong data-timer>≈ {{ remaining }} мин</strong></div>
   </header>
   <form method="post" class="station-form" data-station-form>{% csrf_token %}<input type="hidden" name="submit_token" value="{{ submit_token }}">

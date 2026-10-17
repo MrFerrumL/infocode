@@ -13,7 +13,7 @@
 .station-nav a { display: block; text-align: center; padding: 7px 0; border-radius: 8px; border: 1px solid var(--line); color: var(--ink); font-weight: 600; text-decoration: none; }
 .station-nav a.answered { background: #e7f6ee; border-color: #8fd1ad; color: #1d6b45 !important; }
 .station-nav a.current { outline: 2px solid var(--purple); outline-offset: 1px; }
-.station-task { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 18px; margin-bottom: 18px; }
+.station-task { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; margin-bottom: 18px; }
 .station-condition, .station-answer { border: 1px solid var(--line); border-radius: 14px; padding: 20px; background: var(--paper, white); min-width: 0; }
 .station-condition h2 { margin-top: 0; }
 .station-answer { align-self: start; position: sticky; top: 12px; }
@@ -41,6 +41,22 @@
   .station-head { flex-direction: column; align-items: flex-start; }
   .station-clock { text-align: left; }
 }
+
+/* Layout controls: focus mode hides the site menu; the number column can be hidden; the condition scales. */
+.station-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-left: auto; }
+.station-tools .button { min-height: 36px; padding: 6px 12px; font-size: 13px; }
+.station-tools .button[aria-pressed="true"] { border-color: var(--purple); color: var(--purple); }
+.station-zoom { display: inline-flex; align-items: center; gap: 4px; }
+.station-zoom output { min-width: 46px; text-align: center; font-size: 13px; font-weight: 600; }
+body.station-focus .sidebar, body.station-focus .menu-toggle, body.station-focus .menu-shade { display: none !important; }
+body.station-focus .main-shell { margin-left: 0 !important; }
+body.station-focus .main-shell main { max-width: none; }
+.station.nav-hidden .station-form { grid-template-columns: minmax(0, 1fr); }
+.station.nav-hidden .station-nav { display: none; }
+.station.nav-hidden .station-finish { grid-column: 1; }
+/* The source screenshot is 1920px wide: let it fill the panel and grow beyond 960px. */
+.station-condition { overflow-x: auto; }
+.station .source-condition img { max-width: none; width: calc(var(--station-zoom, 1) * 100%); }
 
 /* Variants archive */
 .archive-year { margin: 28px 0 8px; }
