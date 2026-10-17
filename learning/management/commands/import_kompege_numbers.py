@@ -25,6 +25,16 @@ GAMES_FORMAT = 'infocode-kompege-games-v1'
 GAMES = [19, 20, 21]
 # Exam variants: hidden tasks (19–21 groups share a condition) plus the variants themselves.
 VARIANTS_FORMAT = 'infocode-kompege-variants-v1'
+# K. Polyakov's collection: tasks cut from his DOC files (deploy/prepare_polyakov_doc.py).
+POLYAKOV_FORMAT = 'infocode-polyakov-doc-v1'
+SOURCES = {
+    'https://kompege.ru': {'system': 'kompege', 'name': 'КОМПЕГЭ', 'formats': (FORMAT, GAMES_FORMAT, VARIANTS_FORMAT),
+                           'url': lambda ident: f'https://kompege.ru/task?id={ident}',
+                           'title': lambda number, ident: f'КОМПЕГЭ №{ident} · задание {number}'},
+    'https://kpolyakov.spb.ru': {'system': 'polyakov', 'name': 'К. Поляков', 'formats': (POLYAKOV_FORMAT,),
+                                 'url': lambda ident: 'https://kpolyakov.spb.ru/school/ege.htm',
+                                 'title': lambda number, ident: f'К. Поляков {number}.{ident}'},
+}
 
 
 def inspect_bundle(archive, numbers=None):
@@ -37,7 +47,8 @@ def inspect_bundle(archive, numbers=None):
     rows = manifest.get('tasks')
     games = manifest.get('format') == GAMES_FORMAT
     variants = manifest.get('format') == VARIANTS_FORMAT
-    if manifest.get('format') not in (FORMAT, GAMES_FORMAT, VARIANTS_FORMAT) or manifest.get('source') != 'https://kompege.ru' or not isinstance(rows, list) or not (0 if variants else 1) <= len(rows) <= 5000:
+    spec = SOURCES.get(manifest.get('source'))
+    if spec is None or manifest.get('format') not in spec['formats'] or not isinstance(rows, list) or not (0 if variants else 1) <= len(rows) <= 5000:
         raise ValueError('Expected complete category snapshots')
     selected = manifest.get('numbers')
     if not isinstance(selected, list) or not selected or any(type(n) is not int or not 1 <= n <= 27 for n in selected) or selected != sorted(set(selected)):
@@ -57,7 +68,7 @@ def inspect_bundle(archive, numbers=None):
         if type(row.get('number')) is not int or row['number'] not in selected or type(ident) is not int or not 1 <= ident <= 2_147_483_647 or (row['number'], ident) in seen:
             raise ValueError('Only unique source IDs in selected categories are allowed')
         seen.add((row['number'], ident))
-        if row.get('source_url') != f'https://kompege.ru/task?id={ident}' or row.get('difficulty') not in dict(Task.LEVELS):
+        if row.get('source_url') != spec['url'](ident) or row.get('difficulty') not in dict(Task.LEVELS):
             raise ValueError('Invalid source URL or difficulty')
         if not isinstance(row.get('answer'), str) or not row['answer'].strip() or len(row['answer']) > 250:
             raise ValueError('Every task needs a valid answer')
@@ -65,6 +76,10 @@ def inspect_bundle(archive, numbers=None):
             raise ValueError('Invalid author')
         if 'label' in row and (not isinstance(row['label'], str) or len(row['label']) > 120):
             raise ValueError('Invalid source note')
+        if 'kind' in row and row['kind'] not in dict(Task._meta.get_field('source_kind').choices):
+            raise ValueError('Invalid source kind')
+        if 'solution' in row and (not isinstance(row['solution'], str) or len(row['solution']) > 2000):
+            raise ValueError('Invalid solution')
         if not isinstance(row.get('images'), list) or len(row['images']) != (2 if (games and row['number'] != 19) or (variants and row['number'] in (20, 21)) else 1) or not isinstance(row.get('files'), list) or len(row['files']) > 20:
             raise ValueError('A complete condition image is required')
         for image, items in ((True, row['images']), (False, row['files'])):
@@ -98,19 +113,20 @@ def remove_unreferenced(names):
             default_storage.delete(name)
 
 
-def create_task(row, topic, publish, assets, path, written, in_catalog=True, tags=None):
-    """Create one KOMPEGE task with its condition screenshots and original files from a verified bundle."""
+def create_task(row, topic, publish, assets, path, written, in_catalog=True, tags=None, source='https://kompege.ru'):
+    """Create one imported task with its condition screenshots and original files from a verified bundle."""
     ident = row['source_id']
-    task = Task(topic=topic, title=f'КОМПЕГЭ №{ident} · задание {row["number"]}', answer=row['answer'],
-        difficulty=row['difficulty'], source='КОМПЕГЭ' + (f' · {row["author"]}' if row['author'] else ''),
-        source_system='kompege', external_id=ident, source_url=row['source_url'], published=publish,
-        in_catalog=in_catalog, tags=tags or f'КОМПЕГЭ, полный банк №{row["number"]}',
-        source_label=row.get('label') or source_label(row['author']), source_kind=classify(row['author']))
+    spec = SOURCES[source]
+    task = Task(topic=topic, title=spec['title'](row['number'], ident), answer=row['answer'],
+        difficulty=row['difficulty'], source=spec['name'] + (f' · {row["author"]}' if row['author'] else ''),
+        source_system=spec['system'], external_id=ident, source_url=row['source_url'], published=publish, solution=row.get('solution', ''),
+        in_catalog=in_catalog, tags=tags or (f'КОМПЕГЭ, полный банк №{row["number"]}' if spec['system'] == 'kompege' else f'{spec["name"]}, сборник №{row["number"]}'),
+        source_label=row.get('label') or source_label(row['author']), source_kind=row.get('kind') or classify(row['author']))
     task.full_clean()
     task.save()
     for position, (item, image) in enumerate([(i, True) for i in row['images']] + [(i, False) for i in row['files']], 1):
         basename = PurePosixPath(item['path']).name if image else item['name']
-        name = f'imports/kompege/{ident}/{item["sha256"][:12]}/{basename}'
+        name = f'imports/{spec["system"]}/{ident}/{item["sha256"][:12]}/{basename}'
         if len(name) > 100:
             raise ValueError('Storage filename too long')
         if default_storage.exists(name):
@@ -126,7 +142,7 @@ def create_task(row, topic, publish, assets, path, written, in_catalog=True, tag
             written.append(actual)
             name = actual
         block = TaskBlock(task=task, kind='image' if image else 'file', position=position,
-            text=(f'Условие КОМПЕГЭ №{ident}' if position == 1 else f'Вопрос задания {row["number"]}') if image else item['name'],
+            text=(f'Условие {spec["name"]} №{ident}' if position == 1 else f'Вопрос задания {row["number"]}') if image else item['name'],
             **({'image': name} if image else {'file': name}))
         block.full_clean()
         block.save()
@@ -151,7 +167,9 @@ class Command(BaseCommand):
         except (OSError, ValueError, KeyError, TypeError, zipfile.BadZipFile, Image.DecompressionBombError) as exc:
             raise CommandError('Category validation failed: ' + str(exc)) from exc
         rows = manifest['tasks']
-        old = Task.all_objects.filter(source_system='kompege', topic__number__in=numbers)
+        source = manifest['source']
+        system = SOURCES[source]['system']
+        old = Task.all_objects.filter(source_system=system, topic__number__in=numbers)
         if replace_existing:
             used = Practice.objects.filter(task__in=old).count() + Bookmark.objects.filter(task__in=old).count() + VariantItem.objects.filter(task__in=old).count()
             if used:
@@ -181,10 +199,10 @@ class Command(BaseCommand):
                 for row in rows:
                     ident = row['source_id']
                     topic = topics[row['number']]
-                    if Task.all_objects.filter(topic=topic, source_system='kompege', external_id=ident).exists():
+                    if Task.all_objects.filter(topic=topic, source_system=system, external_id=ident).exists():
                         skipped += 1
                         continue
-                    create_task(row, topic, publish, assets, path, written)
+                    create_task(row, topic, publish, assets, path, written, source=source)
                     created += 1
         except Exception:
             for name in written:

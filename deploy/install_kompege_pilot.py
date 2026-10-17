@@ -117,7 +117,7 @@ def main(argv=None):
                 category_manifest = json.loads(archive.read('manifest.json'))
                 category_rows = category_manifest.get('tasks', [])
                 selected = sorted(set(args.numbers))
-                if category_manifest.get('format') not in ('infocode-kompege-numbers-v1', 'infocode-kompege-games-v1') or category_manifest.get('numbers') != selected or not 1 <= len(category_rows) <= 2000 or any(r.get('number') not in selected for r in category_rows):
+                if category_manifest.get('format') not in ('infocode-kompege-numbers-v1', 'infocode-kompege-games-v1', 'infocode-polyakov-doc-v1') or category_manifest.get('numbers') != selected or not 1 <= len(category_rows) <= 2000 or any(r.get('number') not in selected for r in category_rows):
                     raise ValueError('Expected the complete selected categories')
                 if category_manifest.get('source_counts') != {str(n):sum(r['number'] == n for r in category_rows) for n in selected}:
                     raise ValueError('Category snapshot counts do not match')

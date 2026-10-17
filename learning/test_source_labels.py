@@ -27,8 +27,9 @@ class SourceLabelTests(TestCase):
 
     def test_classification_and_author_from_condition(self):
         self.assertEqual([classify(n) for n in ('Демоверсия 2027', 'Основная волна 18.06.26', 'Резервный день 19.06.25', 'Пересдача 08.07.26',
-                                                'ЕГКР 18.04.26', 'Апробация 04.03.26', 'Статград 12.2024', 'Джобс 12.03.2025', '')],
-                         ['demo', 'exam', 'exam', 'exam', 'probe', 'probe', 'probe', 'author', 'author'])
+                                                'ЕГКР 18.04.26', 'Апробация 04.03.26', 'Статград 12.2024', 'Джобс 12.03.2025', '',
+                                                'ЕГЭ-2026', 'Досрочный ЕГЭ-2022', 'ЕГКР-2025', 'PRO100-ЕГЭ')],
+                         ['demo', 'exam', 'exam', 'exam', 'probe', 'probe', 'probe', 'author', 'author', 'exam', 'exam', 'probe', 'author'])
         self.assertEqual(author_in_condition('<p><a href="x"><strong>(Л. Шастин)</strong></a> Исполнитель'), 'Л. Шастин')
         self.assertEqual(label('', '<p>(М. Ишимов) Текст</p>'), 'Авторская · М. Ишимов')
         self.assertEqual(label('', '<p>Текст без автора</p>'), 'Авторская')

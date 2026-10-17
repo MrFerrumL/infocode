@@ -40,3 +40,14 @@ python deploy/install_kompege_pilot.py --categories ../kompege-numbers22-27.zip 
 python deploy/build_source_notes.py source-notes.json <папки с данными КЕГЭ>
 python manage.py label_source_tasks source-notes.json
 ```
+
+## Сборник К. Полякова (сайт «К. Поляков»)
+
+Задачи берутся из DOC-файла номера на kpolyakov.spb.ru/school/ege.htm, ответы — из `answers.xls`, данные — из архива номера (например, `17data.zip`). Документ переводится в PDF (`soffice --headless --convert-to pdf`), каждая задача вырезается картинкой шириной 1920 px ровно как в Word; задачи на стыке страниц склеиваются. Ссылка на видеоразбор из таблицы ответов попадает в разбор задачи. Задачи, которые уже есть в КЕГЭ (тот же ответ и та же задача), пропускаются.
+
+```
+python deploy/prepare_polyakov_doc.py 17 ege17.pdf answers.xls 17data.zip <снимок КЕГЭ number-17.json> polyakov17.zip
+python deploy/install_kompege_pilot.py --categories polyakov17.zip --numbers 17
+```
+
+№17: в сборнике 475 задач, 97 уже есть в КЕГЭ, перенесено 378 (229 файлов данных, у 166 задач есть видеоразбор).

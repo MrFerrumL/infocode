@@ -49,7 +49,7 @@
     </section>
     {% endfor %}
     <footer class="catalog-condition-footer">
-      <div class="catalog-condition-source"><span>{{ task.source }}</span>{% if task.source_url %}<a href="{{ task.source_url }}" target="_blank" rel="noopener noreferrer">Оригинал{% if task.external_id %} №{{ task.external_id }}{% endif %} ↗</a>{% endif %}</div>
+      <div class="catalog-condition-source"><span>{{ task.source }}</span>{% if task.source_url %}<a href="{{ task.source_url }}" target="_blank" rel="noopener noreferrer">{% if task.source_system == 'polyakov' %}Сайт К. Полякова · задача {{ task.topic.number }}.{{ task.external_id }}{% else %}Оригинал{% if task.external_id %} №{{ task.external_id }}{% endif %}{% endif %} ↗</a>{% endif %}</div>
     </footer>
   </article>
   {% empty %}<div class="empty"><h2>Пока ничего не нашлось</h2><p>Попробуйте другой номер или сбросьте фильтры.</p><a class="button" href="{% url 'catalog' %}">Показать все задания</a></div>{% endfor %}
