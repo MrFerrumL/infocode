@@ -78,34 +78,65 @@ CATALOG_SORTS = [('', 'По умолчанию'), ('asc', 'По номеру: с
                  ('easy', 'Сначала простые'), ('hard', 'Сначала сложные')]
 
 
+def practice_answer(request):
+    """Check a practice answer posted from a task card (catalogue or collection page).
+
+    Returns (task, form, response); response is set for AJAX and for a successful plain POST.
+    """
+    if request.method != 'POST':
+        return None, None, None
+    if not request.POST.get('submit_token'):
+        raise PermissionDenied('Обновите страницу перед отправкой ответа.')
+    result = None
+    submitted = get_object_or_404(Task.objects.select_related('topic'), pk=request.POST.get('task_id') if request.POST.get('task_id', '').isdigit() else 0, published=True, in_catalog=True)
+    answer_form = AnswerForm(request.POST, mode=submitted.code_mode, prefix=f'task-{submitted.pk}')
+    if answer_form.is_valid():
+        with transaction.atomic():
+            if claim_submission(request, f'task:{submitted.pk}'):
+                result = Practice.objects.create(user=request.user, task=submitted,
+                    answer=answer_form.cleaned_data['answer'], python_code=answer_form.cleaned_data.get('python_code', ''),
+                    correct=check_answer(answer_form.cleaned_data['answer'], submitted.answer))
+        # A retry with the same token never creates a second attempt.
+        if result is None:
+            result = Practice.objects.filter(user=request.user, task=submitted).first()
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        history = list(Practice.objects.filter(user=request.user, task=submitted)[:5])
+        return submitted, answer_form, JsonResponse({'feedback': render_to_string('partials/catalog_feedback.html', {
+            'task': submitted, 'result': result, 'history': history,
+            'can_reveal': request.user.is_staff or bool(history)}, request=request),
+            'errors': {key: list(value) for key, value in answer_form.errors.items()},
+            'submit_token': form_token(request.user, f'task:{submitted.pk}'),
+            'solved': Practice.objects.filter(user=request.user, task=submitted, correct=True).exists()})
+    if answer_form.is_valid():
+        # Progressive fallback stays on the same page and keeps its filters and page.
+        return submitted, answer_form, redirect(request.get_full_path() + f'#task-{submitted.pk}')
+    return submitted, answer_form, None
+
+
+def prepare_cards(cards, user, solved, saved=(), submitted=None, answer_form=None):
+    """Attach 19–21 follow-ups, answer forms, tokens and progress to task cards."""
+    game_groups.attach_follow_ups(cards, user)
+    for task in [t for card in cards for t in [card, *getattr(card, 'follow_ups', [])]]:
+        task.solved = task.id in solved
+        task.saved = task.id in saved
+        task.answer_form = answer_form if submitted and submitted.pk == task.pk else AnswerForm(
+            mode=task.code_mode, prefix=f'task-{task.pk}',
+            initial={'python_code': task.catalog_history[0].python_code if task.catalog_history else ''})
+        task.submit_token = form_token(user, f'task:{task.pk}')
+        task.can_reveal = user.is_staff or bool(task.catalog_history)
+
+
+def card_queryset(user):
+    return Task.objects.select_related('topic').prefetch_related(
+        Prefetch('content_blocks', queryset=TaskBlock.objects.all(), to_attr='catalog_blocks'),
+        Prefetch('practice_set', queryset=Practice.objects.filter(user=user).order_by('-created_at', '-pk')[:5], to_attr='catalog_history'))
+
+
 @login_required
 def catalog(request):
-    submitted, answer_form, result = None, None, None
-    if request.method == 'POST':
-        if not request.POST.get('submit_token'):
-            raise PermissionDenied('Обновите страницу перед отправкой ответа.')
-        submitted = get_object_or_404(Task.objects.select_related('topic'), pk=request.POST.get('task_id') if request.POST.get('task_id', '').isdigit() else 0, published=True, in_catalog=True)
-        answer_form = AnswerForm(request.POST, mode=submitted.code_mode, prefix=f'task-{submitted.pk}')
-        if answer_form.is_valid():
-            with transaction.atomic():
-                if claim_submission(request, f'task:{submitted.pk}'):
-                    result = Practice.objects.create(user=request.user, task=submitted,
-                        answer=answer_form.cleaned_data['answer'], python_code=answer_form.cleaned_data.get('python_code', ''),
-                        correct=check_answer(answer_form.cleaned_data['answer'], submitted.answer))
-            # A retry with the same token never creates a second attempt.
-            if result is None:
-                result = Practice.objects.filter(user=request.user, task=submitted).first()
-        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
-            history = list(Practice.objects.filter(user=request.user, task=submitted)[:5])
-            return JsonResponse({'feedback': render_to_string('partials/catalog_feedback.html', {
-                'task': submitted, 'result': result, 'history': history,
-                'can_reveal': request.user.is_staff or bool(history)}, request=request),
-                'errors': {key: list(value) for key, value in answer_form.errors.items()},
-                'submit_token': form_token(request.user, f'task:{submitted.pk}'),
-                'solved': Practice.objects.filter(user=request.user, task=submitted, correct=True).exists()})
-        if answer_form.is_valid():
-            # Progressive fallback stays in the catalogue and keeps its filters and page.
-            return redirect(request.get_full_path() + f'#task-{submitted.pk}')
+    submitted, answer_form, response = practice_answer(request)
+    if response:
+        return response
     topics, solved = topic_stats(request.user)
     qs = Task.objects.filter(published=True, in_catalog=True)
     number = request.GET.get('number', '')
@@ -158,15 +189,7 @@ def catalog(request):
         Prefetch('content_blocks', queryset=TaskBlock.objects.all(), to_attr='catalog_blocks'),
         Prefetch('practice_set', queryset=Practice.objects.filter(user=request.user).order_by('-created_at', '-pk')[:5], to_attr='catalog_history'))
     page = Paginator(qs, 12).get_page(request.GET.get('page'))
-    game_groups.attach_follow_ups(page.object_list, request.user)
-    for task in [t for card in page for t in [card, *getattr(card, 'follow_ups', [])]]:
-        task.solved = task.id in solved
-        task.saved = task.id in saved
-        task.answer_form = answer_form if submitted and submitted.pk == task.pk else AnswerForm(
-            mode=task.code_mode, prefix=f'task-{task.pk}',
-            initial={'python_code': task.catalog_history[0].python_code if task.catalog_history else ''})
-        task.submit_token = form_token(request.user, f'task:{task.pk}')
-        task.can_reveal = request.user.is_staff or bool(task.catalog_history)
+    prepare_cards(page.object_list, request.user, solved, saved, submitted, answer_form)
     for topic in topics:
         topic.chip = '19–21' if topic.number == game_groups.FIRST else str(topic.number)
         topic.folded = topic.number in game_groups.FOLLOW_UPS

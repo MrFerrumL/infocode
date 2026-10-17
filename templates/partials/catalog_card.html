@@ -1,0 +1,29 @@
+{% load content_blocks %}
+<article class="task-card catalog-condition" id="task-{{ task.pk }}" aria-labelledby="task-title-{{ task.pk }}">
+  <header class="catalog-condition-header">
+    <div class="task-number{% if task.follow_ups %} task-number-group{% endif %}">{% if task.follow_ups %}19–21<small>НОМЕРА</small>{% else %}{{ task.topic.number|stringformat:'02d' }}<small>НОМЕР</small>{% endif %}</div>
+    <div class="task-content">
+<div class="task-meta">{% if task.source_label %}<span class="source-note kind-{{ task.source_kind|default:'own' }}" title="{{ task.get_source_kind_display }}">{{ task.source_label }}</span>{% endif %}<span class="pill {{ task.difficulty }}">{{ task.get_difficulty_display }}</span><span>ID {{ task.id }}</span>{% if task.solved %}<span class="success-text" data-catalog-solved>✓ Решено</span>{% endif %}{% if task.saved %}<span>★ В избранном</span>{% endif %}</div>
+      <h3 id="task-title-{{ task.pk }}">{% if task.follow_ups %}{{ task.title|cut:" · задание 19" }} · задания 19–21{% else %}{{ task.title }}{% endif %}</h3>
+      <span class="muted">{{ task.topic.title }}</span>
+    </div>
+  </header>
+  <div class="catalog-condition-body">
+    {% if task.statement %}<div class="statement">{{ task.statement }}</div>{% endif %}
+    {% if task.source_system == 'kompege' and task.topic.number == 20 or task.source_system == 'kompege' and task.topic.number == 21 %}<p class="notice">Ответьте на вопрос задания {{ task.topic.number }}, приведённый после общего условия.</p>{% endif %}
+    {% task_blocks task %}
+    {% if task.follow_ups %}<h3 class="catalog-subtask-title">Задание 19</h3>{% endif %}
+    {% if task.attachment %}<a class="file-link" href="{% url 'download' 'task' task.pk %}">↓ Скачать данные к заданию</a>{% endif %}
+  </div>
+  {% include 'partials/catalog_practice.html' %}
+  {% for item in task.follow_ups %}
+  <section class="catalog-subtask" id="task-{{ item.pk }}" data-catalog-scope aria-labelledby="task-title-{{ item.pk }}">
+    <div class="task-meta"><h3 id="task-title-{{ item.pk }}">Задание {{ item.topic.number }}</h3><span>ID {{ item.id }}</span>{% if item.solved %}<span class="success-text" data-catalog-solved>✓ Решено</span>{% endif %}</div>
+    <div class="catalog-condition-body">{% task_blocks item %}</div>
+    {% include 'partials/catalog_practice.html' with task=item %}
+  </section>
+  {% endfor %}
+  <footer class="catalog-condition-footer">
+    <div class="catalog-condition-source"><span>{{ task.source }}</span>{% if task.source_url %}<a href="{{ task.source_url }}" target="_blank" rel="noopener noreferrer">{% if task.source_system == 'polyakov' %}Сайт К. Полякова · задача {{ task.topic.number }}.{{ task.external_id }}{% else %}Оригинал{% if task.external_id %} №{{ task.external_id }}{% endif %}{% endif %} ↗</a>{% endif %}</div>
+  </footer>
+</article>

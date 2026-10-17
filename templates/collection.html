@@ -1,0 +1,10 @@
+{% extends 'base.html' %}{% load static %}
+{% block title %}{{ collection.title }} · Подборки{% endblock %}
+{% block extra_head %}<script defer src="{% static 'catalog-answers.js' %}"></script>{% endblock %}
+{% block content %}
+<a class="back-link" href="{% url 'collections' %}">← Все подборки</a>
+<div class="page-heading"><div><div class="eyebrow">ПОДБОРКА ИНФОКОДА</div><h1>{{ collection.title }}</h1><p>{{ collection.description }}</p></div><span class="pill">Решено {{ done }} из {{ cards|length }}</span></div>
+<div class="task-list catalog-conditions">
+  {% for task in cards %}{% include 'partials/catalog_card.html' %}{% empty %}<div class="empty"><h2>В подборке пока нет задач</h2></div>{% endfor %}
+</div>
+{% endblock %}

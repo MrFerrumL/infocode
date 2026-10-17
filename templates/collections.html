@@ -1,0 +1,14 @@
+{% extends 'base.html' %}{% load static %}
+{% block title %}Подборки · Инфокод{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'exam-station.css' %}">{% endblock %}
+{% block content %}
+<div class="page-heading"><div><div class="eyebrow">ТРЕНИРОВКА ПО ШАГАМ</div><h1>Подборки<span class="accent">.</span></h1><p>Для каждого номера: «знакомство» → «на подумать» → «повторение». Подборки Инфокода решаются прямо здесь: по 10 задач из банков КЕГЭ и К. Полякова, «повторение» — задачи реальных ЕГЭ, демоверсий и ЕГКР. Подборки Яндекс Учебника открываются на его сайте в новой вкладке.</p></div></div>
+<div class="collections-table" role="table" aria-label="Подборки по номерам">
+  <div class="collections-row collections-head" role="row"><span role="columnheader">№</span><span role="columnheader">Подборки Инфокода</span><span role="columnheader">Яндекс Учебник ↗</span></div>
+  {% for row in rows %}<div class="collections-row" role="row">
+    <strong role="cell">{{ row.number }}</strong>
+    <div class="archive-links" role="cell">{% for c in row.own %}<a href="{% url 'collection' c.pk %}" title="{{ c.description }}">{{ c.level|capfirst }} <span class="muted">{{ c.done }}/{{ c.size }}</span>{% if c.done and c.done == c.size %}<span class="score">✓</span>{% endif %}</a>{% empty %}<span class="muted">—</span>{% endfor %}</div>
+    <div class="archive-links" role="cell">{% for c in row.yandex %}<a href="{{ c.url }}" target="_blank" rel="noopener noreferrer" title="{{ c.title }} — откроется на education.yandex.ru">{{ c.level|default:c.title|capfirst }} ↗</a>{% empty %}<span class="muted">—</span>{% endfor %}</div>
+  </div>{% endfor %}
+</div>
+{% endblock %}

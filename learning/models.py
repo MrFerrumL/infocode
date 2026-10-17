@@ -486,3 +486,4 @@ class LessonFile(models.Model):
 from .platform_models import (LoginBucket, StudentAccess, ActionReceipt, TeacherNote, LearningAssignment, AssignmentRecipient, HomeworkSubmission, Notification, GroupInvite, InviteUse, EditorDraft, VideoPosition, MediaAsset, AuditEvent, TrashEntry, ImportBatch)
 from .notebook_models import Notebook, NotebookCell
 from .schedule_models import ScheduleEvent, ScheduleOccurrence, ScheduleReminder
+from .collection_models import Collection, CollectionItem

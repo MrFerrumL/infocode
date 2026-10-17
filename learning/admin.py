@@ -235,3 +235,20 @@ class ScheduleEventAdmin(admin.ModelAdmin):
         from django.shortcuts import get_object_or_404, redirect
         event = get_object_or_404(self.get_queryset(request), pk=object_id)
         return redirect('schedule_edit', pk=event.pk)
+
+
+from .collection_models import Collection, CollectionItem  # noqa: E402
+
+
+class CollectionItemInline(admin.TabularInline):
+    model = CollectionItem
+    raw_id_fields = ['task']
+    extra = 0
+
+
+@admin.register(Collection)
+class CollectionAdmin(admin.ModelAdmin):
+    list_display = ['title', 'source', 'number', 'level', 'published']
+    list_filter = ['source', 'number', 'published']
+    search_fields = ['title', 'level']
+    inlines = [CollectionItemInline]
