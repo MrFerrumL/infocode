@@ -6,7 +6,7 @@ import io
 import json
 import re
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import quote, urlsplit
 from urllib.request import Request, urlopen
 from PIL import Image
 try:
@@ -46,13 +46,15 @@ def image_resolver(folder, lenient=False, missing=None):
     HTTPS address; an image that cannot be downloaded is reported in `missing` and rendered as a note.
     """
     cache = {}
-    known = {'.png', '.gif', '.jpg', '.jpeg', '.webp'}
+    known = {'.png', '.gif', '.jpg', '.jpeg', '.webp', '.svg'}
 
     def download(url):
         if urlsplit(url).hostname in ('kompege.ru', 'www.kompege.ru'):
             return fetch(url, MAX_ASSET)
-        with urlopen(Request(url, headers={'User-Agent':'Infocode licensed educational import/1.0'}), timeout=40) as response:
-            if response.url != url and not (lenient and response.url.startswith('https://')):
+        # Cyrillic paths and TeX in formula-service queries must be percent-encoded for the request.
+        address = quote(url, safe=":/?&=%+;,@!$'()*~#") if lenient else url
+        with urlopen(Request(address, headers={'User-Agent':'Infocode licensed educational import/1.0'}), timeout=40) as response:
+            if response.url != address and not (lenient and response.url.startswith('https://')):
                 raise ValueError('Unexpected illustration redirect')
             return response.read(MAX_ASSET + 1)
 
@@ -70,10 +72,17 @@ def image_resolver(folder, lenient=False, missing=None):
                     data = download(url)
                     if len(data) > MAX_ASSET:
                         raise ValueError('Oversized illustration')
-                    with Image.open(io.BytesIO(data)) as image:
-                        kind = image.format
-                        image.verify()
-                    extension = {'PNG': '.png', 'GIF': '.gif', 'JPEG': '.jpg', 'WEBP': '.webp'}.get(kind)
+                    head = data[:400].lstrip().lower()
+                    if lenient and (head.startswith(b'<svg') or head.startswith(b'<?xml') and b'<svg' in head):
+                        # Formula services return SVG; <img> renders it without running scripts.
+                        if b'<script' in data.lower() or b'<foreignobject' in data.lower():
+                            raise ValueError('Active SVG content')
+                        kind = 'SVG'
+                    else:
+                        with Image.open(io.BytesIO(data)) as image:
+                            kind = image.format
+                            image.verify()
+                    extension = {'PNG': '.png', 'GIF': '.gif', 'JPEG': '.jpg', 'WEBP': '.webp', 'SVG': '.svg'}.get(kind)
                     if not extension:
                         raise ValueError('Unsupported illustration format: ' + url)
                 except Exception:
