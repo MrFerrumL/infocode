@@ -6,7 +6,8 @@
     if (!form || !window.fetch) return;
     event.preventDefault();
     if (form.dataset.sending || !form.reportValidity()) return;
-    const card = form.closest('.catalog-condition');
+    // A 19–21 card holds several answer forms; each question has its own scope.
+    const card = form.closest('[data-catalog-scope]') || form.closest('.catalog-condition');
     const status = form.querySelector('.catalog-form-status');
     const button = form.querySelector('button[type="submit"]');
     const data = new FormData(form);
@@ -22,11 +23,12 @@
       card.querySelector('.catalog-feedback').innerHTML = result.feedback;
       form.elements.submit_token.value = result.submit_token;
       status.textContent = Object.values(result.errors).flat().join(' ');
-      let solved = card.querySelector('[data-catalog-solved]');
+      const meta = card.querySelector('.task-meta');
+      let solved = meta.querySelector('[data-catalog-solved]');
       if (result.solved && !solved) {
         solved = document.createElement('span'); solved.dataset.catalogSolved = '';
         solved.className = 'success-text'; solved.textContent = '✓ Решено';
-        card.querySelector('.task-meta').append(solved);
+        meta.append(solved);
       }
       if (!Object.keys(result.errors).length) status.textContent = 'Ответ сохранён.';
     } catch (error) {

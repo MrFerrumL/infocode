@@ -79,3 +79,10 @@ html[data-theme="dark"] { --condition-filter: invert(1) hue-rotate(180deg) brigh
   .catalog-condition-body { margin-top: 10px; }
 }
 @media print { .source-condition img { filter: none; mix-blend-mode: normal; } }
+
+/* 19–21: one shared condition with the questions of 20 and 21 below it */
+.catalog-subtask-title { margin: 16px 0 0; font-size: 17px; }
+.catalog-subtask { margin-top: 22px; padding-top: 18px; border-top: 1px dashed var(--line); }
+.catalog-subtask .task-meta { align-items: baseline; }
+.catalog-subtask .task-meta h3 { margin: 0 8px 0 0; font-size: 17px; color: var(--ink); }
+.task-number.task-number-group { width: auto; padding: 0 7px; font-size: 14px; white-space: nowrap; }

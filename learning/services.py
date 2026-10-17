@@ -34,15 +34,24 @@ def create_variant(*, creator, title, topics, count=1, difficulty='', task_ids='
     else:
         if not topics:
             raise ValidationError('Выберите хотя бы один номер или укажите ID вручную.')
-        selected = []
-        for topic in topics:
+        selected, groups = [], []
+        for topic in sorted(topics, key=lambda t: t.number):
             qs = Task.objects.filter(topic=topic, published=True).select_related('topic').prefetch_related('content_blocks')
             if difficulty:
                 qs = qs.filter(difficulty=difficulty)
             pool = list(qs)
             if len(pool) < count:
                 raise ValidationError(f'Для №{topic.number} доступно {len(pool)} заданий. Нужно {count}. Измените фильтр или добавьте задания.')
-            selected.extend(random.SystemRandom().sample(pool, count))
+            # 20 and 21 follow the condition of the chosen 19 when the same group is available.
+            partners = {(t.source_system, t.external_id): t for t in pool if t.external_id}
+            if topic.number in (20, 21) and groups and all(key in partners for key in groups):
+                picked = [partners[key] for key in groups]
+            else:
+                picked = random.SystemRandom().sample(pool, count)
+            if topic.number == 19:
+                groups = [(t.source_system, t.external_id) for t in picked if t.external_id and t.source_system]
+                groups = groups if len(groups) == count else []
+            selected.extend(picked)
     variant = Variant.objects.create(creator=creator, title=title, kind=kind, duration=duration, group=group, published=published)
     variant.topics.set({t.topic_id for t in selected})
     VariantItem.objects.bulk_create([VariantItem(variant=variant, task=t, position=i, number=t.topic.number, statement=t.statement, answer=t.answer, code_mode=code_policy or t.code_mode, solution=t.solution, attachment=t.attachment.name, blocks=[b.snapshot() for b in t.content_blocks.all() if not b.archived_at]) for i, t in enumerate(selected, 1)])

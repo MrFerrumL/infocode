@@ -35,7 +35,7 @@ def validate_archives(source, bundle):
             raise ValueError('Only the 135-card pilot may be installed by this helper.')
 
 
-def remote_script(user, images=False, number1=False, categories=False, numbers=()):
+def remote_script(user, images=False, number1=False, categories=False, numbers=(), replace=False):
     home = '/root' if user == 'root' else '/home/' + user
     stamp = datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-%f')
     refresh = f'docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps -v {home}/kompege-condition-images.zip:/tmp/condition-images.zip:ro web python manage.py refresh_kompege_images /tmp/condition-images.zip < /dev/null\n' if images else ''
@@ -44,7 +44,8 @@ def remote_script(user, images=False, number1=False, categories=False, numbers=(
         if not numbers or any(type(n) is not int or not 1 <= n <= 27 for n in numbers):
             raise ValueError('Select valid category numbers')
         selected = ' '.join(str(n) for n in sorted(set(numbers)))
-        bank += f'docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps -v {home}/kompege-categories.zip:/tmp/kompege-categories.zip:ro web python manage.py import_kompege_numbers /tmp/kompege-categories.zip --numbers {selected} --publish < /dev/null\n'
+        replace_flag = ' --replace-existing' if replace else ''
+        bank += f'docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps -v {home}/kompege-categories.zip:/tmp/kompege-categories.zip:ro web python manage.py import_kompege_numbers /tmp/kompege-categories.zip --numbers {selected} --publish{replace_flag} < /dev/null\n'
     return f'''set -Eeuo pipefail
 trap 'printf "Pilot installation stopped at line %s. See the error above; keep the backups.\\n" "$LINENO" >&2' ERR
 umask 027
@@ -86,7 +87,10 @@ def main(argv=None):
     parser.add_argument('--number1', type=Path, help='Complete reviewed high-resolution number-1 bank')
     parser.add_argument('--categories', type=Path, help='Complete reviewed high-resolution category snapshots')
     parser.add_argument('--numbers', nargs='+', type=int, help='Exact categories to import from --categories')
+    parser.add_argument('--replace-existing', action='store_true', help='Replace earlier KOMPEGE tasks of --numbers (refused if pupils used them)')
     args = parser.parse_args(argv)
+    if args.replace_existing and not args.categories:
+        parser.error('--replace-existing requires --categories')
     if bool(args.categories) != bool(args.numbers) or (args.numbers and any(not 1 <= n <= 27 for n in args.numbers)):
         parser.error('--categories requires valid --numbers 1–27')
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9.:-]{0,252}', args.host) or not re.fullmatch(r'[a-z_][a-z0-9_-]{0,31}', args.user):
@@ -110,7 +114,7 @@ def main(argv=None):
                 category_manifest = json.loads(archive.read('manifest.json'))
                 category_rows = category_manifest.get('tasks', [])
                 selected = sorted(set(args.numbers))
-                if category_manifest.get('format') != 'infocode-kompege-numbers-v1' or category_manifest.get('numbers') != selected or not 1 <= len(category_rows) <= 2000 or any(r.get('number') not in selected for r in category_rows):
+                if category_manifest.get('format') not in ('infocode-kompege-numbers-v1', 'infocode-kompege-games-v1') or category_manifest.get('numbers') != selected or not 1 <= len(category_rows) <= 2000 or any(r.get('number') not in selected for r in category_rows):
                     raise ValueError('Expected the complete selected categories')
                 if category_manifest.get('source_counts') != {str(n):sum(r['number'] == n for r in category_rows) for n in selected}:
                     raise ValueError('Category snapshot counts do not match')
@@ -131,7 +135,7 @@ def main(argv=None):
                    '-o', 'ServerAliveInterval=30', '-o', 'ServerAliveCountMax=6', '-o', 'ConnectTimeout=15', '-i', str(key)]
         target = f'{args.user}@{args.host}'
         home = '/root' if args.user == 'root' else '/home/' + args.user
-        payload = remote_script(args.user, images=bool(args.images), number1=bool(args.number1), categories=bool(args.categories), numbers=args.numbers or ())
+        payload = remote_script(args.user, images=bool(args.images), number1=bool(args.number1), categories=bool(args.categories), numbers=args.numbers or (), replace=args.replace_existing)
         result = subprocess.run([ssh, '-T', *options, target, 'bash -n'], input=payload, check=False)
         if result.returncode:
             print('SSH connection or remote syntax check failed; nothing was installed.', file=sys.stderr)

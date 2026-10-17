@@ -11,13 +11,16 @@ from django.core.files.storage import default_storage
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 from PIL import Image
-from learning.models import Task, TaskBlock, Topic
+from learning.models import Bookmark, Practice, Task, TaskBlock, Topic, VariantItem
 from .import_kompege_pilot import checked_member
 from learning.topic_defaults import TOPICS
 
 MAX_TOTAL = 512 * 1024 * 1024
 
 FORMAT = 'infocode-kompege-numbers-v1'
+# Numbers 19–21 share one condition: 19 has it alone, 20 and 21 add their own question image.
+GAMES_FORMAT = 'infocode-kompege-games-v1'
+GAMES = [19, 20, 21]
 
 
 def inspect_bundle(archive, numbers=None):
@@ -28,11 +31,14 @@ def inspect_bundle(archive, numbers=None):
         raise ValueError('Oversized manifest')
     manifest = json.loads(archive.read('manifest.json'))
     rows = manifest.get('tasks')
-    if manifest.get('format') != FORMAT or manifest.get('source') != 'https://kompege.ru' or not isinstance(rows, list) or not 1 <= len(rows) <= 2000:
+    games = manifest.get('format') == GAMES_FORMAT
+    if manifest.get('format') not in (FORMAT, GAMES_FORMAT) or manifest.get('source') != 'https://kompege.ru' or not isinstance(rows, list) or not 1 <= len(rows) <= 2000:
         raise ValueError('Expected complete category snapshots')
     selected = manifest.get('numbers')
     if not isinstance(selected, list) or not selected or any(type(n) is not int or not 1 <= n <= 27 for n in selected) or selected != sorted(set(selected)):
         raise ValueError('Invalid category selection')
+    if games and selected != GAMES:
+        raise ValueError('Game groups must contain numbers 19, 20 and 21')
     if numbers is not None and selected != sorted(set(numbers)):
         raise ValueError('Bundle categories do not match requested categories')
     counts, hashes = manifest.get('source_counts'), manifest.get('source_sha256')
@@ -52,7 +58,7 @@ def inspect_bundle(archive, numbers=None):
             raise ValueError('Every task needs a valid answer')
         if not isinstance(row.get('author'), str) or len(row['author']) > 200:
             raise ValueError('Invalid author')
-        if not isinstance(row.get('images'), list) or len(row['images']) != 1 or not isinstance(row.get('files'), list) or len(row['files']) > 20:
+        if not isinstance(row.get('images'), list) or len(row['images']) != (2 if games and row['number'] != 19 else 1) or not isinstance(row.get('files'), list) or len(row['files']) > 20:
             raise ValueError('A complete condition image is required')
         for image, items in ((True, row['images']), (False, row['files'])):
             for item in items:
@@ -62,11 +68,26 @@ def inspect_bundle(archive, numbers=None):
                         if picture.width != 1920:
                             raise ValueError('Condition must be a native 1920px screenshot')
                 assets[item['path']] = data
+    if games:
+        groups = {}
+        for row in rows:
+            groups.setdefault(row['source_id'], {})[row['number']] = row
+        for ident, group in groups.items():
+            if sorted(group) != GAMES or any(group[n]['images'][0] != group[19]['images'][0] for n in (20, 21)):
+                raise ValueError(f'Game group {ident} must share one condition across 19, 20 and 21')
     if Counter(row['number'] for row in rows) != Counter({int(n): count for n, count in counts.items()}):
         raise ValueError('Category snapshot is incomplete')
     if {i.filename for i in members} != set(assets) | {'manifest.json'}:
         raise ValueError('Unexpected archive members')
     return manifest, assets
+
+
+def remove_unreferenced(names):
+    used = set(TaskBlock.all_objects.filter(image__in=names).values_list('image', flat=True))
+    used |= set(TaskBlock.all_objects.filter(file__in=names).values_list('file', flat=True))
+    for name in names - used:
+        if default_storage.exists(name):
+            default_storage.delete(name)
 
 
 class Command(BaseCommand):
@@ -77,15 +98,25 @@ class Command(BaseCommand):
         parser.add_argument('--numbers', nargs='+', type=int, required=True)
         parser.add_argument('--dry-run', action='store_true')
         parser.add_argument('--publish', action='store_true')
+        parser.add_argument('--replace-existing', action='store_true',
+            help='Delete earlier KOMPEGE tasks of these numbers first; refused if pupils already used them.')
 
-    def handle(self, path, numbers, dry_run=False, publish=False, **options):
+    def handle(self, path, numbers, dry_run=False, publish=False, replace_existing=False, **options):
         try:
             with zipfile.ZipFile(path) as archive:
                 manifest, assets = inspect_bundle(archive, numbers)
         except (OSError, ValueError, KeyError, TypeError, zipfile.BadZipFile, Image.DecompressionBombError) as exc:
             raise CommandError('Category validation failed: ' + str(exc)) from exc
         rows = manifest['tasks']
-        existing = set(Task.all_objects.filter(source_system='kompege', topic__number__in=numbers).values_list('topic__number', 'external_id'))
+        old = Task.all_objects.filter(source_system='kompege', topic__number__in=numbers)
+        if replace_existing:
+            used = Practice.objects.filter(task__in=old).count() + Bookmark.objects.filter(task__in=old).count() + VariantItem.objects.filter(task__in=old).count()
+            if used:
+                raise CommandError(f'Refusing to replace: earlier tasks have {used} pupil answers, bookmarks or variant items.')
+            self.stdout.write(f'Replacing {old.count()} earlier KOMPEGE tasks in numbers {", ".join(map(str, sorted(set(numbers))))}.')
+            existing = set()
+        else:
+            existing = set(old.values_list('topic__number', 'external_id'))
         self.stdout.write(f'Validated {len(rows)} category tasks; new {sum((r["number"], r["source_id"]) not in existing for r in rows)}.')
         if dry_run:
             self.stdout.write('Dry run: no database or media changes.')
@@ -97,6 +128,13 @@ class Command(BaseCommand):
                 for number in sorted(set(numbers)):
                     topic, _ = Topic.objects.get_or_create(number=number, defaults={'title': TOPICS[number-1]})
                     topics[number] = Topic.objects.select_for_update().get(pk=topic.pk)
+                if replace_existing:
+                    stale = set(TaskBlock.all_objects.filter(task__in=old).exclude(image='').values_list('image', flat=True))
+                    stale |= set(TaskBlock.all_objects.filter(task__in=old).exclude(file='').values_list('file', flat=True))
+                    old.delete()
+                    # Files go only after the new tasks are committed (a failed import keeps everything),
+                    # and only if no block, including a new one reusing the same file, still refers to them.
+                    transaction.on_commit(lambda: remove_unreferenced(stale))
                 for row in rows:
                     ident = row['source_id']
                     topic = topics[row['number']]
@@ -123,7 +161,7 @@ class Command(BaseCommand):
                             written.append(actual)
                             name = actual
                         block = TaskBlock(task=task, kind='image' if image else 'file', position=position,
-                            text=f'Условие КОМПЕГЭ №{ident}' if image else item['name'],
+                            text=(f'Условие КОМПЕГЭ №{ident}' if position == 1 else f'Вопрос задания {row["number"]}') if image else item['name'],
                             **({'image': name} if image else {'file': name}))
                         block.full_clean()
                         block.save()

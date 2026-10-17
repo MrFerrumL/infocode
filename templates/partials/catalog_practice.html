@@ -1,0 +1,12 @@
+<section class="catalog-practice" aria-label="Ответ на задание {{ task.id }}">
+  <form method="post" action="{{ request.get_full_path }}#task-{{ task.pk }}" class="answer-form catalog-answer-form" data-catalog-answer>
+    {% csrf_token %}<input type="hidden" name="task_id" value="{{ task.pk }}"><input type="hidden" name="submit_token" value="{{ task.submit_token }}">
+    {{ task.answer_form.answer.as_field_group }}
+    {% include 'partials/python_answer_form.html' with code_form=task.answer_form code_mode=task.code_mode %}
+    <p class="catalog-form-status" role="status" aria-live="polite"></p>
+    <button class="button" type="submit">Проверить ответ</button>
+  </form>
+  <div class="catalog-feedback" aria-live="polite" aria-atomic="false">
+    {% include 'partials/catalog_feedback.html' with result=task.catalog_history.0 history=task.catalog_history can_reveal=task.can_reveal %}
+  </div>
+</section>

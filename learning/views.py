@@ -20,6 +20,7 @@ from .forms import RegisterForm, AnswerForm, VariantForm, TaskForm
 from .models import Topic, Task, Practice, Bookmark, Variant, ExamAttempt, ExamAnswer, Section, Lesson, LessonProgress, LessonFile, VariantItem, TaskBlock, Course, Step, StudentAssignment
 from .security import form_token, claim_submission
 from .services import check_answer, create_variant, finish_attempt, expire_attempts
+from . import game_groups
 
 staff_required = user_passes_test(lambda u: u.is_active and u.is_staff)
 
@@ -101,11 +102,13 @@ def catalog(request):
             # Progressive fallback stays in the catalogue and keeps its filters and page.
             return redirect(request.get_full_path() + f'#task-{submitted.pk}')
     topics, solved = topic_stats(request.user)
-    qs = Task.objects.filter(published=True).select_related('topic').prefetch_related(
-        Prefetch('content_blocks', queryset=TaskBlock.objects.all(), to_attr='catalog_blocks'),
-        Prefetch('practice_set', queryset=Practice.objects.filter(user=request.user).order_by('-created_at', '-pk')[:5], to_attr='catalog_history'))
+    qs = Task.objects.filter(published=True)
     number = request.GET.get('number', '')
-    if number.isdigit():
+    if number in ('20', '21'):
+        number = '19'
+    if number == '19':
+        qs = qs.filter(topic__number__in=game_groups.NUMBERS)
+    elif number.isdigit():
         qs = qs.filter(topic__number=int(number))
     difficulty = request.GET.get('difficulty', '')
     if difficulty:
@@ -125,8 +128,13 @@ def catalog(request):
         qs = qs.filter(id__in=[pk for pk, correct in latest.items() if not correct])
     elif state == 'new':
         qs = qs.exclude(id__in=solved)
+    # A 19–21 group is one card: grouped 20/21 tasks are answered inside their 19 card.
+    qs = Task.objects.filter(id__in=game_groups.fold_follow_ups(qs)).select_related('topic').prefetch_related(
+        Prefetch('content_blocks', queryset=TaskBlock.objects.all(), to_attr='catalog_blocks'),
+        Prefetch('practice_set', queryset=Practice.objects.filter(user=request.user).order_by('-created_at', '-pk')[:5], to_attr='catalog_history'))
     page = Paginator(qs, 12).get_page(request.GET.get('page'))
-    for task in page:
+    game_groups.attach_follow_ups(page.object_list, request.user)
+    for task in [t for card in page for t in [card, *getattr(card, 'follow_ups', [])]]:
         task.solved = task.id in solved
         task.saved = task.id in saved
         task.answer_form = answer_form if submitted and submitted.pk == task.pk else AnswerForm(
@@ -134,6 +142,9 @@ def catalog(request):
             initial={'python_code': task.catalog_history[0].python_code if task.catalog_history else ''})
         task.submit_token = form_token(request.user, f'task:{task.pk}')
         task.can_reveal = request.user.is_staff or bool(task.catalog_history)
+    for topic in topics:
+        topic.chip = '19–21' if topic.number == game_groups.FIRST else str(topic.number)
+        topic.folded = topic.number in game_groups.FOLLOW_UPS
     params = request.GET.copy()
     params.pop('page', None)
     return render(request, 'catalog.html', {'levels': Task.LEVELS, 'topics': topics, 'page': page, 'number': number, 'difficulty': difficulty, 'query': query, 'state': state, 'params': params.urlencode(), 'nav': 'catalog'})
