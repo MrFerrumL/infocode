@@ -101,13 +101,18 @@ docker compose --env-file .env.production -f compose.production.yaml up -d db mi
 ### Новый, пустой сайт
 
 ```bash
-docker compose --env-file .env.production -f compose.production.yaml run --rm web python manage.py createsuperuser
+docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps web python manage.py init_platform
+docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps web python manage.py createsuperuser
 ```
 
-Укажите собственный логин и пароль администратора. Демонстрационные материалы добавляются только по желанию:
+`init_platform` создаёт только разделы каталога № 1–27, без задач, курсов и пользователей. Повторный запуск сохраняет существующие названия и материалы. Укажите собственный логин и пароль администратора; затем добавляйте свои задачи через «Кабинет преподавателя → Банк заданий». Для запуска с собственным наполнением не нужен перенос локальной базы или `seed_demo`.
+
+Пошаговая установка на выбранный сервер HSVDS с Ubuntu и ключом `.PEM`, регистрация домена и загрузка готового архива — [FIRST_LAUNCH.md](FIRST_LAUNCH.md).
+
+Демонстрационные материалы добавляются только по желанию; замените `YOUR_ADMIN_LOGIN` логином созданного администратора:
 
 ```bash
-docker compose --env-file .env.production -f compose.production.yaml run --rm web python manage.py seed_demo
+docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps web python manage.py seed_demo --owner YOUR_ADMIN_LOGIN
 ```
 
 ### Перенос текущего сайта с компьютера

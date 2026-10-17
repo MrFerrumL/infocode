@@ -49,6 +49,9 @@ class Task(models.Model):
     solution = models.TextField('Разбор', blank=True)
     difficulty = models.CharField('Сложность', choices=LEVELS, default='easy', max_length=10)
     source = models.CharField('Источник / автор', max_length=250, default='Авторская учебная задача')
+    source_system = models.CharField('Банк-источник', max_length=32, blank=True, default='', editable=False)
+    external_id = models.PositiveIntegerField('ID в исходном банке', null=True, blank=True, editable=False)
+    source_url = models.URLField('Ссылка на оригинал', max_length=500, blank=True, default='', editable=False)
     attachment = models.FileField('Данные к задаче', upload_to='tasks/', blank=True, validators=[file_size, FileExtensionValidator(['txt', 'csv', 'xlsx', 'pdf', 'zip'])])
     published = models.BooleanField('Опубликовано', default=True)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -58,6 +61,7 @@ class Task(models.Model):
     class Meta:
         ordering = ['topic__number', 'id']
         indexes = [models.Index(fields=['published', 'topic', 'difficulty'])]
+        constraints = [models.UniqueConstraint(fields=['source_system', 'external_id', 'topic'], condition=models.Q(external_id__isnull=False), name='unique_task_source_id_topic')]
         verbose_name = 'задание'
         verbose_name_plural = 'задания'
     def __str__(self):

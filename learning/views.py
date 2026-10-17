@@ -10,7 +10,7 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.exceptions import ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Count, Q
+from django.db.models import Count, Prefetch, Q
 from django.http import FileResponse, Http404, HttpResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -47,7 +47,8 @@ def register(request):
 
 def topic_stats(user):
     solved = set(Practice.objects.filter(user=user, correct=True).values_list('task_id', flat=True))
-    topics = list(Topic.objects.annotate(total=Count('tasks', filter=Q(tasks__published=True, tasks__archived_at=None))))
+    # Aggregation does not apply Meta.ordering; PostgreSQL otherwise returns arbitrary topic order.
+    topics = list(Topic.objects.annotate(total=Count('tasks', filter=Q(tasks__published=True, tasks__archived_at=None))).order_by('number'))
     task_map = dict(Task.objects.filter(published=True).values_list('id', 'topic_id'))
     for topic in topics:
         topic.solved = sum(1 for pk in solved if task_map.get(pk) == topic.id)
@@ -73,7 +74,8 @@ def dashboard(request):
 @login_required
 def catalog(request):
     topics, solved = topic_stats(request.user)
-    qs = Task.objects.filter(published=True).select_related('topic')
+    qs = Task.objects.filter(published=True).select_related('topic').prefetch_related(
+        Prefetch('content_blocks', queryset=TaskBlock.objects.filter(purpose='statement'), to_attr='catalog_blocks'))
     number = request.GET.get('number', '')
     if number.isdigit():
         qs = qs.filter(topic__number=int(number))
@@ -82,7 +84,7 @@ def catalog(request):
         qs = qs.filter(difficulty=difficulty)
     query = request.GET.get('q', '').strip()
     if query:
-        qs = qs.filter(Q(title__icontains=query) | Q(tags__icontains=query) | Q(subtopic__icontains=query) | Q(statement__icontains=query) | Q(content_blocks__text__icontains=query, content_blocks__purpose='statement') | (Q(id=int(query)) if query.isdigit() else Q(pk__isnull=True))).distinct()
+        qs = qs.filter(Q(title__icontains=query) | Q(tags__icontains=query) | Q(subtopic__icontains=query) | Q(statement__icontains=query) | Q(content_blocks__text__icontains=query, content_blocks__purpose='statement') | ((Q(id=int(query)) | Q(external_id=int(query))) if query.isdigit() else Q(pk__isnull=True))).distinct()
     state = request.GET.get('state', '')
     saved = set(Bookmark.objects.filter(user=request.user).values_list('task_id', flat=True))
     if state == 'saved':

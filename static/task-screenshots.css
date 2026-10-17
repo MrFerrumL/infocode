@@ -1,0 +1,63 @@
+/* Image-based conditions need the reading width, with history and attribution below. */
+.reading-grid.screenshot-task-layout {
+  grid-template-columns: minmax(0, 1fr);
+}
+.screenshot-task-layout > .panel,
+.screenshot-task-layout .content-block {
+  min-width: 0;
+}
+.screenshot-task-layout .block-image {
+  padding: 8px;
+}
+.screenshot-task-layout .block-image figure {
+  margin: 0;
+}
+.screenshot-task-layout .block-image img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.screenshot-task-layout .block-image figcaption,
+.screenshot-task-layout .screenshot-help {
+  color: var(--muted);
+  font-size: 13px;
+}
+.screenshot-task-layout .block-image figcaption {
+  padding: 8px 4px 2px;
+}
+
+/* Preserve original detail. White paper blends into either workspace theme. */
+:root { --condition-filter: none; --condition-blend: multiply; }
+html[data-theme="dark"] { --condition-filter: invert(1) hue-rotate(180deg) brightness(.94); --condition-blend: screen; }
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]):not([data-theme="dark"]) { --condition-filter: invert(1) hue-rotate(180deg) brightness(.94); --condition-blend: screen; }
+}
+.source-condition { background: var(--paper); isolation: isolate; padding: 0 !important; border: 0; }
+.source-condition figure { margin: 0; }
+.source-condition img { display: block; width: 100%; max-width: 960px; max-height: none; height: auto; object-fit: contain; filter: var(--condition-filter); mix-blend-mode: var(--condition-blend); }
+.source-condition figcaption { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px 16px; color: var(--muted); font-size: 12px; padding: 8px 0; }
+.source-condition a[data-condition-zoom] { cursor: zoom-in; }
+.condition-dialog { width: min(1120px, calc(100vw - 24px)); max-width: none; max-height: 92dvh; padding: 0; border: 1px solid var(--line); border-radius: 14px; background: var(--paper); color: var(--ink); }
+.condition-dialog::backdrop { background: #090a14b8; }
+.condition-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 12px; border-bottom: 1px solid var(--line); background: var(--paper); }
+.condition-toolbar .button { min-height: 36px; padding: 7px 12px; font-size: 13px; }
+.condition-scale { min-width: 42px; text-align: center; font-size: 13px; }
+.condition-viewport { max-height: calc(92dvh - 76px); overflow: auto; padding: 12px !important; overscroll-behavior: contain; }
+.condition-dialog .condition-viewport img { width: 960px; max-width: none; }
+.workspace-ui .catalog-condition { display: block; background: var(--paper); border-color: var(--line); padding: 24px; min-width: 0; }
+.catalog-condition-header { display: flex; gap: 20px; align-items: center; }
+.catalog-condition-header .task-number { flex-shrink: 0; }
+.catalog-condition-header .task-content { min-width: 0; }
+.catalog-condition-body { margin-top: 22px; min-width: 0; }
+.catalog-condition-body .statement { white-space: pre-wrap; }
+.catalog-condition-body .content-block { min-width: 0; }
+.workspace-ui .catalog-condition-footer { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 18px 0 0; margin-top: 20px; color: var(--muted); border-top: 1px solid var(--line); }
+.catalog-condition-source { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12px; }
+@media (max-width: 650px) {
+  .workspace-ui .catalog-condition { padding: 18px 14px; }
+  .catalog-condition-header { gap: 12px; }
+  .catalog-condition-header .task-content h3 { overflow-wrap: anywhere; }
+  .workspace-ui .catalog-condition-footer { align-items: flex-start; flex-wrap: wrap; gap: 12px; }
+  .catalog-condition-body { margin-top: 18px; }
+}
+@media print { .source-condition img { filter: none; mix-blend-mode: normal; } }

@@ -1,0 +1,133 @@
+"""Install the reviewed 135-card pilot on the existing VPS from local PowerShell."""
+import argparse
+from datetime import datetime, timezone
+import json
+from pathlib import Path, PurePosixPath
+import re
+import shutil
+import subprocess
+import sys
+from urllib.request import urlopen
+import zipfile
+
+
+def validate_archives(source, bundle):
+    with zipfile.ZipFile(source) as archive:
+        if archive.testzip() is not None:
+            raise ValueError('Source archive is corrupt')
+        names = archive.namelist()
+        if 'infocode/learning/management/commands/import_kompege_pilot.py' not in names or 'infocode/learning/migrations/0014_task_source_reference.py' not in names:
+            raise ValueError('Rebuild the current source archive before installing the pilot.')
+        for name in names:
+            path = PurePosixPath(name)
+            if not name.startswith('infocode/') or '..' in path.parts or '\\' in name or path.is_absolute():
+                raise ValueError('Unsafe source archive path')
+            if path.name.startswith('.env') and path.name not in ('.env.example', '.env.production.example'):
+                raise ValueError('Production secrets must not be in a source archive')
+            if path.suffix.lower() in ('.pem', '.ppk', '.key', '.db', '.sqlite3') or path.name in ('.local-secret', '.local-credentials.txt'):
+                raise ValueError('Private data must not be in a source archive')
+    with zipfile.ZipFile(bundle) as archive:
+        if archive.getinfo('manifest.json').file_size > 2 * 1024 * 1024:
+            raise ValueError('Pilot manifest is too large')
+        manifest = json.loads(archive.read('manifest.json'))
+        rows = manifest.get('tasks', [])
+        if manifest.get('format') != 'infocode-kompege-pilot-v1' or len(rows) != 135 or any(sum(row.get('number') == n for row in rows) != 5 for n in range(1, 28)):
+            raise ValueError('Only the 135-card pilot may be installed by this helper.')
+
+
+def remote_script(user, images=False):
+    home = '/root' if user == 'root' else '/home/' + user
+    stamp = datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-%f')
+    refresh = f'docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps -v {home}/kompege-condition-images.zip:/tmp/condition-images.zip:ro web python manage.py refresh_kompege_images /tmp/condition-images.zip < /dev/null\n' if images else ''
+    return f'''set -Eeuo pipefail
+trap 'printf "Pilot installation stopped at line %s. See the error above; keep the backups.\\n" "$LINENO" >&2' ERR
+umask 027
+cd /opt/infocode
+test -s .env.production
+unzip -t {home}/infocode-source-update.zip > /dev/null
+printf '[1/6] Backing up the existing database, media and source code...\\n'
+docker compose --env-file .env.production -f compose.production.yaml exec -T web python manage.py backup_platform /backups/before-kompege-pilot-{stamp}.zip < /dev/null
+mkdir -p /opt/infocode-code-backups
+tar -czf /opt/infocode-code-backups/source-before-pilot-{stamp}.tar.gz --exclude=./.env.production --exclude=./uploads --exclude=./logs --exclude=./backups --exclude=./.git -C /opt/infocode .
+printf '[2/6] Installing updated source and building the application...\\n'
+unzip -oq {home}/infocode-source-update.zip -d /opt
+docker compose --env-file .env.production -f compose.production.yaml build web < /dev/null
+printf '[3/6] Applying the source-reference migration...\\n'
+docker compose --env-file .env.production -f compose.production.yaml run --rm migrate < /dev/null
+printf '[4/6] Verifying and importing the 135-card pilot...\\n'
+docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps -v {home}/kompege-pilot-135.zip:/tmp/kompege-pilot-135.zip:ro web python manage.py import_kompege_pilot /tmp/kompege-pilot-135.zip --publish --sync-empty-topic-titles < /dev/null
+{refresh}
+printf '[5/6] Starting the updated platform...\\n'
+docker compose --env-file .env.production -f compose.production.yaml up -d --wait --wait-timeout 120 < /dev/null
+printf '[6/6] Checking database, media and application health...\\n'
+docker compose --env-file .env.production -f compose.production.yaml exec -T web python manage.py check_content --strict < /dev/null
+docker compose --env-file .env.production -f compose.production.yaml exec -T web python deploy/healthcheck.py < /dev/null
+printf 'INFOCODE_PILOT_READY\\n'
+'''.encode('utf-8')
+
+
+def main(argv=None):
+    project = Path(__file__).resolve().parent.parent
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--host', default='195.209.211.242')
+    parser.add_argument('--user', default='ubuntu')
+    parser.add_argument('--domain', default='infocode1.ru')
+    parser.add_argument('--key', type=Path, default=Path.home() / 'Downloads' / 'privatekey-1152809.pem')
+    parser.add_argument('--source', type=Path, default=project.parent / 'infocode-python.zip')
+    parser.add_argument('--bundle', type=Path, default=project.parent / 'kompege-pilot-135.zip')
+    parser.add_argument('--images', type=Path, help='Optional reviewed high-resolution condition image package')
+    args = parser.parse_args(argv)
+    if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9.:-]{0,252}', args.host) or not re.fullmatch(r'[a-z_][a-z0-9_-]{0,31}', args.user):
+        parser.error('Invalid SSH host or username')
+    if not re.fullmatch(r'[a-z0-9][a-z0-9.-]*\.[a-z]{2,63}', args.domain):
+        parser.error('Invalid domain')
+    ssh, scp = shutil.which('ssh'), shutil.which('scp')
+    if not ssh or not scp:
+        print('OpenSSH client and scp must be installed.', file=sys.stderr)
+        return 2
+    key = args.key.expanduser().resolve()
+    if not key.is_file() or not args.source.is_file() or not args.bundle.is_file() or (args.images and not args.images.is_file()):
+        print('SSH key, current source archive or pilot archive is missing.', file=sys.stderr)
+        return 2
+    try:
+        validate_archives(args.source, args.bundle)
+        if args.images:
+            with zipfile.ZipFile(args.images) as archive:
+                image_manifest=json.loads(archive.read('manifest.json'))
+                if image_manifest.get('format')!='infocode-condition-images-v1' or len(image_manifest.get('assets',[]))!=135:
+                    raise ValueError('Expected the reviewed 135-image condition refresh package')
+        options = ['-o', 'IdentitiesOnly=yes', '-o', 'BatchMode=yes', '-o', 'StrictHostKeyChecking=yes',
+                   '-o', 'ServerAliveInterval=30', '-o', 'ServerAliveCountMax=6', '-o', 'ConnectTimeout=15', '-i', str(key)]
+        target = f'{args.user}@{args.host}'
+        home = '/root' if args.user == 'root' else '/home/' + args.user
+        payload = remote_script(args.user, images=bool(args.images))
+        result = subprocess.run([ssh, '-T', *options, target, 'bash -n'], input=payload, check=False)
+        if result.returncode:
+            print('SSH connection or remote syntax check failed; nothing was installed.', file=sys.stderr)
+            return result.returncode
+        print('Uploading the reviewed 135-card pilot. Keep this terminal open.', flush=True)
+        uploads=[(args.source, 'infocode-source-update.zip'), (args.bundle, 'kompege-pilot-135.zip')]
+        if args.images: uploads.append((args.images,'kompege-condition-images.zip'))
+        for local, remote in uploads:
+            result = subprocess.run([scp, *options, str(local.resolve()), f'{target}:{home}/{remote}'], check=False)
+            if result.returncode:
+                return result.returncode
+        result = subprocess.run([ssh, '-T', *options, target, 'sudo -n bash -s'], input=payload, check=False)
+        if result.returncode:
+            print('Installation did not finish; see the error above. No success is assumed.', file=sys.stderr)
+            return result.returncode
+        with urlopen(f'https://{args.domain}/health/', timeout=20) as response:
+            if response.status != 200 or json.load(response).get('status') != 'ok':
+                raise ValueError('The public health check did not pass.')
+    except KeyboardInterrupt:
+        print('Interrupted. Check server state before retrying.', file=sys.stderr)
+        return 130
+    except (OSError, ValueError, zipfile.BadZipFile, KeyError) as exc:
+        print(f'Pilot installation/check failed: {exc}', file=sys.stderr)
+        return 2
+    print(f'Pilot installed and health checked. Open https://{args.domain}/catalog/ and refresh the page.', flush=True)
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

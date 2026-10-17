@@ -1,7 +1,7 @@
 FROM python:3.12-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 DEBUG=0 BIND_HOST=0.0.0.0 PORT=8000
 WORKDIR /app
-COPY requirements*.txt .
+COPY requirements*.txt ./
 ARG REQUIREMENTS=requirements.txt
 RUN pip install --no-cache-dir -r ${REQUIREMENTS}
 COPY . .

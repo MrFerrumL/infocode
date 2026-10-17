@@ -64,9 +64,10 @@ class TopicAdmin(admin.ModelAdmin):
 
 @admin.register(Task)
 class TaskAdmin(ArchiveAdmin):
-    list_display = ['id', 'title', 'topic', 'difficulty', 'published']
+    list_display = ['id', 'external_id', 'title', 'topic', 'difficulty', 'published']
     list_filter = ['topic', 'difficulty', 'published']
-    search_fields = ['title', 'statement', 'source']
+    search_fields = ['title', 'statement', 'source', 'external_id']
+    readonly_fields = ['source_system', 'external_id', 'source_url']
     list_editable = ['difficulty', 'published']
     inlines = [BlockInline]
 

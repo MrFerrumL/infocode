@@ -1,5 +1,46 @@
-{% extends 'base.html' %}{% block title %}Каталог заданий · Инфокод{% endblock %}{% block content %}<div class="page-heading"><div><div class="eyebrow">ПРАКТИКА</div><h1>Каталог заданий<span class="accent">.</span></h1><p>От первого номера до уверенного решения сложных задач.</p></div><a class="button secondary" href="?state=saved">☆ Моё избранное</a></div>
-<div class="topic-strip"><a class="{% if not number %}selected{% endif %}" href="{% url 'catalog' %}">Все</a>{% for topic in topics %}<a class="{% if number == topic.number|stringformat:'s' %}selected{% endif %}" title="{{ topic.title }}" href="?number={{ topic.number }}">{{ topic.number }}</a>{% endfor %}</div>
-<form class="filters" method="get"><input type="hidden" name="number" value="{{ number }}"><label class="search-label"><span class="sr-only">Поиск</span><input name="q" value="{{ query }}" placeholder="Название, текст или ID задания"></label><label><span class="sr-only">Сложность</span><select name="difficulty"><option value="">Все уровни</option>{% for value,label in levels %}<option value="{{ value }}" {% if difficulty == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label><label><span class="sr-only">Статус</span><select name="state"><option value="">Все задания</option><option value="new" {% if state == 'new' %}selected{% endif %}>Ещё не решены</option><option value="saved" {% if state == 'saved' %}selected{% endif %}>Избранное</option><option value="mistakes" {% if state == 'mistakes' %}selected{% endif %}>Мои ошибки</option></select></label><button class="button">Найти</button></form>
-<div class="section-heading"><h2>{% if number %}Задания № {{ number }}{% else %}Все задания{% endif %}</h2><span class="muted">Найдено: {{ page.paginator.count }}</span></div><div class="task-list">{% for task in page %}<article class="task-card"><div class="task-number">{{ task.topic.number|stringformat:'02d' }}<small>НОМЕР</small></div><div class="task-content"><div class="task-meta"><span class="pill {{ task.difficulty }}">{{ task.get_difficulty_display }}</span><span>ID {{ task.id }}</span>{% if task.solved %}<span class="success-text">✓ Решено</span>{% endif %}{% if task.saved %}<span>★ В избранном</span>{% endif %}</div><h3><a href="{% url 'task' task.pk %}">{{ task.title }}</a></h3><p>{{ task.statement|truncatechars:180 }}</p><span class="muted">{{ task.topic.title }}</span></div><a href="{% url 'task' task.pk %}" class="button secondary">Решать ↗</a></article>{% empty %}<div class="empty"><h2>Пока ничего не нашлось</h2><p>Попробуйте другой номер или сбросьте фильтры.</p><a class="button" href="{% url 'catalog' %}">Показать все задания</a></div>{% endfor %}</div>
-{% if page.paginator.num_pages > 1 %}<div class="pagination">{% if page.has_previous %}<a class="button secondary" href="?{{ params }}&page={{ page.previous_page_number }}">← Назад</a>{% endif %}<span>{{ page.number }} / {{ page.paginator.num_pages }}</span>{% if page.has_next %}<a class="button secondary" href="?{{ params }}&page={{ page.next_page_number }}">Дальше →</a>{% endif %}</div>{% endif %}{% endblock %}
+{% extends 'base.html' %}
+{% load content_blocks static %}
+{% block title %}Каталог заданий · Инфокод{% endblock %}
+{% block content %}
+<div class="page-heading">
+  <div><div class="eyebrow">ПРАКТИКА</div><h1>Каталог заданий<span class="accent">.</span></h1><p>Выберите номер — условия задач сразу появятся в списке.</p></div>
+  <a class="button secondary" href="?state=saved">☆ Моё избранное</a>
+</div>
+<div class="topic-strip">
+  <a class="{% if not number %}selected{% endif %}" href="{% url 'catalog' %}">Все</a>
+  {% for topic in topics %}<a class="{% if number == topic.number|stringformat:'s' %}selected{% endif %}" {% if number == topic.number|stringformat:'s' %}aria-current="page"{% endif %} title="{{ topic.title }}" href="?number={{ topic.number }}">{{ topic.number }}</a>{% endfor %}
+</div>
+<form class="filters" method="get">
+  <input type="hidden" name="number" value="{{ number }}">
+  <label class="search-label"><span class="sr-only">Поиск</span><input name="q" value="{{ query }}" placeholder="Название, текст или ID задания"></label>
+  <label><span class="sr-only">Сложность</span><select name="difficulty"><option value="">Все уровни</option>{% for value,label in levels %}<option value="{{ value }}" {% if difficulty == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+  <label><span class="sr-only">Статус</span><select name="state"><option value="">Все задания</option><option value="new" {% if state == 'new' %}selected{% endif %}>Ещё не решены</option><option value="saved" {% if state == 'saved' %}selected{% endif %}>Избранное</option><option value="mistakes" {% if state == 'mistakes' %}selected{% endif %}>Мои ошибки</option></select></label>
+  <button class="button">Найти</button>
+</form>
+<div class="section-heading"><h2>{% if number %}Задания № {{ number }}{% else %}Все задания{% endif %}</h2><span class="muted">Найдено: {{ page.paginator.count }}</span></div>
+<div class="task-list catalog-conditions">
+  {% for task in page %}
+  <article class="task-card catalog-condition" id="task-{{ task.pk }}" aria-labelledby="task-title-{{ task.pk }}">
+    <header class="catalog-condition-header">
+      <div class="task-number">{{ task.topic.number|stringformat:'02d' }}<small>НОМЕР</small></div>
+      <div class="task-content">
+        <div class="task-meta"><span class="pill {{ task.difficulty }}">{{ task.get_difficulty_display }}</span><span>ID {{ task.id }}</span>{% if task.solved %}<span class="success-text">✓ Решено</span>{% endif %}{% if task.saved %}<span>★ В избранном</span>{% endif %}</div>
+        <h3 id="task-title-{{ task.pk }}"><a href="{% url 'task' task.pk %}">{{ task.title }}</a></h3>
+        <span class="muted">{{ task.topic.title }}</span>
+      </div>
+    </header>
+    <div class="catalog-condition-body">
+      {% if task.statement %}<div class="statement">{{ task.statement }}</div>{% endif %}
+      {% if task.source_system == 'kompege' and task.topic.number == 20 or task.source_system == 'kompege' and task.topic.number == 21 %}<p class="notice">Ответьте на вопрос задания {{ task.topic.number }}, приведённый после общего условия.</p>{% endif %}
+      {% task_blocks task %}
+      {% if task.attachment %}<a class="file-link" href="{% url 'download' 'task' task.pk %}">↓ Скачать данные к заданию</a>{% endif %}
+    </div>
+    <footer class="catalog-condition-footer">
+      <div class="catalog-condition-source"><span>{{ task.source }}</span>{% if task.source_url %}<a href="{{ task.source_url }}" target="_blank" rel="noopener noreferrer">Оригинал{% if task.external_id %} №{{ task.external_id }}{% endif %} ↗</a>{% endif %}</div>
+      <a href="{% url 'task' task.pk %}" class="button secondary">Решать ↗</a>
+    </footer>
+  </article>
+  {% empty %}<div class="empty"><h2>Пока ничего не нашлось</h2><p>Попробуйте другой номер или сбросьте фильтры.</p><a class="button" href="{% url 'catalog' %}">Показать все задания</a></div>{% endfor %}
+</div>
+{% if page.paginator.num_pages > 1 %}<div class="pagination">{% if page.has_previous %}<a class="button secondary" href="?{{ params }}&page={{ page.previous_page_number }}">← Назад</a>{% endif %}<span>{{ page.number }} / {{ page.paginator.num_pages }}</span>{% if page.has_next %}<a class="button secondary" href="?{{ params }}&page={{ page.next_page_number }}">Дальше →</a>{% endif %}</div>{% endif %}
+{% endblock %}

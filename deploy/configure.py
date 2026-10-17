@@ -10,6 +10,9 @@ def generate(domain, email, target):
     domain = domain.strip().encode('idna').decode('ascii').lower()
     if not re.fullmatch(r'(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}', domain):
         raise ValueError('Use a domain such as ege.example.ru, without https:// or a path.')
+    email = email.strip()
+    if not email.isascii():
+        raise ValueError('The certificate email must contain ASCII characters only. Check your keyboard language and retype it using English letters.')
     if not re.fullmatch(r'[^\s@=]+@[^\s@=]+\.[^\s@=]+', email) or any(c in email for c in '#$"\''):
         raise ValueError('Enter a valid email for certificate notifications.')
     data = f'APP_DOMAIN={domain}\nACME_EMAIL={email}\nSECRET_KEY={secrets.token_urlsafe(64)}\nDB_PASSWORD={secrets.token_urlsafe(40)}\n'
