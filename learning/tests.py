@@ -40,7 +40,7 @@ class PlatformTests(TestCase):
 
     def test_anonymous_needs_login(self):
         self.client.logout()
-        for path in ['/', '/catalog/', '/course/', '/teacher/', '/files/video/1/']:
+        for path in ['/catalog/', '/course/', '/teacher/', '/files/video/1/']:
             self.assertEqual(self.client.get(path).status_code, 302)
 
     def test_student_cannot_use_teacher_actions(self):

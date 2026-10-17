@@ -20,6 +20,9 @@ x-app: &app
     LOG_DIR: /data/logs
     TRUSTED_PROXY: "*"
     WEB_THREADS: "12"
+    SITE_OWNER_NAME: ${SITE_OWNER_NAME:-}
+    SITE_CONTACT_EMAIL: ${SITE_CONTACT_EMAIL:-}
+    SITE_CONTACT_TELEGRAM: ${SITE_CONTACT_TELEGRAM:-}
   volumes:
     - media:/app/uploads
     - logs:/data

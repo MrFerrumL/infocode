@@ -11,6 +11,7 @@ from learning.task_management import delete_task
 from learning.readiness import platform_check
 from learning import notebooks
 from learning import homework, schedule_views as schedule
+from learning import public
 
 urlpatterns = [
     path('homework/', homework.index, name='homework'),
@@ -58,7 +59,9 @@ urlpatterns = [
     path('password/', accounts.StudentPasswordChangeView.as_view(), name='password'),
     path('teacher/students/new/', accounts.create_student, name='student_account_create'),
     path('teacher/students/<int:pk>/password/', accounts.reset_student_password, name='student_password_reset'),
-    path('', v.dashboard, name='dashboard'),
+    path('', public.home, name='dashboard'),
+    path('contacts/', public.contacts, name='contacts'),
+    path('robots.txt', public.robots_txt, name='robots_txt'),
     path('catalog/', v.catalog, name='catalog'),
     path('tasks/<int:pk>/', v.task_detail, name='task'),
     path('tasks/<int:pk>/bookmark/', v.bookmark, name='bookmark'),

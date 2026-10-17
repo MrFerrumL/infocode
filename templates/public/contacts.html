@@ -1,0 +1,18 @@
+{% extends 'base.html' %}{% load static %}{% block title %}Контакты · Инфокод{% endblock %}{% block extra_head %}<link rel="stylesheet" href="{% static 'public.css' %}">{% endblock %}{% block bodyclass %}public-page{% endblock %}{% block content %}
+<header class="public-top"><a class="brand" href="/">инфокод<span class="accent">.</span></a><nav aria-label="Разделы сайта"><a href="/">О платформе</a>{% if user.is_authenticated %}<a class="button secondary" href="/">В кабинет</a>{% else %}<a class="button secondary" href="{% url 'login' %}">Войти</a>{% endif %}</nav></header>
+<section class="public-hero">
+  <span class="eyebrow">КОНТАКТЫ</span>
+  <h1>Связаться с нами</h1>
+  <p class="public-lead">Инфокод — учебная платформа для подготовки к ЕГЭ по информатике{% if contact.owner %}. Владелец и преподаватель — {{ contact.owner }}{% endif %}.</p>
+</section>
+<section class="public-grid">
+  <article class="panel"><h2>Связь</h2>
+    {% if contact.email or contact.telegram %}<ul class="public-contacts">
+      {% if contact.email %}<li>Почта: <a href="mailto:{{ contact.email }}">{{ contact.email }}</a></li>{% endif %}
+      {% if contact.telegram %}<li>Telegram: <a href="https://t.me/{{ contact.telegram|urlencode }}" rel="noopener">@{{ contact.telegram }}</a></li>{% endif %}
+    </ul>{% else %}<p>Ученикам — через своего преподавателя: он выдаёт доступ и помогает со входом.</p>{% endif %}
+  </article>
+  <article class="panel"><h2>Доступ и пароли</h2><p>Логин и временный пароль выдаёт преподаватель. Забыли пароль — напишите преподавателю, он выдаст новый. Сменить пароль можно в кабинете.</p></article>
+  <article class="panel"><h2>Данные учеников</h2><p>Платформа хранит логин, имя, ответы и прогресс только для учёбы. Данные не продаются и не передаются третьим лицам; пароли хранятся в зашифрованном виде.</p></article>
+</section>
+{% endblock %}

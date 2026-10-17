@@ -39,6 +39,10 @@ MEDIA_ROOT = Path(os.environ.get('MEDIA_ROOT', str(MEDIA_ROOT)))
 MEDIA_URL = '/protected-media/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 LOGIN_URL = '/login/'
+# Shown on the public contacts page; empty values are hidden.
+SITE_OWNER_NAME = os.environ.get('SITE_OWNER_NAME', '')
+SITE_CONTACT_EMAIL = os.environ.get('SITE_CONTACT_EMAIL', '')
+SITE_CONTACT_TELEGRAM = os.environ.get('SITE_CONTACT_TELEGRAM', '')
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/login/'
 FILE_UPLOAD_MAX_MEMORY_SIZE = 2 * 1024 * 1024

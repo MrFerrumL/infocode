@@ -8,3 +8,4 @@
 @media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 
 .mobile-only{display:none!important}@media(max-width:650px){.mobile-only{display:flex!important}.mobile-logout{border:0;background:#f8f7fc;color:#6e7082;padding:9px 11px;border-radius:10px;font-size:12px;white-space:nowrap}}
+.footer-links{display:flex;gap:16px}
