@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
 {% load content_blocks static %}
 {% block title %}Каталог заданий · Инфокод{% endblock %}
+{% block extra_head %}<script defer src="{% static 'catalog-answers.js' %}"></script>{% endblock %}
 {% block content %}
 <div class="page-heading">
   <div><div class="eyebrow">ПРАКТИКА</div><h1>Каталог заданий<span class="accent">.</span></h1><p>Выберите номер — условия задач сразу появятся в списке.</p></div>
@@ -24,8 +25,8 @@
     <header class="catalog-condition-header">
       <div class="task-number">{{ task.topic.number|stringformat:'02d' }}<small>НОМЕР</small></div>
       <div class="task-content">
-        <div class="task-meta"><span class="pill {{ task.difficulty }}">{{ task.get_difficulty_display }}</span><span>ID {{ task.id }}</span>{% if task.solved %}<span class="success-text">✓ Решено</span>{% endif %}{% if task.saved %}<span>★ В избранном</span>{% endif %}</div>
-        <h3 id="task-title-{{ task.pk }}"><a href="{% url 'task' task.pk %}">{{ task.title }}</a></h3>
+<div class="task-meta"><span class="pill {{ task.difficulty }}">{{ task.get_difficulty_display }}</span><span>ID {{ task.id }}</span>{% if task.solved %}<span class="success-text" data-catalog-solved>✓ Решено</span>{% endif %}{% if task.saved %}<span>★ В избранном</span>{% endif %}</div>
+        <h3 id="task-title-{{ task.pk }}">{{ task.title }}</h3>
         <span class="muted">{{ task.topic.title }}</span>
       </div>
     </header>
@@ -35,9 +36,20 @@
       {% task_blocks task %}
       {% if task.attachment %}<a class="file-link" href="{% url 'download' 'task' task.pk %}">↓ Скачать данные к заданию</a>{% endif %}
     </div>
+    <section class="catalog-practice" aria-label="Ответ на задание {{ task.id }}">
+      <form method="post" action="{{ request.get_full_path }}#task-{{ task.pk }}" class="answer-form catalog-answer-form" data-catalog-answer>
+        {% csrf_token %}<input type="hidden" name="task_id" value="{{ task.pk }}"><input type="hidden" name="submit_token" value="{{ task.submit_token }}">
+        {{ task.answer_form.answer.as_field_group }}
+        {% include 'partials/python_answer_form.html' with code_form=task.answer_form code_mode=task.code_mode %}
+        <p class="catalog-form-status" role="status" aria-live="polite"></p>
+        <button class="button" type="submit">Проверить ответ</button>
+      </form>
+      <div class="catalog-feedback" aria-live="polite" aria-atomic="false">
+        {% include 'partials/catalog_feedback.html' with result=task.catalog_history.0 history=task.catalog_history can_reveal=task.can_reveal %}
+      </div>
+    </section>
     <footer class="catalog-condition-footer">
       <div class="catalog-condition-source"><span>{{ task.source }}</span>{% if task.source_url %}<a href="{{ task.source_url }}" target="_blank" rel="noopener noreferrer">Оригинал{% if task.external_id %} №{{ task.external_id }}{% endif %} ↗</a>{% endif %}</div>
-      <a href="{% url 'task' task.pk %}" class="button secondary">Решать ↗</a>
     </footer>
   </article>
   {% empty %}<div class="empty"><h2>Пока ничего не нашлось</h2><p>Попробуйте другой номер или сбросьте фильтры.</p><a class="button" href="{% url 'catalog' %}">Показать все задания</a></div>{% endfor %}

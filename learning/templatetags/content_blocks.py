@@ -6,7 +6,7 @@ register = template.Library()
 @register.inclusion_tag('partials/task_blocks.html')
 def task_blocks(obj, purpose='statement'):
     if hasattr(obj, 'content_blocks'):
-        source = obj.catalog_blocks if purpose == 'statement' and hasattr(obj, 'catalog_blocks') else obj.content_blocks.all()
+        source = obj.catalog_blocks if hasattr(obj, 'catalog_blocks') else obj.content_blocks.all()
         blocks = [dict(b.snapshot(), url=reverse('download', args=['block', b.pk]),
                        original_image=b.kind == 'image' and str(b.image).startswith('imports/kompege/'))
                   for b in source if b.purpose == purpose]

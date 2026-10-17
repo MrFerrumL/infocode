@@ -7,12 +7,13 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import login
 from django.contrib.auth.decorators import login_required, user_passes_test
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Count, Prefetch, Q
-from django.http import FileResponse, Http404, HttpResponse, StreamingHttpResponse
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from .forms import RegisterForm, AnswerForm, VariantForm, TaskForm
@@ -73,9 +74,36 @@ def dashboard(request):
 
 @login_required
 def catalog(request):
+    submitted, answer_form, result = None, None, None
+    if request.method == 'POST':
+        if not request.POST.get('submit_token'):
+            raise PermissionDenied('Обновите страницу перед отправкой ответа.')
+        submitted = get_object_or_404(Task.objects.select_related('topic'), pk=request.POST.get('task_id') if request.POST.get('task_id', '').isdigit() else 0, published=True)
+        answer_form = AnswerForm(request.POST, mode=submitted.code_mode, prefix=f'task-{submitted.pk}')
+        if answer_form.is_valid():
+            with transaction.atomic():
+                if claim_submission(request, f'task:{submitted.pk}'):
+                    result = Practice.objects.create(user=request.user, task=submitted,
+                        answer=answer_form.cleaned_data['answer'], python_code=answer_form.cleaned_data.get('python_code', ''),
+                        correct=check_answer(answer_form.cleaned_data['answer'], submitted.answer))
+            # A retry with the same token never creates a second attempt.
+            if result is None:
+                result = Practice.objects.filter(user=request.user, task=submitted).first()
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            history = list(Practice.objects.filter(user=request.user, task=submitted)[:5])
+            return JsonResponse({'feedback': render_to_string('partials/catalog_feedback.html', {
+                'task': submitted, 'result': result, 'history': history,
+                'can_reveal': request.user.is_staff or bool(history)}, request=request),
+                'errors': {key: list(value) for key, value in answer_form.errors.items()},
+                'submit_token': form_token(request.user, f'task:{submitted.pk}'),
+                'solved': Practice.objects.filter(user=request.user, task=submitted, correct=True).exists()})
+        if answer_form.is_valid():
+            # Progressive fallback stays in the catalogue and keeps its filters and page.
+            return redirect(request.get_full_path() + f'#task-{submitted.pk}')
     topics, solved = topic_stats(request.user)
     qs = Task.objects.filter(published=True).select_related('topic').prefetch_related(
-        Prefetch('content_blocks', queryset=TaskBlock.objects.filter(purpose='statement'), to_attr='catalog_blocks'))
+        Prefetch('content_blocks', queryset=TaskBlock.objects.all(), to_attr='catalog_blocks'),
+        Prefetch('practice_set', queryset=Practice.objects.filter(user=request.user).order_by('-created_at', '-pk')[:5], to_attr='catalog_history'))
     number = request.GET.get('number', '')
     if number.isdigit():
         qs = qs.filter(topic__number=int(number))
@@ -101,6 +129,11 @@ def catalog(request):
     for task in page:
         task.solved = task.id in solved
         task.saved = task.id in saved
+        task.answer_form = answer_form if submitted and submitted.pk == task.pk else AnswerForm(
+            mode=task.code_mode, prefix=f'task-{task.pk}',
+            initial={'python_code': task.catalog_history[0].python_code if task.catalog_history else ''})
+        task.submit_token = form_token(request.user, f'task:{task.pk}')
+        task.can_reveal = request.user.is_staff or bool(task.catalog_history)
     params = request.GET.copy()
     params.pop('page', None)
     return render(request, 'catalog.html', {'levels': Task.LEVELS, 'topics': topics, 'page': page, 'number': number, 'difficulty': difficulty, 'query': query, 'state': state, 'params': params.urlencode(), 'nav': 'catalog'})

@@ -53,6 +53,16 @@ html[data-theme="dark"] { --condition-filter: invert(1) hue-rotate(180deg) brigh
 .catalog-condition-body .content-block { min-width: 0; }
 .workspace-ui .catalog-condition-footer { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 18px 0 0; margin-top: 20px; color: var(--muted); border-top: 1px solid var(--line); }
 .catalog-condition-source { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12px; }
+.catalog-practice { margin-top: 24px; padding-top: 20px; border-top: 1px solid var(--line); }
+.catalog-answer-form { max-width: 960px; }
+.catalog-answer-form input:not([type="hidden"]) { max-width: 540px; }
+.catalog-form-status:empty { display: none; }
+.catalog-form-status { color: var(--muted); }
+.catalog-answer-form button:disabled { opacity: .65; cursor: wait; }
+.catalog-feedback { max-width: 960px; }
+.catalog-history { margin-top: 18px; }
+.catalog-history summary { cursor: pointer; color: var(--muted); }
+.catalog-history code, .catalog-feedback .statement { overflow-wrap: anywhere; }
 @media (max-width: 650px) {
   .workspace-ui .catalog-condition { padding: 18px 14px; }
   .catalog-condition-header { gap: 12px; }

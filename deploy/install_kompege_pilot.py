@@ -35,10 +35,11 @@ def validate_archives(source, bundle):
             raise ValueError('Only the 135-card pilot may be installed by this helper.')
 
 
-def remote_script(user, images=False):
+def remote_script(user, images=False, number1=False):
     home = '/root' if user == 'root' else '/home/' + user
     stamp = datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-%f')
     refresh = f'docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps -v {home}/kompege-condition-images.zip:/tmp/condition-images.zip:ro web python manage.py refresh_kompege_images /tmp/condition-images.zip < /dev/null\n' if images else ''
+    bank = f'docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps -v {home}/kompege-number1.zip:/tmp/kompege-number1.zip:ro web python manage.py import_kompege_number1 /tmp/kompege-number1.zip --publish < /dev/null\n' if number1 else ''
     return f'''set -Eeuo pipefail
 trap 'printf "Pilot installation stopped at line %s. See the error above; keep the backups.\\n" "$LINENO" >&2' ERR
 umask 027
@@ -57,6 +58,7 @@ docker compose --env-file .env.production -f compose.production.yaml run --rm mi
 printf '[4/6] Verifying and importing the 135-card pilot...\\n'
 docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps -v {home}/kompege-pilot-135.zip:/tmp/kompege-pilot-135.zip:ro web python manage.py import_kompege_pilot /tmp/kompege-pilot-135.zip --publish --sync-empty-topic-titles < /dev/null
 {refresh}
+{bank}
 printf '[5/6] Starting the updated platform...\\n'
 docker compose --env-file .env.production -f compose.production.yaml up -d --wait --wait-timeout 120 < /dev/null
 printf '[6/6] Checking database, media and application health...\\n'
@@ -76,6 +78,7 @@ def main(argv=None):
     parser.add_argument('--source', type=Path, default=project.parent / 'infocode-python.zip')
     parser.add_argument('--bundle', type=Path, default=project.parent / 'kompege-pilot-135.zip')
     parser.add_argument('--images', type=Path, help='Optional reviewed high-resolution condition image package')
+    parser.add_argument('--number1', type=Path, help='Complete reviewed high-resolution number-1 bank')
     args = parser.parse_args(argv)
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9.:-]{0,252}', args.host) or not re.fullmatch(r'[a-z_][a-z0-9_-]{0,31}', args.user):
         parser.error('Invalid SSH host or username')
@@ -86,11 +89,19 @@ def main(argv=None):
         print('OpenSSH client and scp must be installed.', file=sys.stderr)
         return 2
     key = args.key.expanduser().resolve()
-    if not key.is_file() or not args.source.is_file() or not args.bundle.is_file() or (args.images and not args.images.is_file()):
+    if not key.is_file() or not args.source.is_file() or not args.bundle.is_file() or (args.images and not args.images.is_file()) or (args.number1 and not args.number1.is_file()):
         print('SSH key, current source archive or pilot archive is missing.', file=sys.stderr)
         return 2
     try:
         validate_archives(args.source, args.bundle)
+        if args.number1:
+            with zipfile.ZipFile(args.number1) as archive:
+                if archive.getinfo('manifest.json').file_size > 4 * 1024 * 1024:
+                    raise ValueError('Number-1 manifest is too large')
+                bank_manifest = json.loads(archive.read('manifest.json'))
+                bank_rows = bank_manifest.get('tasks', [])
+                if bank_manifest.get('format') != 'infocode-kompege-number1-v1' or not 1 <= len(bank_rows) <= 2000 or bank_manifest.get('source_count') != len(bank_rows) or any(r.get('number') != 1 for r in bank_rows):
+                    raise ValueError('Expected a complete number-1 bank')
         if args.images:
             with zipfile.ZipFile(args.images) as archive:
                 image_manifest=json.loads(archive.read('manifest.json'))
@@ -100,7 +111,7 @@ def main(argv=None):
                    '-o', 'ServerAliveInterval=30', '-o', 'ServerAliveCountMax=6', '-o', 'ConnectTimeout=15', '-i', str(key)]
         target = f'{args.user}@{args.host}'
         home = '/root' if args.user == 'root' else '/home/' + args.user
-        payload = remote_script(args.user, images=bool(args.images))
+        payload = remote_script(args.user, images=bool(args.images), number1=bool(args.number1))
         result = subprocess.run([ssh, '-T', *options, target, 'bash -n'], input=payload, check=False)
         if result.returncode:
             print('SSH connection or remote syntax check failed; nothing was installed.', file=sys.stderr)
@@ -108,6 +119,7 @@ def main(argv=None):
         print('Uploading the reviewed 135-card pilot. Keep this terminal open.', flush=True)
         uploads=[(args.source, 'infocode-source-update.zip'), (args.bundle, 'kompege-pilot-135.zip')]
         if args.images: uploads.append((args.images,'kompege-condition-images.zip'))
+        if args.number1: uploads.append((args.number1, 'kompege-number1.zip'))
         for local, remote in uploads:
             result = subprocess.run([scp, *options, str(local.resolve()), f'{target}:{home}/{remote}'], check=False)
             if result.returncode:
