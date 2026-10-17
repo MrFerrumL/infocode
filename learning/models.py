@@ -58,6 +58,10 @@ class Task(models.Model):
     source_system = models.CharField('Банк-источник', max_length=32, blank=True, default='', editable=False)
     external_id = models.PositiveIntegerField('ID в исходном банке', null=True, blank=True, editable=False)
     source_url = models.URLField('Ссылка на оригинал', max_length=500, blank=True, default='', editable=False)
+    # As on KOMPEGE: a note above the task ("Демоверсия 2027", "Авторская · Л. Шастин") and its kind for filtering.
+    source_label = models.CharField('Пометка источника', max_length=120, blank=True, default='')
+    source_kind = models.CharField('Тип задания', max_length=10, blank=True, default='',
+        choices=[('demo', 'Демоверсия'), ('exam', 'Реальный ЕГЭ'), ('probe', 'Пробники и ЕГКР'), ('author', 'Авторские')])
     attachment = models.FileField('Данные к задаче', upload_to='tasks/', blank=True, validators=[file_size, FileExtensionValidator(['txt', 'csv', 'xlsx', 'pdf', 'zip'])])
     published = models.BooleanField('Опубликовано', default=True)
     # Tasks of imported KOMPEGE variants that the source keeps out of its public bank.

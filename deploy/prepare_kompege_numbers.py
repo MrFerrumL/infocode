@@ -16,6 +16,10 @@ except ImportError:
     from condition_render import Condition, EXTERNAL_IMAGES, HEAD, TAIL
     from prepare_kompege_pilot import answer_text, fetch, safe_name, source_url, MAX_ASSET
 
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from learning.sources import label as source_label  # noqa: E402  (pure helper, no Django needed)
+
 FORMAT = 'infocode-kompege-numbers-v1'
 MAX_DATA_FILE = 50 * 1024 * 1024  # matches TaskBlock.file limit
 
@@ -144,7 +148,8 @@ def prepare(folder, numbers, refresh=False):
                     destination.write_bytes(fetch(url, MAX_DATA_FILE))
                 files.append({'path': relative, 'name': name_original, 'sha256': hashlib.sha256(destination.read_bytes()).hexdigest(), 'url': url})
             tasks.append({'number': number, 'source_id': ident, 'source_url': f'https://kompege.ru/task?id={ident}',
-                'author': str(row.get('comment') or '').strip(), 'answer': answer, 'answer_origin': answer_origin,
+                'author': str(row.get('comment') or '').strip(), 'label': source_label(row.get('comment'), row['text']),
+                'answer': answer, 'answer_origin': answer_origin,
                 'difficulty': {0:'easy',1:'medium',2:'hard',3:'grave'}[row['difficulty']],
                 'images': ['screenshots/' + name + '.jpg'], 'files': files})
             if len(seen) % 25 == 0:

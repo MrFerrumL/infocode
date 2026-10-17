@@ -16,6 +16,8 @@
   <label class="search-label"><span class="sr-only">Поиск</span><input name="q" value="{{ query }}" placeholder="Название, текст или ID задания"></label>
   <label><span class="sr-only">Сложность</span><select name="difficulty"><option value="">Все уровни</option>{% for value,label in levels %}<option value="{{ value }}" {% if difficulty == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
   <label><span class="sr-only">Статус</span><select name="state"><option value="">Все задания</option><option value="new" {% if state == 'new' %}selected{% endif %}>Ещё не решены</option><option value="saved" {% if state == 'saved' %}selected{% endif %}>Избранное</option><option value="mistakes" {% if state == 'mistakes' %}selected{% endif %}>Мои ошибки</option></select></label>
+  <label><span class="sr-only">Тип</span><select name="kind"><option value="">Все типы</option>{% for value,label in kinds %}<option value="{{ value }}" {% if kind == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
+  <label><span class="sr-only">Сайт</span><select name="site"><option value="">Все сайты</option>{% for value,label in sites %}<option value="{{ value }}" {% if site == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
   <label><span class="sr-only">Сортировка</span><select name="sort">{% for value,label in sorts %}<option value="{{ value }}" {% if sort == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
   <button class="button">Найти</button>
 </form>
@@ -26,7 +28,7 @@
     <header class="catalog-condition-header">
       <div class="task-number{% if task.follow_ups %} task-number-group{% endif %}">{% if task.follow_ups %}19–21<small>НОМЕРА</small>{% else %}{{ task.topic.number|stringformat:'02d' }}<small>НОМЕР</small>{% endif %}</div>
       <div class="task-content">
-<div class="task-meta"><span class="pill {{ task.difficulty }}">{{ task.get_difficulty_display }}</span><span>ID {{ task.id }}</span>{% if task.solved %}<span class="success-text" data-catalog-solved>✓ Решено</span>{% endif %}{% if task.saved %}<span>★ В избранном</span>{% endif %}</div>
+<div class="task-meta">{% if task.source_label %}<span class="source-note kind-{{ task.source_kind|default:'own' }}" title="{{ task.get_source_kind_display }}">{{ task.source_label }}</span>{% endif %}<span class="pill {{ task.difficulty }}">{{ task.get_difficulty_display }}</span><span>ID {{ task.id }}</span>{% if task.solved %}<span class="success-text" data-catalog-solved>✓ Решено</span>{% endif %}{% if task.saved %}<span>★ В избранном</span>{% endif %}</div>
         <h3 id="task-title-{{ task.pk }}">{% if task.follow_ups %}{{ task.title|cut:" · задание 19" }} · задания 19–21{% else %}{{ task.title }}{% endif %}</h3>
         <span class="muted">{{ task.topic.title }}</span>
       </div>

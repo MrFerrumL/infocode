@@ -10,11 +10,11 @@ import json
 from pathlib import Path
 try:
     from .condition_render import Condition, HEAD, TAIL
-    from .prepare_kompege_numbers import image_resolver
+    from .prepare_kompege_numbers import image_resolver, source_label
     from .prepare_kompege_pilot import answer_text, fetch
 except ImportError:
     from condition_render import Condition, HEAD, TAIL
-    from prepare_kompege_numbers import image_resolver
+    from prepare_kompege_numbers import image_resolver, source_label
     from prepare_kompege_pilot import answer_text, fetch
 
 FORMAT = 'infocode-kompege-games-v1'
@@ -48,7 +48,8 @@ def prepare(folder, refresh=False):
             raise ValueError('Invalid public game group: ' + str(ident))
         seen.add(ident)
         common = {'source_id': ident, 'source_url': f'https://kompege.ru/task?id={ident}',
-                  'author': str(row.get('comment') or '').strip(), 'difficulty': LEVELS[row['difficulty']], 'files': []}
+                  'author': str(row.get('comment') or '').strip(), 'label': source_label(row.get('comment'), row['text']),
+                  'difficulty': LEVELS[row['difficulty']], 'files': []}
         condition = f'19-{ident}-condition'
         render(folder, local_image, row['text'], condition)
         jobs.append({'id': ident, 'number': 19, 'page': condition + '.html', 'image': 'captures/' + condition + '.jpg'})

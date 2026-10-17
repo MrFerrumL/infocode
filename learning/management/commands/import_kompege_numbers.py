@@ -14,6 +14,7 @@ from PIL import Image
 from learning.models import Bookmark, Practice, Task, TaskBlock, Topic, VariantItem
 from .import_kompege_pilot import checked_member
 from learning.topic_defaults import TOPICS
+from learning.sources import classify, label as source_label
 
 # Number 24 alone carries ~1.1 GB of TXT data; data files are streamed, never held together.
 MAX_TOTAL = 3 * 1024 * 1024 * 1024
@@ -62,6 +63,8 @@ def inspect_bundle(archive, numbers=None):
             raise ValueError('Every task needs a valid answer')
         if not isinstance(row.get('author'), str) or len(row['author']) > 200:
             raise ValueError('Invalid author')
+        if 'label' in row and (not isinstance(row['label'], str) or len(row['label']) > 120):
+            raise ValueError('Invalid source note')
         if not isinstance(row.get('images'), list) or len(row['images']) != (2 if (games and row['number'] != 19) or (variants and row['number'] in (20, 21)) else 1) or not isinstance(row.get('files'), list) or len(row['files']) > 20:
             raise ValueError('A complete condition image is required')
         for image, items in ((True, row['images']), (False, row['files'])):
@@ -101,7 +104,8 @@ def create_task(row, topic, publish, assets, path, written, in_catalog=True, tag
     task = Task(topic=topic, title=f'КОМПЕГЭ №{ident} · задание {row["number"]}', answer=row['answer'],
         difficulty=row['difficulty'], source='КОМПЕГЭ' + (f' · {row["author"]}' if row['author'] else ''),
         source_system='kompege', external_id=ident, source_url=row['source_url'], published=publish,
-        in_catalog=in_catalog, tags=tags or f'КОМПЕГЭ, полный банк №{row["number"]}')
+        in_catalog=in_catalog, tags=tags or f'КОМПЕГЭ, полный банк №{row["number"]}',
+        source_label=row.get('label') or source_label(row['author']), source_kind=classify(row['author']))
     task.full_clean()
     task.save()
     for position, (item, image) in enumerate([(i, True) for i in row['images']] + [(i, False) for i in row['files']], 1):

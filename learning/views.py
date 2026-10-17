@@ -21,6 +21,7 @@ from .models import Topic, Task, Practice, Bookmark, Variant, ExamAttempt, ExamA
 from .security import form_token, claim_submission
 from .services import check_answer, create_variant, finish_attempt, expire_attempts
 from . import game_groups
+from .sources import KINDS, SITES
 
 staff_required = user_passes_test(lambda u: u.is_active and u.is_staff)
 
@@ -116,6 +117,15 @@ def catalog(request):
     difficulty = request.GET.get('difficulty', '')
     if difficulty:
         qs = qs.filter(difficulty=difficulty)
+    # As on KOMPEGE: what the task is (demo, real exam, probe, author's) and which site it comes from.
+    kind = request.GET.get('kind', '')
+    if kind in dict(KINDS):
+        qs = qs.filter(source_kind=kind)
+    site = request.GET.get('site', '')
+    if site in SITES and site:
+        qs = qs.filter(source_system=site)
+    elif site == 'own':
+        qs = qs.filter(source_system='')
     query = request.GET.get('q', '').strip()
     if query:
         qs = qs.filter(Q(title__icontains=query) | Q(tags__icontains=query) | Q(subtopic__icontains=query) | Q(statement__icontains=query) | Q(content_blocks__text__icontains=query, content_blocks__purpose='statement') | ((Q(id=int(query)) | Q(external_id=int(query))) if query.isdigit() else Q(pk__isnull=True))).distinct()
@@ -156,7 +166,8 @@ def catalog(request):
         topic.folded = topic.number in game_groups.FOLLOW_UPS
     params = request.GET.copy()
     params.pop('page', None)
-    return render(request, 'catalog.html', {'levels': Task.LEVELS, 'topics': topics, 'page': page, 'number': number, 'difficulty': difficulty, 'query': query, 'state': state, 'sort': sort, 'sorts': CATALOG_SORTS, 'params': params.urlencode(), 'nav': 'catalog'})
+    return render(request, 'catalog.html', {'levels': Task.LEVELS, 'topics': topics, 'page': page, 'number': number, 'difficulty': difficulty, 'query': query, 'state': state, 'sort': sort, 'sorts': CATALOG_SORTS, 'kind': kind, 'kinds': KINDS, 'site': site,
+        'sites': [(key or 'own', name) for key, name in SITES.items() if Task.objects.filter(published=True, in_catalog=True, source_system=key).exists()], 'params': params.urlencode(), 'nav': 'catalog'})
 
 
 @login_required
