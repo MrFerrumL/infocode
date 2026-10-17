@@ -19,25 +19,40 @@ from .studio_views import teacher_students
 from .views import staff_required
 
 
+LATIN = dict(zip('абвгдеёжзийклмнопрстуфхцчшщъыьэюя', ['a', 'b', 'v', 'g', 'd', 'e', 'e', 'zh', 'z', 'i', 'y', 'k', 'l', 'm', 'n', 'o', 'p', 'r', 's', 't', 'u', 'f', 'kh', 'ts', 'ch', 'sh', 'shch', '', 'y', '', 'e', 'yu', 'ya']))
+# Easy to dictate: no l/1/i or o/0 look-alikes.
+PASSWORD_LETTERS, PASSWORD_DIGITS = 'abcdefghjkmnpqrstuvwxyz', '23456789'
+
+
+def latin(text):
+    return ''.join(LATIN.get(ch, ch if ch.isascii() and ch.isalnum() else '') for ch in text.lower())
+
+
+def free_username(first_name, last_name):
+    base = '.'.join(part for part in (latin(last_name), latin(first_name)) if part)[:140] or 'student'
+    taken = {name.lower() for name in User.objects.filter(username__istartswith=base).values_list('username', flat=True)}
+    if base not in taken:
+        return base
+    return next(f'{base}{n}' for n in range(2, 10_000) if f'{base}{n}' not in taken)
+
+
+def simple_password():
+    pick = secrets.choice
+    return ''.join(pick(PASSWORD_LETTERS) for _ in range(4)) + ''.join(pick(PASSWORD_DIGITS) for _ in range(4))
+
+
 class StudentAccountForm(forms.ModelForm):
-    first_name = forms.CharField(label='Имя ученика', max_length=150)
+    first_name = forms.CharField(label='Имя', max_length=150)
+    last_name = forms.CharField(label='Фамилия', max_length=150)
     group = forms.ModelChoiceField(label='Сразу добавить в группу', queryset=StudyGroup.objects.none(), required=False)
 
     class Meta:
         model = User
-        fields = ['first_name', 'last_name', 'username']
-        labels = {'last_name': 'Фамилия', 'username': 'Логин для входа'}
-        help_texts = {'username': 'Например: ivan.petrov. Временный пароль создаст платформа.'}
+        fields = ['first_name', 'last_name']
 
     def __init__(self, *args, teacher, **kwargs):
         super().__init__(*args, **kwargs)
         self.fields['group'].queryset = own_groups(teacher)
-
-    def clean_username(self):
-        name = self.cleaned_data['username']
-        if User.objects.filter(username__iexact=name).exists():
-            raise forms.ValidationError('Такой логин уже занят. Придумайте другой или используйте приглашение для существующего аккаунта.')
-        return name
 
 
 def claim_account_action(request, scope):
@@ -69,18 +84,20 @@ def create_student(request):
                     messages.info(request, 'Аккаунт уже создан. Повторная отправка не создаёт нового ученика.')
                     return redirect('teacher_students')
                 student = form.save(commit=False)
-                password = secrets.token_urlsafe(18)
+                student.username = free_username(student.first_name, student.last_name)
+                password = simple_password()
                 student.is_staff = student.is_superuser = False
                 student.set_password(password)
                 student.save()
                 StudentAssignment.objects.create(teacher=request.user, student=student)
-                StudentAccess.objects.create(user=student)
+                # The teacher hands out these credentials, so they keep working until the pupil changes them.
+                StudentAccess.objects.create(user=student, must_change_password=False)
                 if form.cleaned_data['group']:
                     form.cleaned_data['group'].students.add(student)
                 AuditEvent.objects.create(user=request.user, action='Выдача доступа', model='auth.user', object_id=student.pk, title=student.username)
             return credentials_response(request, student, password)
         except IntegrityError:
-            form.add_error('username', 'Логин уже занят. Выберите другой.')
+            form.add_error(None, 'Логин только что заняли. Отправьте форму ещё раз — платформа подберёт другой.')
     return render(request, 'studio/student_account.html', {
         'form': form, 'submit_token': form_token(request.user, 'student-account-create'), 'nav': 'teacher',
     })
@@ -101,10 +118,10 @@ def reset_student_password(request, pk):
             if not claim_account_action(request, scope):
                 return redirect('teacher_student', pk=pk)
             student = students.select_for_update().get(pk=pk)
-            password = secrets.token_urlsafe(18)
+            password = simple_password()
             student.set_password(password)
             student.save(update_fields=['password'])
-            StudentAccess.objects.update_or_create(user=student, defaults={'must_change_password': True})
+            StudentAccess.objects.update_or_create(user=student, defaults={'must_change_password': False})
             AuditEvent.objects.create(user=request.user, action='Сброс пароля', model='auth.user', object_id=pk, title=student.username)
         return credentials_response(request, student, password)
     return render(request, 'studio/student_reset.html', {

@@ -31,21 +31,22 @@ class AccountTests(TestCase):
         self.client.force_login(self.teacher)
 
     def create(self, **changes):
-        data = {'username': 'new-student', 'first_name': 'Иван', 'last_name': 'Петров', 'group': self.group.pk,
+        data = {'first_name': 'Иван', 'last_name': 'Петров', 'group': self.group.pk,
                 'submit_token': form_token(self.teacher, 'student-account-create')}
         data.update(changes)
         return self.client.post(reverse('student_account_create'), data)
 
     def test_teacher_issues_hashed_temporary_password_and_attaches_group(self):
-        page = self.create(is_staff='on', is_superuser='on')
+        page = self.create(is_staff='on', is_superuser='on', username='chosen')
         self.assertEqual(page.status_code, 200)
-        student = User.objects.get(username='new-student')
+        student = User.objects.get(username='petrov.ivan')
         password = page.context['temporary_password']
+        self.assertRegex(password, r'^[a-z]{4}[2-9]{4}$')
         self.assertTrue(student.check_password(password))
         self.assertFalse(student.is_staff or student.is_superuser)
         self.assertTrue(self.group.students.filter(pk=student.pk).exists())
         self.assertTrue(StudentAssignment.objects.filter(teacher=self.teacher, student=student).exists())
-        self.assertTrue(student.student_access.must_change_password)
+        self.assertFalse(student.student_access.must_change_password)
         self.assertIn('no-store', page['Cache-Control'])
         self.assertEqual(page['Referrer-Policy'], 'no-referrer')
         self.assertNotIn(password, json.dumps(list(AuditEvent.objects.values('title', 'changes'))))
@@ -54,26 +55,31 @@ class AccountTests(TestCase):
     def test_no_foreign_group_or_duplicate_login_or_unscoped_token(self):
         page = self.create(group=self.foreign_group.pk)
         self.assertTrue(page.context['form'].errors)
-        self.assertFalse(User.objects.filter(username='new-student').exists())
-        page = self.create(username=self.student.username.upper())
-        self.assertIn('username', page.context['form'].errors)
+        self.assertFalse(User.objects.filter(username='petrov.ivan').exists())
+        self.create()
+        page = self.create()
+        self.assertEqual(page.status_code, 200)
+        self.assertEqual(page.context['student'].username, 'petrov.ivan2')
+        self.assertEqual(self.create(first_name='Ёжик', last_name='Щукин-Юрьев').context['student'].username, 'shchukinyurev.ezhik')
         self.assertEqual(self.create(submit_token='').status_code, 403)
         self.assertEqual(self.create(submit_token=form_token(self.other, 'student-account-create')).status_code, 403)
 
-    def test_first_login_requires_a_different_password_and_releases_access(self):
+    def test_issued_password_works_at_once_and_any_new_password_is_accepted(self):
         page = self.create()
         password = page.context['temporary_password']
         self.client.logout()
-        self.assertTrue(self.client.login(username='new-student', password=password))
-        self.assertRedirects(self.client.get('/catalog/'), '/password/', fetch_redirect_response=False)
+        self.assertTrue(self.client.login(username='petrov.ivan', password=password))
+        self.assertEqual(self.client.get('/catalog/').status_code, 200)
         page = self.client.post('/password/', {'old_password': password, 'new_password1': password, 'new_password2': password})
         self.assertContains(page, 'Новый пароль должен отличаться')
-        new = 'MyPrivate!Coding-43857'
-        self.assertRedirects(self.client.post('/password/', {'old_password': password, 'new_password1': new, 'new_password2': new}), '/')
-        student = User.objects.get(username='new-student')
-        self.assertTrue(student.check_password(new))
-        self.assertFalse(student.student_access.must_change_password)
-        self.assertEqual(self.client.get('/catalog/').status_code, 200)
+        self.assertRedirects(self.client.post('/password/', {'old_password': password, 'new_password1': '1234', 'new_password2': '1234'}), '/')
+        self.assertTrue(User.objects.get(username='petrov.ivan').check_password('1234'))
+
+    def test_registration_accepts_a_simple_password(self):
+        self.client.logout()
+        page = self.client.post('/register/', {'first_name': 'Иван Куликов', 'username': 'ivan', 'password1': '1111', 'password2': '1111'})
+        self.assertEqual(page.status_code, 302)
+        self.assertTrue(User.objects.get(username='ivan').check_password('1111'))
 
     def test_reset_scopes_authority_and_invalidates_old_session_once(self):
         pupil = Client()

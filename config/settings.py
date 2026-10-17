@@ -26,7 +26,8 @@ if os.environ.get('DB_ENGINE') == 'postgresql':
     DATABASES = {'default': {'ENGINE': 'django.db.backends.postgresql', 'NAME': os.environ.get('DB_NAME', 'infocode'), 'USER': os.environ.get('DB_USER', 'infocode'), 'PASSWORD': os.environ.get('DB_PASSWORD', ''), 'HOST': os.environ.get('DB_HOST', 'db'), 'PORT': os.environ.get('DB_PORT', '5432'), 'CONN_MAX_AGE': 60, 'CONN_HEALTH_CHECKS': True}}
 else:
     DATABASES['default']['OPTIONS']['transaction_mode'] = 'IMMEDIATE'
-AUTH_PASSWORD_VALIDATORS = [{'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'}, {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'}, {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'}, {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'}]
+# Any non-empty password is accepted: pupils choose simple ones for convenience (owner's decision).
+AUTH_PASSWORD_VALIDATORS = []
 LANGUAGE_CODE = 'ru-ru'
 TIME_ZONE = 'Europe/Moscow'
 USE_I18N = True
