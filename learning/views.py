@@ -74,7 +74,8 @@ def dashboard(request):
     return render(request, 'dashboard.html', {'topics': topics, 'solved_count': len(solved), 'accuracy': accuracy, 'total': total, 'completed_lessons': len(done), 'next_lesson': next_lesson, 'recent': ExamAttempt.objects.filter(user=request.user, submitted_at__isnull=False).select_related('variant')[:4], 'nav': 'dashboard'})
 
 
-CATALOG_SORTS = [('', 'Сначала новые'), ('old', 'Сначала старые'), ('easy', 'Сначала простые'), ('hard', 'Сначала сложные')]
+CATALOG_SORTS = [('', 'По умолчанию'), ('asc', 'По номеру: с первой задачи'), ('desc', 'По номеру: с последней'),
+                 ('easy', 'Сначала простые'), ('hard', 'Сначала сложные')]
 
 
 @login_required
@@ -142,12 +143,17 @@ def catalog(request):
     elif state == 'new':
         qs = qs.exclude(id__in=solved)
     # A 19–21 group is one card: grouped 20/21 tasks are answered inside their 19 card.
-    # As on KOMPEGE: newest source tasks first (demo, retake, main wave…), own tasks after them.
-    sort = request.GET.get('sort', '')
+    # By default each bank keeps its own order: KOMPEGE newest first (demo, retake, main wave…),
+    # K. Polyakov from his first task (17.1, 17.2…), own tasks last. 'asc'/'desc' sort by source number.
+    sort = {'old': 'asc'}.get(request.GET.get('sort', ''), request.GET.get('sort', ''))
     rank = Case(*[When(difficulty=value, then=Value(i)) for i, (value, _) in enumerate(Task.LEVELS)], output_field=IntegerField())
-    order = {'old': [F('external_id').asc(nulls_last=True), 'id'],
-             'easy': [rank, F('external_id').desc(nulls_last=True), '-id'],
-             'hard': [rank.desc(), F('external_id').desc(nulls_last=True), '-id']}.get(sort, [F('external_id').desc(nulls_last=True), '-id'])
+    bank = Case(When(source_system='kompege', then=Value(0)), When(source_system='polyakov', then=Value(1)), default=Value(2), output_field=IntegerField())
+    polyakov_first = Case(When(source_system='polyakov', then=F('external_id')), default=Value(0), output_field=IntegerField())
+    order = {'asc': [bank, F('external_id').asc(nulls_last=True), 'id'],
+             'desc': [bank, F('external_id').desc(nulls_last=True), '-id'],
+             'easy': [rank, bank, polyakov_first, F('external_id').desc(nulls_last=True), '-id'],
+             'hard': [rank.desc(), bank, polyakov_first, F('external_id').desc(nulls_last=True), '-id']}.get(
+        sort, [bank, polyakov_first, F('external_id').desc(nulls_last=True), '-id'])
     qs = Task.objects.filter(id__in=game_groups.fold_follow_ups(qs)).order_by('topic__number', *order).select_related('topic').prefetch_related(
         Prefetch('content_blocks', queryset=TaskBlock.objects.all(), to_attr='catalog_blocks'),
         Prefetch('practice_set', queryset=Practice.objects.filter(user=request.user).order_by('-created_at', '-pk')[:5], to_attr='catalog_history'))
