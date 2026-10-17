@@ -13,7 +13,7 @@ NUMBERS = (FIRST,) + FOLLOW_UPS
 
 
 def partner_19():
-    return Task.objects.filter(published=True, topic__number=FIRST, source_system=OuterRef('source_system'),
+    return Task.objects.filter(published=True, in_catalog=True, topic__number=FIRST, source_system=OuterRef('source_system'),
                                external_id=OuterRef('external_id')).exclude(source_system='')
 
 
@@ -28,7 +28,7 @@ def fold_follow_ups(qs):
     keys = set(hidden.values_list('source_system', 'external_id'))
     ids = set(qs.exclude(grouped_follow_up()).values_list('id', flat=True))
     if keys:
-        partners = Task.objects.filter(published=True, topic__number=FIRST, external_id__in={k[1] for k in keys})
+        partners = Task.objects.filter(published=True, in_catalog=True, topic__number=FIRST, external_id__in={k[1] for k in keys})
         ids |= {pk for pk, system, ident in partners.values_list('id', 'source_system', 'external_id') if (system, ident) in keys}
     return ids
 
@@ -38,7 +38,7 @@ def attach_follow_ups(tasks, user):
     firsts = [t for t in tasks if t.topic.number == FIRST and t.external_id and t.source_system]
     if not firsts:
         return {}
-    rows = Task.objects.filter(published=True, topic__number__in=FOLLOW_UPS, external_id__in=[t.external_id for t in firsts]).select_related('topic').prefetch_related(
+    rows = Task.objects.filter(published=True, in_catalog=True, topic__number__in=FOLLOW_UPS, external_id__in=[t.external_id for t in firsts]).select_related('topic').prefetch_related(
         Prefetch('content_blocks', queryset=TaskBlock.objects.all(), to_attr='catalog_blocks'),
         Prefetch('practice_set', queryset=Practice.objects.filter(user=user).order_by('-created_at', '-pk')[:5], to_attr='catalog_history')).order_by('topic__number')
     by_key = {}

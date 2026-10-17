@@ -7,6 +7,10 @@ from django.views.decorators.http import require_GET
 from .views import dashboard
 
 
+def verification():
+    return {'google_site_verification': settings.GOOGLE_SITE_VERIFICATION}
+
+
 def contact_details():
     return {'owner': settings.SITE_OWNER_NAME, 'email': settings.SITE_CONTACT_EMAIL, 'telegram': settings.SITE_CONTACT_TELEGRAM.lstrip('@')}
 
@@ -14,7 +18,7 @@ def contact_details():
 def home(request):
     if request.user.is_authenticated:
         return dashboard(request)
-    return render(request, 'public/home.html', {'contact': contact_details()})
+    return render(request, 'public/home.html', {'contact': contact_details(), **verification()})
 
 
 @require_GET

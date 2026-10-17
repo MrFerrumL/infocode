@@ -22,18 +22,21 @@ FORMAT = 'infocode-kompege-numbers-v1'
 # Numbers 19–21 share one condition: 19 has it alone, 20 and 21 add their own question image.
 GAMES_FORMAT = 'infocode-kompege-games-v1'
 GAMES = [19, 20, 21]
+# Exam variants: hidden tasks (19–21 groups share a condition) plus the variants themselves.
+VARIANTS_FORMAT = 'infocode-kompege-variants-v1'
 
 
 def inspect_bundle(archive, numbers=None):
     members = archive.infolist()
-    if len(members) != len({i.filename for i in members}) or len(members) > 2500 or sum(i.file_size for i in members) > MAX_TOTAL:
+    if len(members) != len({i.filename for i in members}) or len(members) > 10000 or sum(i.file_size for i in members) > MAX_TOTAL:
         raise ValueError('Duplicate, excessive or oversized archive members')
     if archive.getinfo('manifest.json').file_size > 4 * 1024 * 1024:
         raise ValueError('Oversized manifest')
     manifest = json.loads(archive.read('manifest.json'))
     rows = manifest.get('tasks')
     games = manifest.get('format') == GAMES_FORMAT
-    if manifest.get('format') not in (FORMAT, GAMES_FORMAT) or manifest.get('source') != 'https://kompege.ru' or not isinstance(rows, list) or not 1 <= len(rows) <= 2000:
+    variants = manifest.get('format') == VARIANTS_FORMAT
+    if manifest.get('format') not in (FORMAT, GAMES_FORMAT, VARIANTS_FORMAT) or manifest.get('source') != 'https://kompege.ru' or not isinstance(rows, list) or not (0 if variants else 1) <= len(rows) <= 5000:
         raise ValueError('Expected complete category snapshots')
     selected = manifest.get('numbers')
     if not isinstance(selected, list) or not selected or any(type(n) is not int or not 1 <= n <= 27 for n in selected) or selected != sorted(set(selected)):
@@ -59,7 +62,7 @@ def inspect_bundle(archive, numbers=None):
             raise ValueError('Every task needs a valid answer')
         if not isinstance(row.get('author'), str) or len(row['author']) > 200:
             raise ValueError('Invalid author')
-        if not isinstance(row.get('images'), list) or len(row['images']) != (2 if games and row['number'] != 19 else 1) or not isinstance(row.get('files'), list) or len(row['files']) > 20:
+        if not isinstance(row.get('images'), list) or len(row['images']) != (2 if (games and row['number'] != 19) or (variants and row['number'] in (20, 21)) else 1) or not isinstance(row.get('files'), list) or len(row['files']) > 20:
             raise ValueError('A complete condition image is required')
         for image, items in ((True, row['images']), (False, row['files'])):
             for item in items:
@@ -90,6 +93,40 @@ def remove_unreferenced(names):
     for name in names - used:
         if default_storage.exists(name):
             default_storage.delete(name)
+
+
+def create_task(row, topic, publish, assets, path, written, in_catalog=True, tags=None):
+    """Create one KOMPEGE task with its condition screenshots and original files from a verified bundle."""
+    ident = row['source_id']
+    task = Task(topic=topic, title=f'КОМПЕГЭ №{ident} · задание {row["number"]}', answer=row['answer'],
+        difficulty=row['difficulty'], source='КОМПЕГЭ' + (f' · {row["author"]}' if row['author'] else ''),
+        source_system='kompege', external_id=ident, source_url=row['source_url'], published=publish,
+        in_catalog=in_catalog, tags=tags or f'КОМПЕГЭ, полный банк №{row["number"]}')
+    task.full_clean()
+    task.save()
+    for position, (item, image) in enumerate([(i, True) for i in row['images']] + [(i, False) for i in row['files']], 1):
+        basename = PurePosixPath(item['path']).name if image else item['name']
+        name = f'imports/kompege/{ident}/{item["sha256"][:12]}/{basename}'
+        if len(name) > 100:
+            raise ValueError('Storage filename too long')
+        if default_storage.exists(name):
+            with default_storage.open(name, 'rb') as handle:
+                if hashlib.sha256(handle.read()).hexdigest() != item['sha256']:
+                    raise ValueError('Existing media checksum mismatch')
+        else:
+            data = assets[item['path']]
+            if data is None:
+                with zipfile.ZipFile(path) as archive:
+                    data = checked_member(archive, item)
+            actual = default_storage.save(name, ContentFile(data))
+            written.append(actual)
+            name = actual
+        block = TaskBlock(task=task, kind='image' if image else 'file', position=position,
+            text=(f'Условие КОМПЕГЭ №{ident}' if position == 1 else f'Вопрос задания {row["number"]}') if image else item['name'],
+            **({'image': name} if image else {'file': name}))
+        block.full_clean()
+        block.save()
+    return task
 
 
 class Command(BaseCommand):
@@ -143,34 +180,7 @@ class Command(BaseCommand):
                     if Task.all_objects.filter(topic=topic, source_system='kompege', external_id=ident).exists():
                         skipped += 1
                         continue
-                    task = Task(topic=topic, title=f'КОМПЕГЭ №{ident} · задание {row["number"]}', answer=row['answer'],
-                        difficulty=row['difficulty'], source='КОМПЕГЭ' + (f' · {row["author"]}' if row['author'] else ''),
-                        source_system='kompege', external_id=ident, source_url=row['source_url'], published=publish,
-                        tags=f'КОМПЕГЭ, полный банк №{row["number"]}')
-                    task.full_clean()
-                    task.save()
-                    for position, (item, image) in enumerate([(i, True) for i in row['images']] + [(i, False) for i in row['files']], 1):
-                        basename = PurePosixPath(item['path']).name if image else item['name']
-                        name = f'imports/kompege/{ident}/{item["sha256"][:12]}/{basename}'
-                        if len(name) > 100:
-                            raise ValueError('Storage filename too long')
-                        if default_storage.exists(name):
-                            with default_storage.open(name, 'rb') as handle:
-                                if hashlib.sha256(handle.read()).hexdigest() != item['sha256']:
-                                    raise ValueError('Existing media checksum mismatch')
-                        else:
-                            data = assets[item['path']]
-                            if data is None:
-                                with zipfile.ZipFile(path) as archive:
-                                    data = checked_member(archive, item)
-                            actual = default_storage.save(name, ContentFile(data))
-                            written.append(actual)
-                            name = actual
-                        block = TaskBlock(task=task, kind='image' if image else 'file', position=position,
-                            text=(f'Условие КОМПЕГЭ №{ident}' if position == 1 else f'Вопрос задания {row["number"]}') if image else item['name'],
-                            **({'image': name} if image else {'file': name}))
-                        block.full_clean()
-                        block.save()
+                    create_task(row, topic, publish, assets, path, written)
                     created += 1
         except Exception:
             for name in written:

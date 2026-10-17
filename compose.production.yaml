@@ -23,6 +23,7 @@ x-app: &app
     SITE_OWNER_NAME: ${SITE_OWNER_NAME:-}
     SITE_CONTACT_EMAIL: ${SITE_CONTACT_EMAIL:-}
     SITE_CONTACT_TELEGRAM: ${SITE_CONTACT_TELEGRAM:-}
+    GOOGLE_SITE_VERIFICATION: ${GOOGLE_SITE_VERIFICATION:-}
   volumes:
     - media:/app/uploads
     - logs:/data

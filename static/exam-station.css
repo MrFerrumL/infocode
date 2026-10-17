@@ -1,0 +1,65 @@
+/* KEGE-style exam station (imported variants scored as the exam). */
+.station-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; margin-bottom: 18px; }
+.station-head h1 { margin: 4px 0 0; font-size: 26px; }
+.station-clock { text-align: right; flex-shrink: 0; }
+.station-clock span { display: block; font-size: 12px; color: var(--muted); }
+.station-clock strong { font: 600 24px/1.2 ui-monospace, Consolas, monospace; }
+.station.time-low .station-clock strong { color: #c2410c; }
+.station-form { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 18px; align-items: start; }
+.station-nav { position: sticky; top: 12px; border: 1px solid var(--line); border-radius: 14px; padding: 10px 8px; background: var(--paper, white); max-height: calc(100vh - 24px); overflow-y: auto; }
+.station-count { margin: 0 0 10px; text-align: center; font-size: 11px; color: var(--muted); line-height: 1.3; }
+.station-count strong { font-size: 22px; color: var(--ink); }
+.station-nav ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.station-nav a { display: block; text-align: center; padding: 7px 0; border-radius: 8px; border: 1px solid var(--line); color: var(--ink); font-weight: 600; text-decoration: none; }
+.station-nav a.answered { background: #e7f6ee; border-color: #8fd1ad; color: #1d6b45; }
+.station-nav a.current { outline: 2px solid var(--purple); outline-offset: 1px; }
+.station-task { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 18px; margin-bottom: 18px; }
+.station-condition, .station-answer { border: 1px solid var(--line); border-radius: 14px; padding: 20px; background: var(--paper, white); min-width: 0; }
+.station-condition h2 { margin-top: 0; }
+.station-answer { align-self: start; position: sticky; top: 12px; }
+.station-answer-title { margin: 0 0 10px; font-weight: 600; }
+.answer-grid { border-collapse: collapse; width: 100%; margin: 0 0 12px; }
+.answer-grid th { font-size: 12px; color: var(--muted); font-weight: 500; padding: 2px 4px; }
+.answer-grid td { padding: 2px; }
+.answer-grid input { width: 100%; min-width: 0; padding: 8px; border: 1px solid var(--line); border-radius: 6px; font: 15px ui-monospace, Consolas, monospace; background: var(--surface); color: var(--ink); }
+.answer-grid input:focus { outline: 2px solid var(--purple); outline-offset: 0; }
+.station-answer-actions { display: flex; gap: 8px; }
+.station-answer-actions .button { flex: 1; }
+.station-status { min-height: 1.4em; margin: 8px 0 0; font-size: 13px; color: var(--muted); }
+.station-steps { display: none; }
+.station-finish { grid-column: 2; display: flex; justify-content: flex-end; gap: 10px; }
+/* With JavaScript: one task at a time, like the station. */
+.station.js .station-steps { display: flex; grid-column: 1 / -1; justify-content: space-between; }
+.station.js .station-finish button[value="save"] { display: none; }
+@media (max-width: 900px) {
+  .station-form { grid-template-columns: 1fr; }
+  .station-nav { position: static; max-height: none; }
+  .station-nav ol { grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); }
+  .station-task { grid-template-columns: 1fr; }
+  .station-answer { position: static; }
+  .station-finish { grid-column: 1; }
+  .station-head { flex-direction: column; align-items: flex-start; }
+  .station-clock { text-align: left; }
+}
+
+/* Variants archive */
+.archive-year { margin: 28px 0 8px; }
+.archive-year h2 { margin-bottom: 4px; }
+.archive-collection { margin: 14px 0; }
+.archive-collection h3 { font-size: 15px; margin: 0 0 8px; color: var(--muted); font-weight: 600; }
+.archive-links { display: flex; flex-wrap: wrap; gap: 8px; }
+.archive-links a { display: inline-flex; gap: 8px; align-items: center; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--paper, white); color: var(--ink); text-decoration: none; font-size: 14px; }
+.archive-links a:hover { border-color: var(--purple); }
+.archive-links .score { font-size: 12px; font-weight: 700; color: #1d6b45; background: #e7f6ee; border-radius: 6px; padding: 1px 6px; }
+
+/* Exam result table */
+.ege-summary { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 18px; }
+.ege-summary div { border: 1px solid var(--line); border-radius: 14px; padding: 14px 18px; background: var(--paper, white); }
+.ege-summary span { display: block; font-size: 12px; color: var(--muted); }
+.ege-summary strong { font-size: 28px; }
+.ege-table { width: 100%; border-collapse: collapse; margin-bottom: 22px; background: var(--paper, white); }
+.ege-table th, .ege-table td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; font-size: 14px; }
+.ege-table td.answer { font-family: ui-monospace, Consolas, monospace; white-space: pre-line; }
+.ege-table tr.full td.points { background: #e7f6ee; }
+.ege-table tr.part td.points { background: #fff4d6; }
+.ege-table tr.none td.points { background: #fde8e8; }

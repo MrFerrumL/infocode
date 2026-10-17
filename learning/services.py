@@ -14,6 +14,34 @@ def check_answer(value, expected):
     return bool(normalize(value)) and normalize(value) == normalize(expected)
 
 
+# Primary (0–29) to test score, as on KOMPEGE.
+EGE_SCALE = [0, 7, 14, 20, 27, 34, 40, 43, 46, 48, 51, 54, 56, 59, 62, 64, 67, 70, 72, 75, 78, 80, 83, 85, 88, 90, 93, 95, 98, 100]
+
+
+def max_points(number):
+    return 2 if number in (26, 27) else 1
+
+
+def ege_points(number, value, expected):
+    """KOMPEGE rules: 1 point for 1–25; for 26 and 27 two points, one for a partly right answer."""
+    rows = [normalize(row).split() for row in value.splitlines() if normalize(row)]
+    keys = [normalize(row).split() for row in expected.splitlines() if normalize(row)]
+    if not rows:
+        return 0
+    if rows == keys:
+        return max_points(number)
+    if number not in (26, 27):
+        return 0
+    if len(keys) == 2 and number == 27:
+        # Two files: one point if at least two of the four numbers are in place.
+        hits = sum(1 for r in range(2) for c in range(2)
+                   if r < len(rows) and c < len(rows[r]) and c < len(keys[r]) and rows[r][c] == keys[r][c])
+        return 1 if hits >= 2 else 0
+    got, key = (rows[0] + [''])[:2], (keys[0] + [''])[:2] if keys else ['', '']
+    swapped = got[0] == key[1] and got[1] == key[0]
+    return 1 if swapped or got[0] == key[0] or got[1] == key[1] else 0
+
+
 @transaction.atomic
 def create_variant(*, creator, title, topics, count=1, difficulty='', task_ids='', kind='exam', duration=235, group=None, published=False, code_policy=''):
     from .python_answers import CODE_MODES
@@ -36,7 +64,7 @@ def create_variant(*, creator, title, topics, count=1, difficulty='', task_ids='
             raise ValidationError('Выберите хотя бы один номер или укажите ID вручную.')
         selected, groups = [], []
         for topic in sorted(topics, key=lambda t: t.number):
-            qs = Task.objects.filter(topic=topic, published=True).select_related('topic').prefetch_related('content_blocks')
+            qs = Task.objects.filter(topic=topic, published=True, in_catalog=True).select_related('topic').prefetch_related('content_blocks')
             if difficulty:
                 qs = qs.filter(difficulty=difficulty)
             pool = list(qs)
@@ -62,14 +90,25 @@ def finish_attempt(attempt):
     if attempt.submitted_at:
         return
     score = 0
+    ege = attempt.variant.scoring == 'ege'
     for item in attempt.variant.items.all():
         answer, _ = ExamAnswer.objects.get_or_create(attempt=attempt, item=item)
-        answer.correct = check_answer(answer.answer, item.answer) and (item.code_mode != 'required' or bool(answer.python_code.strip()))
-        answer.save(update_fields=['correct'])
-        score += int(answer.correct)
+        code_ok = item.code_mode != 'required' or bool(answer.python_code.strip())
+        if ege:
+            answer.points = ege_points(item.number, answer.answer, item.answer) if code_ok else 0
+            answer.correct = answer.points == max_points(item.number)
+            score += answer.points
+        else:
+            answer.correct = check_answer(answer.answer, item.answer) and code_ok
+            answer.points = int(answer.correct)
+            score += int(answer.correct)
+        answer.save(update_fields=['correct', 'points'])
     attempt.score = score
+    if ege:
+        attempt.primary_score = score
+        attempt.test_score = EGE_SCALE[min(score, len(EGE_SCALE) - 1)]
     attempt.submitted_at = timezone.now()
-    attempt.save(update_fields=['score', 'submitted_at'])
+    attempt.save(update_fields=['score', 'primary_score', 'test_score', 'submitted_at'])
     from .assignments import sync_exam_result
     sync_exam_result(attempt)
 

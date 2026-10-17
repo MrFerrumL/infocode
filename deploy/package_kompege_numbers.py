@@ -9,7 +9,7 @@ import zipfile
 from PIL import Image
 
 
-FORMATS = ('infocode-kompege-numbers-v1', 'infocode-kompege-games-v1')
+FORMATS = ('infocode-kompege-numbers-v1', 'infocode-kompege-games-v1', 'infocode-kompege-variants-v1')
 
 
 def package(folder, output):

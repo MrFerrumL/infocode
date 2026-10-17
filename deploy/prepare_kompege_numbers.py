@@ -39,36 +39,51 @@ def source_answer(row):
     raise ValueError('No verified source answer: ' + str(row.get('taskId')))
 
 
-def image_resolver(folder):
-    """Download condition illustrations once into source-images/ and return local paths."""
+def image_resolver(folder, lenient=False, missing=None):
+    """Download condition illustrations once into source-images/ and return local paths.
+
+    lenient (hidden variant tasks): images may live on any HTTPS host and may redirect to another
+    HTTPS address; an image that cannot be downloaded is reported in `missing` and rendered as a note.
+    """
     cache = {}
+    known = {'.png', '.gif', '.jpg', '.jpeg', '.webp'}
+
+    def download(url):
+        if urlsplit(url).hostname in ('kompege.ru', 'www.kompege.ru'):
+            return fetch(url, MAX_ASSET)
+        with urlopen(Request(url, headers={'User-Agent':'Infocode licensed educational import/1.0'}), timeout=40) as response:
+            if response.url != url and not (lenient and response.url.startswith('https://')):
+                raise ValueError('Unexpected illustration redirect')
+            return response.read(MAX_ASSET + 1)
 
     def local_image(url):
         if url.startswith('data:'):
             return url
         if url not in cache:
             stem = folder / 'source-images' / hashlib.sha256(url.encode()).hexdigest()[:20]
-            suffix = Path(urlsplit(url).path).suffix
+            suffix = Path(urlsplit(url).path).suffix.lower()
+            suffix = suffix if suffix in known else ''
             existing = [p for p in stem.parent.glob(stem.name + '.*')] if not suffix else []
             destination = stem.with_suffix(suffix) if suffix else (existing[0] if existing else None)
             if destination is None or not destination.exists():
-                if any(re.fullmatch(pattern, url) for pattern in EXTERNAL_IMAGES):
-                    with urlopen(Request(url, headers={'User-Agent':'Infocode licensed educational import/1.0'}), timeout=40) as response:
-                        if response.url != url:
-                            raise ValueError('Unexpected illustration redirect')
-                        data = response.read(MAX_ASSET + 1)
-                else:
-                    data = fetch(url, MAX_ASSET)
-                if len(data) > MAX_ASSET:
-                    raise ValueError('Oversized illustration')
-                with Image.open(io.BytesIO(data)) as image:
-                    kind = image.format
-                    image.verify()
-                if destination is None:
-                    extension = {'PNG': '.png', 'GIF': '.gif', 'JPEG': '.jpg'}.get(kind)
+                try:
+                    data = download(url)
+                    if len(data) > MAX_ASSET:
+                        raise ValueError('Oversized illustration')
+                    with Image.open(io.BytesIO(data)) as image:
+                        kind = image.format
+                        image.verify()
+                    extension = {'PNG': '.png', 'GIF': '.gif', 'JPEG': '.jpg', 'WEBP': '.webp'}.get(kind)
                     if not extension:
                         raise ValueError('Unsupported illustration format: ' + url)
-                    destination = stem.with_suffix(extension)
+                except Exception:
+                    if not lenient:
+                        raise
+                    if missing is not None:
+                        missing.append(url)
+                    cache[url] = None
+                    return None
+                destination = destination or stem.with_suffix(extension)
                 destination.write_bytes(data)
             cache[url] = destination.relative_to(folder).as_posix()
         return cache[url]

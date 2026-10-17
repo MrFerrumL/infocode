@@ -41,3 +41,9 @@ class PublicPagesTests(TestCase):
         body = page.content.decode()
         self.assertIn('Allow: /contacts/', body)
         self.assertTrue(body.rstrip().endswith('Disallow: /'))
+
+    @override_settings(GOOGLE_SITE_VERIFICATION='abc123-token')
+    def test_landing_carries_search_console_tag_when_configured(self):
+        self.assertContains(self.client.get('/'), '<meta name="google-site-verification" content="abc123-token">')
+        with self.settings(GOOGLE_SITE_VERIFICATION=''):
+            self.assertNotContains(self.client.get('/'), 'google-site-verification')

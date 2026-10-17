@@ -1,0 +1,46 @@
+{% extends 'base.html' %}{% load content_blocks static %}
+{% block title %}{{ attempt.variant.title }} · экзамен{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'exam-station.css' %}"><script defer src="{% static 'exam-station.js' %}"></script>{% endblock %}
+{% block content %}
+{% if work %}<a class="back-link" href="{% url 'assignment_detail' work.pk %}">← {{ work.get_kind_display }} и история попыток</a>{% endif %}
+<div class="station" data-station data-save-url="{% url 'exam_save' attempt.pk %}" data-deadline="{{ attempt.deadline|date:'c' }}">
+  <header class="station-head">
+    <div><span class="eyebrow">ЕГЭ ПО ИНФОРМАТИКЕ · ПОПЫТКА №{{ attempt_number }}{% if attempt.variant.external_id %} · КИМ № {{ attempt.variant.external_id }}{% endif %}</span><h1>{{ attempt.variant.title }}</h1></div>
+    <div class="station-clock" aria-live="off"><span>Осталось</span><strong data-timer>≈ {{ remaining }} мин</strong></div>
+  </header>
+  <form method="post" class="station-form" data-station-form>{% csrf_token %}<input type="hidden" name="submit_token" value="{{ submit_token }}">
+    <nav class="station-nav" aria-label="Задания варианта">
+      <p class="station-count">Дано ответов<br><strong data-answered>0</strong>/{{ items|length }}</p>
+      <ol>{% for item in items %}<li><a href="#q{{ item.pk }}" data-goto="{{ forloop.counter0 }}" class="{% if item.value %}answered{% endif %}" aria-label="Задание {{ item.number }}">{{ item.number }}</a></li>{% endfor %}</ol>
+    </nav>
+    <div class="station-tasks">
+      {% for item in items %}
+      <section class="station-task" id="q{{ item.pk }}" data-task data-item="{{ item.pk }}" aria-labelledby="qt{{ item.pk }}">
+        <div class="station-condition">
+          <h2 id="qt{{ item.pk }}">Задание {{ item.number }}</h2>
+          {% if item.statement %}<div class="statement">{{ item.statement }}</div>{% endif %}
+          {% task_blocks item %}
+          {% if item.attachment %}<a class="file-link" href="{% url 'download' 'item' item.pk %}">↓ Данные к заданию</a>{% endif %}
+        </div>
+        <div class="station-answer">
+          <p class="station-answer-title">{% if item.answer_rows > 1 or item.answer_cols > 1 %}Введите ответ в поля таблицы{% else %}Введите ответ{% endif %}</p>
+          <table class="answer-grid{% if item.answer_rows == 1 and item.answer_cols == 1 %} single{% endif %}">
+            {% if item.answer_rows > 1 or item.answer_cols > 1 %}<thead><tr><th></th>{% for cell in item.grid.0 %}<th scope="col">{{ forloop.counter }}</th>{% endfor %}</tr></thead>{% endif %}
+            <tbody>{% for row in item.grid %}{% with r=forloop.counter0 %}<tr>{% if item.answer_rows > 1 or item.answer_cols > 1 %}<th scope="row">{{ forloop.counter }}</th>{% endif %}{% for cell in row %}<td><input name="cell_{{ item.pk }}_{{ r }}_{{ forloop.counter0 }}" value="{{ cell }}" autocomplete="off" spellcheck="false" aria-label="Задание {{ item.number }}, строка {{ r|add:1 }}, ячейка {{ forloop.counter }}"></td>{% endfor %}</tr>{% endwith %}{% endfor %}</tbody>
+          </table>
+          <div class="station-answer-actions"><button type="button" class="button secondary" data-clear>Очистить</button><button type="button" class="button" data-save>Сохранить ответ</button></div>
+          <p class="station-status" role="status" data-status></p>
+          {% if item.code_mode != 'off' %}{% include 'partials/python_answer_form.html' with code_form=item.code_form code_mode=item.code_mode %}{% endif %}
+          <details class="answer-comment"><summary>Комментарий к заданию</summary>{{ item.code_form.comment.as_field_group }}</details>
+        </div>
+        <div class="station-steps"><button type="button" class="button secondary" data-prev>← Предыдущее</button><button type="button" class="button secondary" data-next>Следующее →</button></div>
+      </section>
+      {% endfor %}
+    </div>
+    <div class="station-finish">
+      <button name="action" value="save" class="button secondary">Сохранить все ответы</button>
+      <button name="action" value="submit" class="button" data-finish>Завершить экзамен</button>
+    </div>
+  </form>
+</div>
+{% endblock %}

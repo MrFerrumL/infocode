@@ -1,4 +1,4 @@
-{% extends 'base.html' %}{% load static %}{% block title %}Инфокод — подготовка к ЕГЭ по информатике{% endblock %}{% block extra_head %}<link rel="stylesheet" href="{% static 'public.css' %}">{% endblock %}{% block bodyclass %}public-page{% endblock %}{% block content %}
+{% extends 'base.html' %}{% load static %}{% block title %}Инфокод — подготовка к ЕГЭ по информатике{% endblock %}{% block extra_head %}<link rel="stylesheet" href="{% static 'public.css' %}">{% if google_site_verification %}<meta name="google-site-verification" content="{{ google_site_verification }}">{% endif %}{% endblock %}{% block bodyclass %}public-page{% endblock %}{% block content %}
 <header class="public-top"><a class="brand" href="/">инфокод<span class="accent">.</span></a><nav aria-label="Разделы сайта"><a href="{% url 'contacts' %}">Контакты</a><a class="button secondary" href="{% url 'login' %}">Войти</a></nav></header>
 <section class="public-hero">
   <span class="eyebrow">УЧЕБНАЯ ПЛАТФОРМА</span>

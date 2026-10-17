@@ -50,8 +50,8 @@ def register(request):
 def topic_stats(user):
     solved = set(Practice.objects.filter(user=user, correct=True).values_list('task_id', flat=True))
     # Aggregation does not apply Meta.ordering; PostgreSQL otherwise returns arbitrary topic order.
-    topics = list(Topic.objects.annotate(total=Count('tasks', filter=Q(tasks__published=True, tasks__archived_at=None))).order_by('number'))
-    task_map = dict(Task.objects.filter(published=True).values_list('id', 'topic_id'))
+    topics = list(Topic.objects.annotate(total=Count('tasks', filter=Q(tasks__published=True, tasks__in_catalog=True, tasks__archived_at=None))).order_by('number'))
+    task_map = dict(Task.objects.filter(published=True, in_catalog=True).values_list('id', 'topic_id'))
     for topic in topics:
         topic.solved = sum(1 for pk in solved if task_map.get(pk) == topic.id)
         topic.percent = round(topic.solved / topic.total * 100) if topic.total else 0
@@ -82,7 +82,7 @@ def catalog(request):
     if request.method == 'POST':
         if not request.POST.get('submit_token'):
             raise PermissionDenied('Обновите страницу перед отправкой ответа.')
-        submitted = get_object_or_404(Task.objects.select_related('topic'), pk=request.POST.get('task_id') if request.POST.get('task_id', '').isdigit() else 0, published=True)
+        submitted = get_object_or_404(Task.objects.select_related('topic'), pk=request.POST.get('task_id') if request.POST.get('task_id', '').isdigit() else 0, published=True, in_catalog=True)
         answer_form = AnswerForm(request.POST, mode=submitted.code_mode, prefix=f'task-{submitted.pk}')
         if answer_form.is_valid():
             with transaction.atomic():
@@ -105,7 +105,7 @@ def catalog(request):
             # Progressive fallback stays in the catalogue and keeps its filters and page.
             return redirect(request.get_full_path() + f'#task-{submitted.pk}')
     topics, solved = topic_stats(request.user)
-    qs = Task.objects.filter(published=True)
+    qs = Task.objects.filter(published=True, in_catalog=True)
     number = request.GET.get('number', '')
     if number in ('20', '21'):
         number = '19'
@@ -164,7 +164,7 @@ def catalog(request):
 def task_detail(request, pk):
     tasks = Task.objects.select_related('topic')
     if not request.user.is_staff:
-        tasks = tasks.filter(published=True)
+        tasks = tasks.filter(published=True, in_catalog=True)
     task = get_object_or_404(tasks, pk=pk)
     latest = Practice.objects.filter(user=request.user, task=task).first() if task.code_mode != 'off' else None
     form = AnswerForm(request.POST or None, mode=task.code_mode, initial={'python_code': latest.python_code if latest else ''})
@@ -186,11 +186,44 @@ def bookmark(request, pk):
     return redirect('task', pk=pk)
 
 
+def posted_answer(request, item):
+    """KEGE answer grid: cells joined by spaces, rows by newlines; plain field otherwise."""
+    if f'cell_{item.pk}_0_0' not in request.POST:
+        return request.POST.get(f'answer_{item.pk}', '').strip()[:250]
+    rows = [' '.join(v for v in (request.POST.get(f'cell_{item.pk}_{r}_{c}', '').strip() for c in range(item.answer_cols)) if v)
+            for r in range(item.answer_rows)]
+    while rows and not rows[-1]:
+        rows.pop()
+    return '\n'.join(rows)[:250]
+
+
+def answer_grid(item, value):
+    rows = value.split('\n') if value else []
+    return [[(rows[r].split() + [''] * item.answer_cols)[c] if r < len(rows) else '' for c in range(item.answer_cols)] for r in range(item.answer_rows)]
+
+
 @login_required
 def variants(request):
     kind = 'test' if request.path.startswith('/tests') else 'exam'
     qs = visible_variants(request.user).filter(kind=kind).annotate(task_count=Count('items')).prefetch_related('topics')
-    return render(request, 'variants.html', {'variants': qs, 'kind': kind, 'nav': 'tests' if kind == 'test' else 'variants'})
+    imported = [v for v in qs if v.source_system == 'kompege']
+    own = [v for v in qs if v.source_system != 'kompege']
+    # KOMPEGE archive layout: school year (newest first) → collection → variants in source order.
+    best = {}
+    for variant_id, score in ExamAttempt.objects.filter(user=request.user, variant__in=imported, submitted_at__isnull=False).values_list('variant_id', 'test_score'):
+        best[variant_id] = max(best.get(variant_id, 0), score or 0)
+    years = {}
+    for v in sorted(imported, key=lambda v: (v.school_year, -v.sort_order), reverse=True):
+        v.best_score = best.get(v.pk)
+        # Button label as in the source archive; the heading above already names year and collection.
+        v.short = v.title.split(' · ', 1)[-1]
+        if v.collection.startswith('Варианты от '):
+            v.short = v.short.removesuffix(' от ' + v.collection[len('Варианты от '):])
+        collections = years.setdefault(v.school_year, {})
+        collections.setdefault(v.collection, []).append(v)
+    archive = [{'school_year': year, 'exam_year': int(year[:4]) + 1, 'collections': [{'title': t, 'variants': vs} for t, vs in cols.items()]}
+               for year, cols in years.items()]
+    return render(request, 'variants.html', {'variants': own, 'archive': archive, 'kind': kind, 'nav': 'tests' if kind == 'test' else 'variants'})
 
 
 @login_required
@@ -253,7 +286,8 @@ def exam(request, pk):
     valid_code = True
     for item in items:
         saved = answers.get(item.pk)
-        item.value = request.POST.get(f'answer_{item.pk}', '')[:250] if request.method == 'POST' else saved.answer if saved else ''
+        item.value = posted_answer(request, item) if request.method == 'POST' else saved.answer if saved else ''
+        item.grid = answer_grid(item, item.value)
         # Homework always accepts an optional program; required-code tasks retain their rule.
         if recipient and recipient.assignment.kind == 'homework' and item.code_mode == 'off':
             item.code_mode = 'optional'
@@ -275,7 +309,27 @@ def exam(request, pk):
     if request.method == 'POST' and not valid_code:
         messages.error(request, 'Проверьте код и комментарии в отмеченных заданиях. Ответы пока не сохранены; введённые данные остались в форме.')
     remaining = max(0, math.ceil((attempt.deadline - timezone.now()).total_seconds() / 60))
-    return render(request, 'exam.html', {'submit_token': form_token(request.user, f'exam:{pk}'), 'attempt': attempt, 'items': items, 'remaining': remaining, 'work': recipient.assignment if recipient else None, 'attempt_number': ExamAttempt.objects.filter(user=attempt.user, variant=attempt.variant, pk__lte=attempt.pk).count(), 'nav': 'homework' if recipient and recipient.assignment.kind == 'homework' else 'variants'})
+    template = 'exam_station.html' if attempt.variant.scoring == 'ege' else 'exam.html'
+    return render(request, template, {'submit_token': form_token(request.user, f'exam:{pk}'), 'attempt': attempt, 'items': items, 'remaining': remaining, 'work': recipient.assignment if recipient else None, 'attempt_number': ExamAttempt.objects.filter(user=attempt.user, variant=attempt.variant, pk__lte=attempt.pk).count(), 'nav': 'homework' if recipient and recipient.assignment.kind == 'homework' else 'variants'})
+
+
+@login_required
+@require_POST
+@transaction.atomic
+def exam_save(request, pk):
+    """Save one answer of an open attempt (KEGE station «Сохранить ответ»); code and comments are kept."""
+    attempt = get_object_or_404(ExamAttempt.objects.select_for_update().select_related('variant'), pk=pk, user=request.user, submitted_at=None)
+    if timezone.now() >= attempt.deadline:
+        return JsonResponse({'error': 'Время вышло. Завершите экзамен — проверятся сохранённые ответы.'}, status=409)
+    if attempt.variant.assigned_only:
+        from .models import AssignmentRecipient
+        recipient = AssignmentRecipient.objects.select_related('assignment').filter(assignment__variant=attempt.variant, student=request.user).first()
+        if recipient is None or not recipient.assignment.active:
+            return JsonResponse({'error': 'Назначение закрыто преподавателем.'}, status=409)
+    item = get_object_or_404(attempt.variant.items, pk=request.POST.get('item') if str(request.POST.get('item', '')).isdigit() else 0)
+    value = posted_answer(request, item)
+    ExamAnswer.objects.update_or_create(attempt=attempt, item=item, defaults={'answer': value})
+    return JsonResponse({'ok': True, 'value': value, 'answered': attempt.answers.exclude(answer='').count()})
 
 
 @login_required
@@ -292,7 +346,13 @@ def result(request, pk):
         from .models import AssignmentRecipient
         recipient = AssignmentRecipient.objects.select_related('assignment').filter(assignment__variant=attempt.variant, student=attempt.user).first()
     from .assignments import assignment_block
-    return render(request, 'result.html', {'attempt': attempt, 'answers': attempt.answers.select_related('item'), 'total': total, 'percent': round(attempt.score / total * 100) if total else 0,
+    from .services import max_points
+    answers = list(attempt.answers.select_related('item').order_by('item__position'))
+    for a in answers:
+        a.max_points = max_points(a.item.number) if attempt.variant.scoring == 'ege' else 1
+    max_primary = sum(a.max_points for a in answers)
+    return render(request, 'result.html', {'attempt': attempt, 'answers': answers, 'total': total, 'percent': round(attempt.score / total * 100) if total else 0,
+        'ege': attempt.variant.scoring == 'ege', 'max_primary': max_primary, 'full_count': sum(1 for a in answers if a.correct), 'show_answers': not attempt.variant.hide_answers or request.user.is_staff,
         'work': recipient.assignment if recipient else None, 'retry_block': assignment_block(recipient) if recipient else '',
         'attempt_number': ExamAttempt.objects.filter(user=attempt.user, variant=attempt.variant, pk__lte=attempt.pk).count(),
         'start_token': form_token(request.user, f'start-exam:{attempt.variant_id}'), 'nav': 'homework' if recipient and recipient.assignment.kind == 'homework' else 'variants'})

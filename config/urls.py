@@ -70,6 +70,7 @@ urlpatterns = [
     path('variants/<int:pk>/', v.variant_detail, name='variant'),
     path('variants/<int:pk>/start/', v.start_exam, name='start_exam'),
     path('exam/<int:pk>/', v.exam, name='exam'),
+    path('exam/<int:pk>/save/', v.exam_save, name='exam_save'),
     path('results/<int:pk>/', v.result, name='result'),
     path('course/', courses.courses, name='course'),
     path('course/<int:pk>/', courses.overview, name='course_overview'),

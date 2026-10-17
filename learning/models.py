@@ -60,6 +60,8 @@ class Task(models.Model):
     source_url = models.URLField('Ссылка на оригинал', max_length=500, blank=True, default='', editable=False)
     attachment = models.FileField('Данные к задаче', upload_to='tasks/', blank=True, validators=[file_size, FileExtensionValidator(['txt', 'csv', 'xlsx', 'pdf', 'zip'])])
     published = models.BooleanField('Опубликовано', default=True)
+    # Tasks of imported KOMPEGE variants that the source keeps out of its public bank.
+    in_catalog = models.BooleanField('Показывать в каталоге', default=True, help_text='Выключено — задание доступно только внутри вариантов.')
     created_at = models.DateTimeField(auto_now_add=True)
     archived_at = models.DateTimeField(null=True, blank=True, db_index=True)
     tags = models.CharField('Теги через запятую', max_length=300, blank=True)
@@ -113,9 +115,20 @@ class Variant(models.Model):
     duration = models.PositiveSmallIntegerField('Время, мин', default=235, validators=[MinValueValidator(1), MaxValueValidator(600)])
     published = models.BooleanField('Опубликован', default=False)
     assigned_only = models.BooleanField(default=False, editable=False)
+    # Imported KOMPEGE variants keep their source labels and are scored like the exam.
+    SCORING = [('plain', 'Число верных ответов'), ('ege', 'Первичные и тестовые баллы ЕГЭ')]
+    scoring = models.CharField('Подсчёт результата', max_length=10, choices=SCORING, default='plain')
+    hide_answers = models.BooleanField('Скрывать верные ответы после сдачи', default=False)
+    school_year = models.CharField('Учебный год', max_length=9, blank=True)
+    collection = models.CharField('Сборник', max_length=150, blank=True)
+    source_system = models.CharField(max_length=32, blank=True, default='', editable=False)
+    external_id = models.PositiveIntegerField('Номер КИМ в источнике', null=True, blank=True, editable=False)
+    source_url = models.URLField(max_length=500, blank=True, default='', editable=False)
+    sort_order = models.PositiveIntegerField(default=0, editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         ordering = ['-created_at']
+        constraints = [models.UniqueConstraint(fields=['source_system', 'external_id'], condition=models.Q(external_id__isnull=False), name='unique_variant_source_id')]
         verbose_name = 'вариант / контрольная'
         verbose_name_plural = 'варианты и контрольные'
     def __str__(self):
@@ -134,6 +147,9 @@ class VariantItem(models.Model):
     solution = models.TextField()
     attachment = models.CharField(max_length=500, blank=True)
     blocks = models.JSONField(default=list, blank=True)
+    # KEGE-style answer grid; answers are stored as cells joined by spaces, rows by newlines.
+    answer_rows = models.PositiveSmallIntegerField(default=1)
+    answer_cols = models.PositiveSmallIntegerField(default=1)
     class Meta:
         ordering = ['position']
         constraints = [models.UniqueConstraint(fields=['variant', 'position'], name='unique_variant_position')]
@@ -146,6 +162,8 @@ class ExamAttempt(models.Model):
     deadline = models.DateTimeField()
     submitted_at = models.DateTimeField(null=True, blank=True)
     score = models.PositiveSmallIntegerField(default=0)
+    primary_score = models.PositiveSmallIntegerField(null=True, blank=True)
+    test_score = models.PositiveSmallIntegerField(null=True, blank=True)
     class Meta:
         ordering = ['-started_at']
         indexes = [models.Index(fields=['user', 'submitted_at']), models.Index(fields=['submitted_at', 'deadline'])]
@@ -159,6 +177,7 @@ class ExamAnswer(models.Model):
     python_code = models.TextField('Python-код ученика', blank=True, max_length=MAX_CODE_LENGTH)
     comment = models.TextField('Комментарий ученика', blank=True, max_length=3000)
     correct = models.BooleanField(default=False)
+    points = models.PositiveSmallIntegerField(default=0)
     class Meta:
         constraints = [models.UniqueConstraint(fields=['attempt', 'item'], name='unique_exam_answer')]
 
@@ -190,7 +209,7 @@ class TaskBlock(models.Model):
     archived_at = models.DateTimeField(null=True, blank=True, db_index=True)
     text = models.TextField('Текст / подпись', blank=True)
     image = models.ImageField('Изображение', upload_to='task-images/', blank=True, validators=[file_size, FileExtensionValidator(['png', 'jpg', 'jpeg', 'webp'])])
-    file = models.FileField('Файл', upload_to='task-blocks/', blank=True, validators=[data_file_size, FileExtensionValidator(['txt', 'csv', 'xlsx', 'xls', 'pdf', 'zip', 'docx', 'ods', 'odt', 'py'])])
+    file = models.FileField('Файл', upload_to='task-blocks/', blank=True, validators=[data_file_size, FileExtensionValidator(['txt', 'csv', 'xlsx', 'xls', 'pdf', 'zip', 'docx', 'doc', 'ods', 'odt', 'py'])])
     class Meta:
         ordering = ['position', 'id']
         verbose_name = 'блок задания'
