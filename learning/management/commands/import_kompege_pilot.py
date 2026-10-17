@@ -18,7 +18,7 @@ from learning.topic_defaults import TOPICS
 
 
 FORMAT = 'infocode-kompege-pilot-v1'
-MAX_FILE = 20 * 1024 * 1024
+MAX_FILE = 50 * 1024 * 1024  # largest number-17 data files are about 31 MB
 MAX_TOTAL = 256 * 1024 * 1024
 
 

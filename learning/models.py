@@ -11,6 +11,12 @@ def file_size(value):
         raise ValidationError('Файл должен быть не больше 20 МБ.')
 
 
+def data_file_size(value):
+    # Task data files (e.g. number 17 sequences) can exceed the general 20 MB limit.
+    if value.size > 50 * 1024 * 1024:
+        raise ValidationError('Файл должен быть не больше 50 МБ.')
+
+
 def video_size(value):
     if value.size > 500 * 1024 * 1024:
         raise ValidationError('Видео должно быть не больше 500 МБ.')
@@ -184,7 +190,7 @@ class TaskBlock(models.Model):
     archived_at = models.DateTimeField(null=True, blank=True, db_index=True)
     text = models.TextField('Текст / подпись', blank=True)
     image = models.ImageField('Изображение', upload_to='task-images/', blank=True, validators=[file_size, FileExtensionValidator(['png', 'jpg', 'jpeg', 'webp'])])
-    file = models.FileField('Файл', upload_to='task-blocks/', blank=True, validators=[file_size, FileExtensionValidator(['txt', 'csv', 'xlsx', 'xls', 'pdf', 'zip', 'docx', 'ods', 'odt', 'py'])])
+    file = models.FileField('Файл', upload_to='task-blocks/', blank=True, validators=[data_file_size, FileExtensionValidator(['txt', 'csv', 'xlsx', 'xls', 'pdf', 'zip', 'docx', 'ods', 'odt', 'py'])])
     class Meta:
         ordering = ['position', 'id']
         verbose_name = 'блок задания'

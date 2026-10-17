@@ -60,7 +60,7 @@ class EditorTests(TestCase):
         data.update(statement='Текст', solution_file=SimpleUploadedFile('answer.html', b'<script>bad</script>'))
         self.assertEqual(self.client.post('/teacher/tasks/new/', data).status_code, 200)
         self.assertFalse(Task.objects.filter(title=data['title']).exists())
-        data['solution_file'] = SimpleUploadedFile('large.txt', b'x' * (20 * 1024 * 1024 + 1))
+        data['solution_file'] = SimpleUploadedFile('large.txt', b'x' * (50 * 1024 * 1024 + 1))
         self.assertEqual(self.client.post('/teacher/tasks/new/', data).status_code, 200)
         self.assertFalse(Task.objects.filter(title=data['title']).exists())
 

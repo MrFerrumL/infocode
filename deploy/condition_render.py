@@ -11,9 +11,14 @@ import re
 
 # Some source conditions embed illustrations hosted on K. Polyakov's site.
 POLYAKOV_IMAGE = r'https://kpolyakov\.spb\.ru/cms/images/\d+\.(?:gif|png|jpe?g)'
+# ...and on the Uploadcare CDN, addressed by file UUID without an extension.
+UPLOADCARE_IMAGE = r'https://ucarecdn\.com/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/'
+# ...and on VK's photo CDN with a signed size/quality query.
+VK_IMAGE = r'https://sun\d+-\d+\.userapi\.com/impg/[A-Za-z0-9_-]+/[A-Za-z0-9_-]+\.(?:jpg|png)\?size=\d+x\d+&quality=\d+&sign=[0-9a-f]{32}&type=album'
+EXTERNAL_IMAGES = (POLYAKOV_IMAGE, UPLOADCARE_IMAGE, VK_IMAGE)
 
 class Condition(HTMLParser):
-    tags = {'p','br','table','colgroup','col','tbody','tr','td','strong','em','sub','sup','div','span','pre','code','ul','ol','li','blockquote'}
+    tags = {'p','br','table','colgroup','col','tbody','tr','td','strong','em','sub','sup','div','span','pre','code','ul','ol','li','blockquote','u'}
     void = {'br','col','img','hr','wbr'}
     properties = {'border-collapse','width','border-width','height','padding','text-align','border-spacing'}
     def __init__(self, image_resolver=None):
@@ -34,7 +39,7 @@ class Condition(HTMLParser):
                 if a.get('alt', '').strip():
                     raise ValueError('Image has text but no source')
                 return
-            if not (re.fullmatch(r'data:image/(?:png|gif|jpeg);base64,[A-Za-z0-9+/=\s]+',src) or re.fullmatch(r'https://kompege\.ru/images/[A-Za-z0-9_.-]+',src) or re.fullmatch(POLYAKOV_IMAGE,src)):
+            if not (re.fullmatch(r'data:image/(?:png|gif|jpeg);base64,[A-Za-z0-9+/=\s]+',src) or re.fullmatch(r'https://kompege\.ru/images/[A-Za-z0-9_.-]+',src) or any(re.fullmatch(pattern,src) for pattern in EXTERNAL_IMAGES)):
                 raise ValueError('Unrecognised image origin')
             if self.image_resolver:
                 src=self.image_resolver(src)

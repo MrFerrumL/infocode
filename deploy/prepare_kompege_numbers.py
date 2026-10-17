@@ -10,13 +10,14 @@ from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 from PIL import Image
 try:
-    from .condition_render import Condition, HEAD, POLYAKOV_IMAGE, TAIL
+    from .condition_render import Condition, EXTERNAL_IMAGES, HEAD, TAIL
     from .prepare_kompege_pilot import answer_text, fetch, safe_name, source_url, MAX_ASSET
 except ImportError:
-    from condition_render import Condition, HEAD, POLYAKOV_IMAGE, TAIL
+    from condition_render import Condition, EXTERNAL_IMAGES, HEAD, TAIL
     from prepare_kompege_pilot import answer_text, fetch, safe_name, source_url, MAX_ASSET
 
 FORMAT = 'infocode-kompege-numbers-v1'
+MAX_DATA_FILE = 50 * 1024 * 1024  # matches TaskBlock.file limit
 
 # Source task 31372 has an empty API key but provides the author's calculation.
 # Independently checked using exact fractions: stereo/mono PCM, then 34% reduction.
@@ -38,22 +39,20 @@ def source_answer(row):
     raise ValueError('No verified source answer: ' + str(row.get('taskId')))
 
 
-def prepare(folder, numbers, refresh=False):
-    numbers = sorted(set(numbers))
-    if not numbers or any(n not in range(1, 28) for n in numbers):
-        raise ValueError('Choose EGE categories 1–27')
-    folder.mkdir(parents=True, exist_ok=True)
-    (folder / 'captures').mkdir(exist_ok=True)
-    (folder / 'source-images').mkdir(exist_ok=True)
+def image_resolver(folder):
+    """Download condition illustrations once into source-images/ and return local paths."""
     cache = {}
 
     def local_image(url):
         if url.startswith('data:'):
             return url
         if url not in cache:
-            destination = folder / 'source-images' / (hashlib.sha256(url.encode()).hexdigest()[:20] + Path(urlsplit(url).path).suffix)
-            if not destination.exists():
-                if re.fullmatch(POLYAKOV_IMAGE, url):
+            stem = folder / 'source-images' / hashlib.sha256(url.encode()).hexdigest()[:20]
+            suffix = Path(urlsplit(url).path).suffix
+            existing = [p for p in stem.parent.glob(stem.name + '.*')] if not suffix else []
+            destination = stem.with_suffix(suffix) if suffix else (existing[0] if existing else None)
+            if destination is None or not destination.exists():
+                if any(re.fullmatch(pattern, url) for pattern in EXTERNAL_IMAGES):
                     with urlopen(Request(url, headers={'User-Agent':'Infocode licensed educational import/1.0'}), timeout=40) as response:
                         if response.url != url:
                             raise ValueError('Unexpected illustration redirect')
@@ -63,10 +62,28 @@ def prepare(folder, numbers, refresh=False):
                 if len(data) > MAX_ASSET:
                     raise ValueError('Oversized illustration')
                 with Image.open(io.BytesIO(data)) as image:
+                    kind = image.format
                     image.verify()
+                if destination is None:
+                    extension = {'PNG': '.png', 'GIF': '.gif', 'JPEG': '.jpg'}.get(kind)
+                    if not extension:
+                        raise ValueError('Unsupported illustration format: ' + url)
+                    destination = stem.with_suffix(extension)
                 destination.write_bytes(data)
             cache[url] = destination.relative_to(folder).as_posix()
         return cache[url]
+
+    return local_image
+
+
+def prepare(folder, numbers, refresh=False):
+    numbers = sorted(set(numbers))
+    if not numbers or any(n not in range(1, 28) for n in numbers):
+        raise ValueError('Choose EGE categories 1–27')
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / 'captures').mkdir(exist_ok=True)
+    (folder / 'source-images').mkdir(exist_ok=True)
+    local_image = image_resolver(folder)
 
     tasks, jobs, counts, hashes = [], [], {}, {}
     for number in numbers:
@@ -100,7 +117,7 @@ def prepare(folder, numbers, refresh=False):
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 url = source_url(item['url'])
                 if not destination.exists():
-                    destination.write_bytes(fetch(url, MAX_ASSET))
+                    destination.write_bytes(fetch(url, MAX_DATA_FILE))
                 files.append({'path': relative, 'name': name_original, 'sha256': hashlib.sha256(destination.read_bytes()).hexdigest(), 'url': url})
             tasks.append({'number': number, 'source_id': ident, 'source_url': f'https://kompege.ru/task?id={ident}',
                 'author': str(row.get('comment') or '').strip(), 'answer': answer, 'answer_origin': answer_origin,
