@@ -20,3 +20,8 @@ def platform_context(request):
         'workspace_section': next((key for key, names in categories.items() if route in names), 'more'),
         'current_route': route,
     }
+
+
+def season_context(request):
+    from django.conf import settings
+    return {'site_season': getattr(settings, 'SITE_SEASON', '')}
