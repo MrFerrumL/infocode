@@ -45,7 +45,7 @@ def checked_member(archive, item, image=False):
         name = item.get('name', '')
         if not isinstance(name, str) or not name or name != PurePosixPath(name).name or '\\' in name or len(name) > 90:
             raise ValueError('Invalid original filename')
-        allowed = {'txt', 'csv', 'xlsx', 'xls', 'pdf', 'zip', 'docx', 'ods', 'odt', 'py'}
+        allowed = {'txt', 'csv', 'xlsx', 'xls', 'pdf', 'zip', 'docx', 'doc', 'ods', 'odt', 'py'}
         if PurePosixPath(name).suffix.lower().lstrip('.') not in allowed:
             raise ValueError('Unsupported attachment: ' + name)
     return data

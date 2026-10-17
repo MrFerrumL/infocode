@@ -11,7 +11,7 @@
 .station-count strong { font-size: 22px; color: var(--ink); }
 .station-nav ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
 .station-nav a { display: block; text-align: center; padding: 7px 0; border-radius: 8px; border: 1px solid var(--line); color: var(--ink); font-weight: 600; text-decoration: none; }
-.station-nav a.answered { background: #e7f6ee; border-color: #8fd1ad; color: #1d6b45; }
+.station-nav a.answered { background: #e7f6ee; border-color: #8fd1ad; color: #1d6b45 !important; }
 .station-nav a.current { outline: 2px solid var(--purple); outline-offset: 1px; }
 .station-task { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 18px; margin-bottom: 18px; }
 .station-condition, .station-answer { border: 1px solid var(--line); border-radius: 14px; padding: 20px; background: var(--paper, white); min-width: 0; }
@@ -60,6 +60,7 @@
 .ege-table { width: 100%; border-collapse: collapse; margin-bottom: 22px; background: var(--paper, white); }
 .ege-table th, .ege-table td { border: 1px solid var(--line); padding: 6px 10px; text-align: left; vertical-align: top; font-size: 14px; }
 .ege-table td.answer { font-family: ui-monospace, Consolas, monospace; white-space: pre-line; }
+.ege-table td.points { color: #1f2430; font-weight: 600; }
 .ege-table tr.full td.points { background: #e7f6ee; }
 .ege-table tr.part td.points { background: #fff4d6; }
 .ege-table tr.none td.points { background: #fde8e8; }
