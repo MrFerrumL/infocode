@@ -15,7 +15,8 @@ from learning.models import Bookmark, Practice, Task, TaskBlock, Topic, VariantI
 from .import_kompege_pilot import checked_member
 from learning.topic_defaults import TOPICS
 
-MAX_TOTAL = 512 * 1024 * 1024
+# Number 24 alone carries ~1.1 GB of TXT data; data files are streamed, never held together.
+MAX_TOTAL = 3 * 1024 * 1024 * 1024
 
 FORMAT = 'infocode-kompege-numbers-v1'
 # Numbers 19–21 share one condition: 19 has it alone, 20 and 21 add their own question image.
@@ -67,7 +68,8 @@ def inspect_bundle(archive, numbers=None):
                     with Image.open(io.BytesIO(data)) as picture:
                         if picture.width != 1920:
                             raise ValueError('Condition must be a native 1920px screenshot')
-                assets[item['path']] = data
+                # Data files are verified here and read again one by one when saved.
+                assets[item['path']] = data if image else None
     if games:
         groups = {}
         for row in rows:
@@ -157,7 +159,11 @@ class Command(BaseCommand):
                                 if hashlib.sha256(handle.read()).hexdigest() != item['sha256']:
                                     raise ValueError('Existing media checksum mismatch')
                         else:
-                            actual = default_storage.save(name, ContentFile(assets[item['path']]))
+                            data = assets[item['path']]
+                            if data is None:
+                                with zipfile.ZipFile(path) as archive:
+                                    data = checked_member(archive, item)
+                            actual = default_storage.save(name, ContentFile(data))
                             written.append(actual)
                             name = actual
                         block = TaskBlock(task=task, kind='image' if image else 'file', position=position,

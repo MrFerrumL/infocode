@@ -10,7 +10,7 @@ from pathlib import Path
 import re
 
 # Some source conditions embed illustrations hosted on K. Polyakov's site.
-POLYAKOV_IMAGE = r'https://kpolyakov\.spb\.ru/cms/images/\d+\.(?:gif|png|jpe?g)'
+POLYAKOV_IMAGE = r'https://kpolyakov\.spb\.ru/cms/images/\d+[a-z]?\.(?:gif|png|jpe?g)'
 # ...and on the Uploadcare CDN, addressed by file UUID without an extension.
 UPLOADCARE_IMAGE = r'https://ucarecdn\.com/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/'
 # ...and on VK's photo CDN with a signed size/quality query.

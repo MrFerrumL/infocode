@@ -44,14 +44,16 @@ def package(folder, output):
         row['images'] = images
         for item in row['files']:
             file = folder / item['path']
-            data = file.read_bytes()
-            if hashlib.sha256(data).hexdigest() != item['sha256']:
+            if hashlib.sha256(file.read_bytes()).hexdigest() != item['sha256']:
                 raise ValueError('Original attachment checksum mismatch')
-            blobs[item['path']] = data
+            blobs[item['path']] = file  # written from disk; number 24 holds ~1.1 GB
     with zipfile.ZipFile(output, 'w', zipfile.ZIP_DEFLATED) as archive:
         archive.writestr('manifest.json', json.dumps(manifest, ensure_ascii=False, indent=2).encode('utf-8'))
         for name, data in blobs.items():
-            archive.writestr(name, data)
+            if isinstance(data, Path):
+                archive.write(data, name)
+            else:
+                archive.writestr(name, data)
     print(f'Packaged {dict(counts)}; {len(manifest["tasks"])} native screenshots ({sum(1 for k in blobs if k.startswith("screenshots/"))} unique), {sum(len(r["files"]) for r in manifest["tasks"])} files; {output.stat().st_size} bytes.')
 
 
