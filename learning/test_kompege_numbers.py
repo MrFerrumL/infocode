@@ -15,6 +15,7 @@ from django.urls import reverse
 from django.utils import timezone
 from PIL import Image
 from deploy.condition_render import Condition
+from deploy.prepare_kompege_numbers import source_answer, ANSWER_RECOVERIES
 from learning.models import Task, TaskBlock, Topic, Practice
 
 
@@ -116,3 +117,22 @@ class CompleteCategoriesTests(TestCase):
         self.assertEqual(len(resolved),1)
         with self.assertRaises(ValueError):Condition().feed('<img src="https://other.example/image.png">')
         with self.assertRaises(ValueError):Condition().feed('<script>evil()</script>')
+
+    def test_native_renderer_preserves_code_indentation_and_lists_as_in_source(self):
+        parser=Condition()
+        parser.feed('<pre><code>for x in range(3):\n    print(x &lt; 2)</code></pre><ol><li>Шаг</li></ol>')
+        html=''.join(parser.parts)
+        self.assertIn('for x in range(3):\n    print(x &lt; 2)',html)
+        self.assertIn('<ol><li>Шаг</li></ol>',html)
+
+    def test_missing_key_recovery_is_bound_to_verified_condition_and_solution(self):
+        row={'number':7,'taskId':31372,'key':'','text':'condition','solve_text':'original solution'}
+        recovery={'answer':'120','condition_sha256':hashlib.sha256(row['text'].encode()).hexdigest(),
+                  'solution_sha256':hashlib.sha256(row['solve_text'].encode()).hexdigest()}
+        with patch.dict(ANSWER_RECOVERIES,{(7,31372):recovery},clear=True):
+            self.assertEqual(source_answer(row),('120','author-solution'))
+            row['text']='changed condition'
+            with self.assertRaises(ValueError):source_answer(row)
+            row['key']='0012'
+            self.assertEqual(source_answer(row),('0012','api'))
+        with self.assertRaises(ValueError):source_answer({'number':8,'taskId':123,'key':''})

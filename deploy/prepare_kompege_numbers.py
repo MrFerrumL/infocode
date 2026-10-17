@@ -17,6 +17,25 @@ except ImportError:
 
 FORMAT = 'infocode-kompege-numbers-v1'
 
+# Source task 31372 has an empty API key but provides the author's calculation.
+# Independently checked using exact fractions: stereo/mono PCM, then 34% reduction.
+# Do not execute downloaded solution code or reuse the recovery after source edits.
+ANSWER_RECOVERIES = {
+    (7, 31372): {'answer': '120',
+        'condition_sha256': 'cb262b4df9c455d1f449c8b79978a3e97e0067ae5b18e6b377ae35015222f170',
+        'solution_sha256': 'c35b0440b9a1745eda337947a3b8759d04fe6dd1b89379bbbbad8930cda1db36'},
+}
+
+
+def source_answer(row):
+    answer = answer_text(row.get('key'))
+    if answer:
+        return answer, 'api'
+    recovery = ANSWER_RECOVERIES.get((row.get('number'), row.get('taskId')))
+    if recovery and hashlib.sha256(row['text'].encode()).hexdigest() == recovery['condition_sha256'] and hashlib.sha256((row.get('solve_text') or '').encode()).hexdigest() == recovery['solution_sha256']:
+        return recovery['answer'], 'author-solution'
+    raise ValueError('No verified source answer: ' + str(row.get('taskId')))
+
 
 def prepare(folder, numbers, refresh=False):
     numbers = sorted(set(numbers))
@@ -59,7 +78,8 @@ def prepare(folder, numbers, refresh=False):
         for row in sorted(rows, key=lambda r: -r['taskId']):
             if row['hide']:
                 continue
-            ident, answer = row['taskId'], answer_text(row['key'])
+            ident = row['taskId']
+            answer, answer_origin = source_answer(row)
             if row['number'] != number or ident in seen or not answer or len(answer) > 250 or not row['text']:
                 raise ValueError('Invalid public source row: ' + str(ident))
             seen.add(ident)
@@ -82,7 +102,7 @@ def prepare(folder, numbers, refresh=False):
                     destination.write_bytes(fetch(url, MAX_ASSET))
                 files.append({'path': relative, 'name': name_original, 'sha256': hashlib.sha256(destination.read_bytes()).hexdigest(), 'url': url})
             tasks.append({'number': number, 'source_id': ident, 'source_url': f'https://kompege.ru/task?id={ident}',
-                'author': str(row.get('comment') or '').strip(), 'answer': answer,
+                'author': str(row.get('comment') or '').strip(), 'answer': answer, 'answer_origin': answer_origin,
                 'difficulty': {0:'easy',1:'medium',2:'hard',3:'grave'}[row['difficulty']],
                 'images': ['screenshots/' + name + '.jpg'], 'files': files})
             if len(seen) % 25 == 0:
