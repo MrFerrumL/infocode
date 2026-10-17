@@ -4,15 +4,16 @@ from datetime import datetime, timezone
 import hashlib
 import io
 import json
+import re
 from pathlib import Path
 from urllib.parse import urlsplit
 from urllib.request import Request, urlopen
 from PIL import Image
 try:
-    from .condition_render import Condition, HEAD, TAIL
+    from .condition_render import Condition, HEAD, POLYAKOV_IMAGE, TAIL
     from .prepare_kompege_pilot import answer_text, fetch, safe_name, source_url, MAX_ASSET
 except ImportError:
-    from condition_render import Condition, HEAD, TAIL
+    from condition_render import Condition, HEAD, POLYAKOV_IMAGE, TAIL
     from prepare_kompege_pilot import answer_text, fetch, safe_name, source_url, MAX_ASSET
 
 FORMAT = 'infocode-kompege-numbers-v1'
@@ -52,7 +53,7 @@ def prepare(folder, numbers, refresh=False):
         if url not in cache:
             destination = folder / 'source-images' / (hashlib.sha256(url.encode()).hexdigest()[:20] + Path(urlsplit(url).path).suffix)
             if not destination.exists():
-                if url == 'https://kpolyakov.spb.ru/cms/images/5271.gif':
+                if re.fullmatch(POLYAKOV_IMAGE, url):
                     with urlopen(Request(url, headers={'User-Agent':'Infocode licensed educational import/1.0'}), timeout=40) as response:
                         if response.url != url:
                             raise ValueError('Unexpected illustration redirect')

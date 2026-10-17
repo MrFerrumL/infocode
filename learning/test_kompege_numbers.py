@@ -111,12 +111,22 @@ class CompleteCategoriesTests(TestCase):
             resolved.append(url)
             return 'source-images/original.gif'
         parser=Condition(image_resolver=resolver)
-        parser.feed('<p>\\(x \\lor y\\)</p><table border="1"><tr><td>0</td></tr></table><img><img src="https://kpolyakov.spb.ru/cms/images/5271.gif">')
+        parser.feed('<p>\\(x \\lor y\\)</p><table border="1"><tr><td>0</td></tr></table><img><img src="https://kpolyakov.spb.ru/cms/images/5271.gif"><img src="https://kpolyakov.spb.ru/cms/images/8785.gif">')
         self.assertIn('\\(x \\lor y\\)',''.join(parser.parts))
         self.assertIn('<table border="1">',''.join(parser.parts))
-        self.assertEqual(len(resolved),1)
+        self.assertEqual(len(resolved),2)
         with self.assertRaises(ValueError):Condition().feed('<img src="https://other.example/image.png">')
+        with self.assertRaises(ValueError):Condition().feed('<img src="https://kpolyakov.spb.ru/cms/../evil.gif">')
         with self.assertRaises(ValueError):Condition().feed('<script>evil()</script>')
+
+    def test_native_renderer_keeps_quotes_and_quill_formula_source(self):
+        parser=Condition()
+        parser.feed('<blockquote><p><strong>A.</strong> Subtract 1</p></blockquote><p>Digit <span class="ql-formula" data-value="x_{15}">﻿<span contenteditable="false"><span class="katex"><math><mi>x</mi></math><span class="katex-html">x15<br></span></span></span>﻿</span> is unknown.</p>')
+        html=''.join(parser.parts)
+        self.assertIn('<blockquote><p><strong>A.</strong> Subtract 1</p></blockquote>',html)
+        self.assertIn('<p>Digit \(x_{15}\) is unknown.</p>',html)
+        self.assertNotIn('math',html)
+        self.assertNotIn('x15',html)
 
     def test_native_renderer_preserves_code_indentation_and_lists_as_in_source(self):
         parser=Condition()
