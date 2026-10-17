@@ -94,3 +94,10 @@ class PilotInstallerTests(SimpleTestCase):
             archive.writestr('manifest.json', json.dumps({'format': 'infocode-kompege-pilot-v1', 'tasks': [{'number': 1}] * 136}))
         with self.assertRaisesRegex(ValueError, 'Only the 135-card pilot'):
             validate_archives(self.source, self.bundle)
+
+    def test_explicit_categories_are_scoped_and_import_only_after_backup(self):
+        payload = remote_script('ubuntu', categories=True, numbers=[3, 2]).decode('utf-8')
+        self.assertIn('import_kompege_numbers /tmp/kompege-categories.zip --numbers 2 3 --publish', payload)
+        self.assertLess(payload.index('backup_platform'), payload.index('import_kompege_numbers'))
+        with self.assertRaises(ValueError):
+            remote_script('ubuntu', categories=True, numbers=[0])

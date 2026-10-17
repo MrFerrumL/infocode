@@ -1,0 +1,105 @@
+"""Prepare complete public categories with exact source conditions and original files."""
+import argparse
+from datetime import datetime, timezone
+import hashlib
+import io
+import json
+from pathlib import Path
+from urllib.parse import urlsplit
+from urllib.request import Request, urlopen
+from PIL import Image
+try:
+    from .condition_render import Condition, HEAD, TAIL
+    from .prepare_kompege_pilot import answer_text, fetch, safe_name, source_url, MAX_ASSET
+except ImportError:
+    from condition_render import Condition, HEAD, TAIL
+    from prepare_kompege_pilot import answer_text, fetch, safe_name, source_url, MAX_ASSET
+
+FORMAT = 'infocode-kompege-numbers-v1'
+
+
+def prepare(folder, numbers, refresh=False):
+    numbers = sorted(set(numbers))
+    if not numbers or any(n not in range(1, 28) for n in numbers):
+        raise ValueError('Choose EGE categories 1–27')
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / 'captures').mkdir(exist_ok=True)
+    (folder / 'source-images').mkdir(exist_ok=True)
+    cache = {}
+
+    def local_image(url):
+        if url.startswith('data:'):
+            return url
+        if url not in cache:
+            destination = folder / 'source-images' / (hashlib.sha256(url.encode()).hexdigest()[:20] + Path(urlsplit(url).path).suffix)
+            if not destination.exists():
+                if url == 'https://kpolyakov.spb.ru/cms/images/5271.gif':
+                    with urlopen(Request(url, headers={'User-Agent':'Infocode licensed educational import/1.0'}), timeout=40) as response:
+                        if response.url != url:
+                            raise ValueError('Unexpected illustration redirect')
+                        data = response.read(MAX_ASSET + 1)
+                else:
+                    data = fetch(url, MAX_ASSET)
+                if len(data) > MAX_ASSET:
+                    raise ValueError('Oversized illustration')
+                with Image.open(io.BytesIO(data)) as image:
+                    image.verify()
+                destination.write_bytes(data)
+            cache[url] = destination.relative_to(folder).as_posix()
+        return cache[url]
+
+    tasks, jobs, counts, hashes = [], [], {}, {}
+    for number in numbers:
+        source = folder / f'number-{number:02}.json'
+        if refresh or not source.exists():
+            source.write_bytes(fetch(f'https://kompege.ru/api/v1/task/number/{number}'))
+        rows = json.loads(source.read_text(encoding='utf-8'))
+        hashes[str(number)] = hashlib.sha256(source.read_bytes()).hexdigest()
+        seen = set()
+        for row in sorted(rows, key=lambda r: -r['taskId']):
+            if row['hide']:
+                continue
+            ident, answer = row['taskId'], answer_text(row['key'])
+            if row['number'] != number or ident in seen or not answer or len(answer) > 250 or not row['text']:
+                raise ValueError('Invalid public source row: ' + str(ident))
+            seen.add(ident)
+            parser = Condition(image_resolver=local_image)
+            parser.feed(row['text'])
+            parser.close()
+            name = f'{number:02}-{ident}-condition'
+            (folder / (name + '.html')).write_text(HEAD + ''.join(parser.parts) + TAIL, encoding='utf-8')
+            jobs.append({'id': ident, 'number': number, 'page': name + '.html', 'image': 'captures/' + name + '.jpg'})
+            files = []
+            for index, item in enumerate(row.get('files') or []):
+                name_original = safe_name(item['name'])
+                if Path(name_original).suffix.lower() not in ('.txt','.csv','.xlsx','.xls','.pdf','.zip','.docx','.ods','.odt','.py'):
+                    raise ValueError('Unsupported original file: ' + name_original)
+                relative = f'attachments/{ident}/{index:02}-{name_original}'
+                destination = folder / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                url = source_url(item['url'])
+                if not destination.exists():
+                    destination.write_bytes(fetch(url, MAX_ASSET))
+                files.append({'path': relative, 'name': name_original, 'sha256': hashlib.sha256(destination.read_bytes()).hexdigest(), 'url': url})
+            tasks.append({'number': number, 'source_id': ident, 'source_url': f'https://kompege.ru/task?id={ident}',
+                'author': str(row.get('comment') or '').strip(), 'answer': answer,
+                'difficulty': {0:'easy',1:'medium',2:'hard',3:'grave'}[row['difficulty']],
+                'images': ['screenshots/' + name + '.jpg'], 'files': files})
+            if len(seen) % 25 == 0:
+                print(f'Number {number}: prepared {len(seen)} tasks...', flush=True)
+        counts[str(number)] = len(seen)
+    manifest = {'format': FORMAT, 'source': 'https://kompege.ru', 'numbers': numbers,
+        'created_at': datetime.now(timezone.utc).isoformat(), 'source_counts': counts, 'source_sha256': hashes,
+        'rights': 'User confirmed permission to republish.', 'tasks': tasks}
+    (folder / 'manifest.json').write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding='utf-8')
+    (folder / 'jobs.json').write_text(json.dumps(jobs, ensure_ascii=False, indent=2), encoding='utf-8')
+    print(f'Prepared {counts}; {sum(len(t["files"]) for t in tasks)} original files; native 1920px screenshots required.', flush=True)
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('folder', type=Path)
+    parser.add_argument('--numbers', nargs='+', type=int, required=True)
+    parser.add_argument('--refresh', action='store_true')
+    args = parser.parse_args()
+    prepare(args.folder.resolve(), args.numbers, args.refresh)

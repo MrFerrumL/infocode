@@ -35,11 +35,16 @@ def validate_archives(source, bundle):
             raise ValueError('Only the 135-card pilot may be installed by this helper.')
 
 
-def remote_script(user, images=False, number1=False):
+def remote_script(user, images=False, number1=False, categories=False, numbers=()):
     home = '/root' if user == 'root' else '/home/' + user
     stamp = datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-%f')
     refresh = f'docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps -v {home}/kompege-condition-images.zip:/tmp/condition-images.zip:ro web python manage.py refresh_kompege_images /tmp/condition-images.zip < /dev/null\n' if images else ''
     bank = f'docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps -v {home}/kompege-number1.zip:/tmp/kompege-number1.zip:ro web python manage.py import_kompege_number1 /tmp/kompege-number1.zip --publish < /dev/null\n' if number1 else ''
+    if categories:
+        if not numbers or any(type(n) is not int or not 1 <= n <= 27 for n in numbers):
+            raise ValueError('Select valid category numbers')
+        selected = ' '.join(str(n) for n in sorted(set(numbers)))
+        bank += f'docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps -v {home}/kompege-categories.zip:/tmp/kompege-categories.zip:ro web python manage.py import_kompege_numbers /tmp/kompege-categories.zip --numbers {selected} --publish < /dev/null\n'
     return f'''set -Eeuo pipefail
 trap 'printf "Pilot installation stopped at line %s. See the error above; keep the backups.\\n" "$LINENO" >&2' ERR
 umask 027
@@ -79,7 +84,11 @@ def main(argv=None):
     parser.add_argument('--bundle', type=Path, default=project.parent / 'kompege-pilot-135.zip')
     parser.add_argument('--images', type=Path, help='Optional reviewed high-resolution condition image package')
     parser.add_argument('--number1', type=Path, help='Complete reviewed high-resolution number-1 bank')
+    parser.add_argument('--categories', type=Path, help='Complete reviewed high-resolution category snapshots')
+    parser.add_argument('--numbers', nargs='+', type=int, help='Exact categories to import from --categories')
     args = parser.parse_args(argv)
+    if bool(args.categories) != bool(args.numbers) or (args.numbers and any(not 1 <= n <= 27 for n in args.numbers)):
+        parser.error('--categories requires valid --numbers 1–27')
     if not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9.:-]{0,252}', args.host) or not re.fullmatch(r'[a-z_][a-z0-9_-]{0,31}', args.user):
         parser.error('Invalid SSH host or username')
     if not re.fullmatch(r'[a-z0-9][a-z0-9.-]*\.[a-z]{2,63}', args.domain):
@@ -89,11 +98,22 @@ def main(argv=None):
         print('OpenSSH client and scp must be installed.', file=sys.stderr)
         return 2
     key = args.key.expanduser().resolve()
-    if not key.is_file() or not args.source.is_file() or not args.bundle.is_file() or (args.images and not args.images.is_file()) or (args.number1 and not args.number1.is_file()):
+    if not key.is_file() or not args.source.is_file() or not args.bundle.is_file() or (args.images and not args.images.is_file()) or (args.number1 and not args.number1.is_file()) or (args.categories and not args.categories.is_file()):
         print('SSH key, current source archive or pilot archive is missing.', file=sys.stderr)
         return 2
     try:
         validate_archives(args.source, args.bundle)
+        if args.categories:
+            with zipfile.ZipFile(args.categories) as archive:
+                if archive.getinfo('manifest.json').file_size > 4 * 1024 * 1024:
+                    raise ValueError('Category manifest is too large')
+                category_manifest = json.loads(archive.read('manifest.json'))
+                category_rows = category_manifest.get('tasks', [])
+                selected = sorted(set(args.numbers))
+                if category_manifest.get('format') != 'infocode-kompege-numbers-v1' or category_manifest.get('numbers') != selected or not 1 <= len(category_rows) <= 2000 or any(r.get('number') not in selected for r in category_rows):
+                    raise ValueError('Expected the complete selected categories')
+                if category_manifest.get('source_counts') != {str(n):sum(r['number'] == n for r in category_rows) for n in selected}:
+                    raise ValueError('Category snapshot counts do not match')
         if args.number1:
             with zipfile.ZipFile(args.number1) as archive:
                 if archive.getinfo('manifest.json').file_size > 4 * 1024 * 1024:
@@ -111,7 +131,7 @@ def main(argv=None):
                    '-o', 'ServerAliveInterval=30', '-o', 'ServerAliveCountMax=6', '-o', 'ConnectTimeout=15', '-i', str(key)]
         target = f'{args.user}@{args.host}'
         home = '/root' if args.user == 'root' else '/home/' + args.user
-        payload = remote_script(args.user, images=bool(args.images), number1=bool(args.number1))
+        payload = remote_script(args.user, images=bool(args.images), number1=bool(args.number1), categories=bool(args.categories), numbers=args.numbers or ())
         result = subprocess.run([ssh, '-T', *options, target, 'bash -n'], input=payload, check=False)
         if result.returncode:
             print('SSH connection or remote syntax check failed; nothing was installed.', file=sys.stderr)
@@ -120,6 +140,7 @@ def main(argv=None):
         uploads=[(args.source, 'infocode-source-update.zip'), (args.bundle, 'kompege-pilot-135.zip')]
         if args.images: uploads.append((args.images,'kompege-condition-images.zip'))
         if args.number1: uploads.append((args.number1, 'kompege-number1.zip'))
+        if args.categories: uploads.append((args.categories, 'kompege-categories.zip'))
         for local, remote in uploads:
             result = subprocess.run([scp, *options, str(local.resolve()), f'{target}:{home}/{remote}'], check=False)
             if result.returncode:

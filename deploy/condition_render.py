@@ -12,14 +12,21 @@ import re
 class Condition(HTMLParser):
     tags = {'p','br','table','colgroup','col','tbody','tr','td','strong','em','sub','sup','div','span'}
     properties = {'border-collapse','width','border-width','height','padding','text-align','border-spacing'}
-    def __init__(self):
-        super().__init__(convert_charrefs=False); self.parts=[]
+    def __init__(self, image_resolver=None):
+        super().__init__(convert_charrefs=False); self.parts=[]; self.image_resolver=image_resolver
     def handle_starttag(self, tag, attrs):
         a=dict(attrs)
         if tag=='img':
             src=a.get('src','')
-            if not (re.fullmatch(r'data:image/(?:png|gif|jpeg);base64,[A-Za-z0-9+/=\s]+',src) or re.fullmatch(r'https://kompege\.ru/images/[A-Za-z0-9_.-]+',src)):
+            if not src:
+                # Empty editor placeholders contain no source illustration.
+                if a.get('alt', '').strip():
+                    raise ValueError('Image has text but no source')
+                return
+            if not (re.fullmatch(r'data:image/(?:png|gif|jpeg);base64,[A-Za-z0-9+/=\s]+',src) or re.fullmatch(r'https://kompege\.ru/images/[A-Za-z0-9_.-]+',src) or src == 'https://kpolyakov.spb.ru/cms/images/5271.gif'):
                 raise ValueError('Unrecognised image origin')
+            if self.image_resolver:
+                src=self.image_resolver(src)
             self.parts.append('<img src="'+escape(src,quote=True)+'" alt="Иллюстрация из оригинального условия">')
         elif tag in self.tags:
             allowed={key:value for key,value in attrs if key in ('border','width','height','align','dir') and re.fullmatch(r'[\w. %+-]+',value or '')}
