@@ -10,7 +10,7 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.core.exceptions import PermissionDenied, ValidationError
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import Count, Prefetch, Q
+from django.db.models import Case, Count, F, IntegerField, Prefetch, Q, Value, When
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
@@ -73,6 +73,9 @@ def dashboard(request):
     return render(request, 'dashboard.html', {'topics': topics, 'solved_count': len(solved), 'accuracy': accuracy, 'total': total, 'completed_lessons': len(done), 'next_lesson': next_lesson, 'recent': ExamAttempt.objects.filter(user=request.user, submitted_at__isnull=False).select_related('variant')[:4], 'nav': 'dashboard'})
 
 
+CATALOG_SORTS = [('', 'Сначала новые'), ('old', 'Сначала старые'), ('easy', 'Сначала простые'), ('hard', 'Сначала сложные')]
+
+
 @login_required
 def catalog(request):
     submitted, answer_form, result = None, None, None
@@ -129,7 +132,13 @@ def catalog(request):
     elif state == 'new':
         qs = qs.exclude(id__in=solved)
     # A 19–21 group is one card: grouped 20/21 tasks are answered inside their 19 card.
-    qs = Task.objects.filter(id__in=game_groups.fold_follow_ups(qs)).select_related('topic').prefetch_related(
+    # As on KOMPEGE: newest source tasks first (demo, retake, main wave…), own tasks after them.
+    sort = request.GET.get('sort', '')
+    rank = Case(*[When(difficulty=value, then=Value(i)) for i, (value, _) in enumerate(Task.LEVELS)], output_field=IntegerField())
+    order = {'old': [F('external_id').asc(nulls_last=True), 'id'],
+             'easy': [rank, F('external_id').desc(nulls_last=True), '-id'],
+             'hard': [rank.desc(), F('external_id').desc(nulls_last=True), '-id']}.get(sort, [F('external_id').desc(nulls_last=True), '-id'])
+    qs = Task.objects.filter(id__in=game_groups.fold_follow_ups(qs)).order_by('topic__number', *order).select_related('topic').prefetch_related(
         Prefetch('content_blocks', queryset=TaskBlock.objects.all(), to_attr='catalog_blocks'),
         Prefetch('practice_set', queryset=Practice.objects.filter(user=request.user).order_by('-created_at', '-pk')[:5], to_attr='catalog_history'))
     page = Paginator(qs, 12).get_page(request.GET.get('page'))
@@ -147,7 +156,7 @@ def catalog(request):
         topic.folded = topic.number in game_groups.FOLLOW_UPS
     params = request.GET.copy()
     params.pop('page', None)
-    return render(request, 'catalog.html', {'levels': Task.LEVELS, 'topics': topics, 'page': page, 'number': number, 'difficulty': difficulty, 'query': query, 'state': state, 'params': params.urlencode(), 'nav': 'catalog'})
+    return render(request, 'catalog.html', {'levels': Task.LEVELS, 'topics': topics, 'page': page, 'number': number, 'difficulty': difficulty, 'query': query, 'state': state, 'sort': sort, 'sorts': CATALOG_SORTS, 'params': params.urlencode(), 'nav': 'catalog'})
 
 
 @login_required

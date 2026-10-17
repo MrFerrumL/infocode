@@ -118,7 +118,8 @@ class GameGroupTests(TestCase):
         task20 = Task.objects.get(topic__number=20, external_id=501)
         self.client.force_login(self.user)
         page = self.client.get('/catalog/?number=19')
-        token = page.context['page'].object_list[0].follow_ups[0].submit_token
+        card = next(t for t in page.context['page'] if t.external_id == 501)
+        token = card.follow_ups[0].submit_token
         reply = self.client.post('/catalog/?number=19', {'task_id': task20.pk, 'submit_token': token, f'task-{task20.pk}-answer': '28 48'},
                                  HTTP_X_REQUESTED_WITH='XMLHttpRequest')
         self.assertTrue(reply.json()['solved'])

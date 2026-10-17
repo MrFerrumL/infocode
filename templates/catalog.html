@@ -16,6 +16,7 @@
   <label class="search-label"><span class="sr-only">Поиск</span><input name="q" value="{{ query }}" placeholder="Название, текст или ID задания"></label>
   <label><span class="sr-only">Сложность</span><select name="difficulty"><option value="">Все уровни</option>{% for value,label in levels %}<option value="{{ value }}" {% if difficulty == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
   <label><span class="sr-only">Статус</span><select name="state"><option value="">Все задания</option><option value="new" {% if state == 'new' %}selected{% endif %}>Ещё не решены</option><option value="saved" {% if state == 'saved' %}selected{% endif %}>Избранное</option><option value="mistakes" {% if state == 'mistakes' %}selected{% endif %}>Мои ошибки</option></select></label>
+  <label><span class="sr-only">Сортировка</span><select name="sort">{% for value,label in sorts %}<option value="{{ value }}" {% if sort == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
   <button class="button">Найти</button>
 </form>
 <div class="section-heading"><h2>{% if number == '19' %}Задания № 19–21{% elif number %}Задания № {{ number }}{% else %}Все задания{% endif %}</h2><span class="muted">Найдено: {{ page.paginator.count }}</span></div>
