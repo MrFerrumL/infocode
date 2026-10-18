@@ -187,12 +187,8 @@
       number.addEventListener('click', event => { event.stopPropagation(); current = date; mode = 'day'; viewSelect.value = mode; load(); });
       cell.append(number);
       const events = visible.filter(row => inDay(row, date));
-      events.slice(0, 3).forEach(row => cell.append(eventNode(row)));
-      if (events.length > 3) {
-        const more = node('button', 'calendar-more', `Ещё ${events.length - 3}`); more.type = 'button';
-        more.addEventListener('click', event => { event.stopPropagation(); current = date; mode = 'day'; viewSelect.value = mode; load(); });
-        cell.append(more);
-      }
+      // Every lesson of the day is listed; the cell grows instead of hiding them behind "Ещё".
+      events.forEach(row => cell.append(eventNode(row)));
       if (teacher) cell.addEventListener('click', () => createAt(new Date(date.getTime() + 9 * 3600000), new Date(date.getTime() + 10 * 3600000)));
       dropTarget(cell, date); grid.append(cell);
     }
