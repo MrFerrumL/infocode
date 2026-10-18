@@ -1,0 +1,48 @@
+/* Seasonal look (learning/seasons.py): a light decoration over the usual style. Colours and layout stay as they are. */
+:root { --frost-a: rgba(147, 197, 253, .22); --frost-b: rgba(196, 181, 253, .18); --frost-side: rgba(219, 234, 254, .65); --flake: #60a5fa;
+        --spook-a: rgba(249, 115, 22, .16); --spook-b: rgba(124, 58, 237, .14); --spook-side: rgba(255, 237, 213, .7);
+        --festive-a: rgba(220, 38, 38, .10); --festive-b: rgba(234, 179, 8, .12); --festive-side: rgba(254, 226, 226, .55); }
+:root[data-theme="dark"] { --frost-a: rgba(56, 189, 248, .10); --frost-b: rgba(167, 139, 250, .10); --frost-side: rgba(30, 64, 175, .22); --flake: #bae6fd;
+        --spook-a: rgba(249, 115, 22, .14); --spook-b: rgba(124, 58, 237, .16); --spook-side: rgba(124, 45, 18, .28);
+        --festive-a: rgba(220, 38, 38, .12); --festive-b: rgba(234, 179, 8, .10); --festive-side: rgba(127, 29, 29, .25); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --frost-a: rgba(56, 189, 248, .10); --frost-b: rgba(167, 139, 250, .10); --frost-side: rgba(30, 64, 175, .22); --flake: #bae6fd;
+        --spook-a: rgba(249, 115, 22, .14); --spook-b: rgba(124, 58, 237, .16); --spook-side: rgba(124, 45, 18, .28);
+        --festive-a: rgba(220, 38, 38, .12); --festive-b: rgba(234, 179, 8, .10); --festive-side: rgba(127, 29, 29, .25); }
+}
+
+/* Winter: frost */
+body.season-winter { background-image: radial-gradient(1100px 480px at 8% -8%, var(--frost-a), transparent 62%), radial-gradient(900px 420px at 100% 0%, var(--frost-b), transparent 60%); background-attachment: fixed; }
+.season-winter .sidebar { background-image: linear-gradient(180deg, var(--frost-side), transparent 280px); }
+.season-winter .brand::after { content: '❄'; font-size: .45em; margin-left: .3em; align-self: flex-start; color: var(--flake); }
+
+/* New Year: frost with red and gold, a tree by the logo and a garland of lights */
+body.season-newyear { background-image: radial-gradient(1100px 480px at 8% -8%, var(--frost-a), transparent 62%), radial-gradient(900px 420px at 100% 0%, var(--festive-a), transparent 60%), radial-gradient(700px 360px at 55% 110%, var(--festive-b), transparent 65%); background-attachment: fixed; }
+.season-newyear .sidebar { background-image: linear-gradient(180deg, var(--festive-side), transparent 300px); }
+.season-newyear .brand::after { content: '🎄'; font-size: .5em; margin-left: .3em; align-self: flex-start; }
+.season-garland { position: fixed; top: 0; left: 0; right: 0; height: 26px; display: flex; justify-content: space-around; pointer-events: none; z-index: 30;
+  background: radial-gradient(ellipse 50% 14px at 50% 0, transparent 70%, rgba(71, 85, 105, .55) 72%, transparent 76%) 0 -2px / 92px 26px repeat-x; }
+.season-garland span { --c: #ef4444; position: relative; top: 9px; width: 9px; height: 13px; border-radius: 50% 50% 50% 50% / 40% 40% 60% 60%; background: var(--c); box-shadow: 0 0 6px 1px var(--c); opacity: .9; }
+.season-garland span::before { content: ''; position: absolute; top: -3px; left: 2px; width: 5px; height: 4px; border-radius: 1px; background: #64748b; }
+.season-garland span:nth-child(4n+2) { --c: #facc15; } .season-garland span:nth-child(4n+3) { --c: #22c55e; } .season-garland span:nth-child(4n) { --c: #3b82f6; }
+.season-garland span:nth-child(odd) { top: 13px; }
+.season-fx-on .season-garland span { animation: garland-twinkle 2.4s ease-in-out infinite; }
+@keyframes garland-twinkle { 0%, 100% { opacity: .95; box-shadow: 0 0 8px 2px var(--c); } 50% { opacity: .35; box-shadow: 0 0 2px 0 var(--c); } }
+
+/* Halloween: pumpkin glow, a cobweb in the corner, leaves and bats */
+body.season-halloween { background-image: radial-gradient(1100px 480px at 8% -8%, var(--spook-a), transparent 62%), radial-gradient(900px 420px at 100% 0%, var(--spook-b), transparent 60%); background-attachment: fixed; }
+.season-halloween .sidebar { background-image: linear-gradient(180deg, var(--spook-side), transparent 280px); }
+.season-halloween .brand::after { content: '🎃'; font-size: .5em; margin-left: .3em; align-self: flex-start; }
+.season-halloween .main-shell::before, .season-halloween.public-page::before { content: ''; position: fixed; top: 0; right: 0; width: 120px; height: 120px; pointer-events: none; z-index: 0; opacity: .2;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 150 150' fill='none' stroke='%23786f85' stroke-width='1'%3E%3Cpath d='M150 0L0 150M150 0L40 150M150 0L90 150M150 0L0 40M150 0L0 95'/%3E%3Cpath d='M128 0Q130 18 150 22M100 0Q104 40 150 48M70 0Q78 64 150 76M42 0Q52 90 150 106M14 0Q26 116 150 136'/%3E%3Cpath d='M150 22Q133 26 136 0M150 48Q118 54 120 0M150 76Q100 84 104 0'/%3E%3C/svg%3E") no-repeat top right / contain; }
+:root[data-theme="dark"] .season-halloween .main-shell::before { opacity: .3; }
+.season-halloween .button:not(.secondary):hover { box-shadow: 0 0 0 3px rgba(249, 115, 22, .25); }
+
+/* Moving decorations sit behind the content and never take clicks. */
+#season-fx { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: -1; }
+.snow-toggle { min-height: 34px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 9px; background: transparent; color: var(--muted); font-size: 15px; line-height: 1; cursor: pointer; }
+.snow-toggle[aria-pressed="true"] { color: var(--flake); border-color: var(--flake); }
+.season-halloween .snow-toggle[aria-pressed="true"] { border-color: #f97316; }
+.season-newyear .snow-toggle[aria-pressed="true"] { border-color: #ef4444; }
+@media (prefers-reduced-motion: reduce) { .season-garland span { animation: none !important; } }
+@media print { #season-fx, .snow-toggle, .season-garland, [class*="season-"] .brand::after, .season-halloween .main-shell::before { display: none !important; } body[class*="season-"] { background-image: none; } }

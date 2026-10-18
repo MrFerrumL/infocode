@@ -23,5 +23,5 @@ def platform_context(request):
 
 
 def season_context(request):
-    from django.conf import settings
-    return {'site_season': getattr(settings, 'SITE_SEASON', '')}
+    from .seasons import current_season
+    return {'site_season': current_season()}
