@@ -47,6 +47,8 @@ class PilotInstallerTests(SimpleTestCase):
         self.assertNotIn('seed_demo', payload)
         self.assertNotIn('down -v', payload)
         self.assertIn('check_content --strict', payload)
+        # Old installer backups are pruned only after the new one exists.
+        self.assertLess(payload.index('backup_platform'), payload.index('tail -n +4 | xargs -r rm -f'))
 
     def test_polyakov_bundles_are_imported_after_backup_then_removed(self):
         payload = remote_script('ubuntu', polyakov=[([1, 2], 'polyakov-1.zip'), ([19, 20, 21], 'polyakov-2.zip')]).decode('utf-8')

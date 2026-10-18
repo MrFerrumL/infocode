@@ -24,6 +24,6 @@ class SeasonTests(TestCase):
             self.assertContains(page, 'season.js')
         with self.settings(SITE_SEASON='none'):
             self.assertEqual(current_season(), '')
-            self.assertNotContains(self.client.get('/'), 'season.js')
+            self.assertNotContains(self.client.get('/'), 'season-newyear')  # no default; visitors can still pick one
         with self.settings(SITE_SEASON='auto'):
             self.assertEqual(current_season(date(2026, 10, 31)), 'halloween')

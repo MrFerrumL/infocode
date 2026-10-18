@@ -4,7 +4,8 @@ auto (default) follows the calendar:
   halloween — 15 October … 2 November
   winter    — 3 November … 30 November, 15 January … end of February
   newyear   — 1 December … 14 January
-SITE_SEASON=halloween|winter|newyear forces one; none (or empty) turns decorations off.
+SITE_SEASON=halloween|winter|newyear forces one; none (or empty) means no default decoration.
+Each visitor can switch the look in the top bar menu (static/season.js); the choice stays in the browser.
 """
 from django.conf import settings
 from django.utils import timezone

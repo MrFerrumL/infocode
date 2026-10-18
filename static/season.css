@@ -46,3 +46,16 @@ body.season-halloween { background-image: radial-gradient(1100px 480px at 8% -8%
 .season-newyear .snow-toggle[aria-pressed="true"] { border-color: #ef4444; }
 @media (prefers-reduced-motion: reduce) { .season-garland span { animation: none !important; } }
 @media print { #season-fx, .snow-toggle, .season-garland, [class*="season-"] .brand::after, .season-halloween .main-shell::before { display: none !important; } body[class*="season-"] { background-image: none; } }
+
+/* The picker in the top bar: 🎃 / ❄ / 🎄 / ✕ */
+.season-picker { position: relative; display: inline-flex; }
+.season-menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 60; min-width: 230px; display: grid; gap: 2px; padding: 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper, #fff); box-shadow: 0 12px 30px rgba(30, 20, 60, .14); }
+.season-menu[hidden] { display: none; }
+.season-menu button { display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px; border: 0; border-radius: 8px; background: transparent; color: var(--ink); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.season-menu button span { width: 20px; text-align: center; }
+.season-menu button:hover, .season-menu button:focus-visible { background: var(--soft, #f1edfb); outline: none; }
+.season-menu button[aria-checked="true"] { color: var(--purple); font-weight: 600; }
+.season-menu button[aria-checked="true"]::after { content: '✓'; margin-left: auto; }
+.public-top nav .season-menu { right: auto; left: 0; }
+:root[data-theme="dark"] .season-menu { background: #211d2c; border-color: #3d344a; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .season-menu { background: #211d2c; border-color: #3d344a; } }

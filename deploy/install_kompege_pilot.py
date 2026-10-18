@@ -65,6 +65,9 @@ printf '[1/6] Backing up the existing database, media and source code...\\n'
 docker compose --env-file .env.production -f compose.production.yaml exec -T web python manage.py backup_platform /backups/before-kompege-pilot-{stamp}.zip < /dev/null
 mkdir -p /opt/infocode-code-backups
 tar -czf /opt/infocode-code-backups/source-before-pilot-{stamp}.tar.gz --exclude=./.env.production --exclude=./uploads --exclude=./logs --exclude=./backups --exclude=./.git -C /opt/infocode .
+# Keep the three newest installer backups of each kind (the one just made included).
+docker compose --env-file .env.production -f compose.production.yaml exec -T web sh -c 'ls -1t /backups/before-kompege-pilot-*.zip | tail -n +4 | xargs -r rm -f' < /dev/null
+ls -1t /opt/infocode-code-backups/source-before-pilot-*.tar.gz | tail -n +4 | xargs -r rm -f
 printf '[2/6] Installing updated source and building the application...\\n'
 unzip -oq {home}/infocode-source-update.zip -d /opt
 docker compose --env-file .env.production -f compose.production.yaml build web < /dev/null
