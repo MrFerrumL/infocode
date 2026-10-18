@@ -22,6 +22,9 @@ class ScheduleEvent(models.Model):
     location = models.CharField('Место / кабинет', max_length=240, blank=True)
     meeting_url = models.URLField('Ссылка на видеовстречу', max_length=500, blank=True)
     audience = models.CharField('Кому видно', max_length=12, choices=AUDIENCES, default='selected')
+    # Shown to every signed-in pupil; reminders still go only to the audience above.
+    public = models.BooleanField('Видно всем ученикам платформы', default=False,
+        help_text='Выключено — занятие видят только ваши ученики (как выбрано в «Кому видно»).')
     group = models.ForeignKey('learning.StudyGroup', on_delete=models.SET_NULL, null=True, blank=True, verbose_name='Группа')
     students = models.ManyToManyField(settings.AUTH_USER_MODEL, blank=True, related_name='scheduled_lessons', verbose_name='Отдельные ученики')
     assignment = models.ForeignKey('learning.LearningAssignment', on_delete=models.SET_NULL, null=True, blank=True, verbose_name='Связанное ДЗ / КР')

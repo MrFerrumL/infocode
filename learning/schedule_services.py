@@ -20,9 +20,9 @@ def visible_events(user):
     if user.is_staff:
         return editable_events(user)
     # Removed students cannot retain access through a stale event recipient.
-    return ScheduleEvent.objects.filter(teacher__assigned_students__student=user).filter(
-        Q(audience='all') | Q(audience='selected', students=user) |
-        Q(audience='selected', group__students=user)).distinct()
+    own = Q(teacher__assigned_students__student=user) & (
+        Q(audience='all') | Q(audience='selected', students=user) | Q(audience='selected', group__students=user))
+    return ScheduleEvent.objects.filter(own | Q(public=True)).distinct()
 
 
 def event_students(event):

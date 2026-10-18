@@ -17,7 +17,7 @@ class ScheduleForm(forms.ModelForm):
 
     class Meta:
         model = ScheduleEvent
-        fields = ['title', 'starts_at', 'ends_at', 'all_day', 'audience', 'group', 'students',
+        fields = ['title', 'starts_at', 'ends_at', 'all_day', 'audience', 'public', 'group', 'students',
                   'recurrence', 'weekdays', 'repeat_until', 'reminder_minutes', 'color',
                   'location', 'meeting_url', 'assignment', 'description']
         widgets = {
@@ -45,7 +45,7 @@ class ScheduleForm(forms.ModelForm):
         self.initial.setdefault('reminder_minutes', 30)
         self.initial.setdefault('repeat_until', (now + timedelta(days=90)).date())
         if single:
-            for name in ('audience', 'group', 'students', 'recurrence', 'weekdays', 'repeat_until', 'assignment', 'reminder_minutes'):
+            for name in ('audience', 'public', 'group', 'students', 'recurrence', 'weekdays', 'repeat_until', 'assignment', 'reminder_minutes'):
                 self.fields[name].disabled = True
             self.initial['recurrence'] = 'none'
 

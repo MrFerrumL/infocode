@@ -260,3 +260,29 @@ class HomeworkWorkspaceTests(BaseScheduleCase):
         self.assertIn('Сдать: Отдельная контрольная', titles)
         self.client.force_login(self.second)
         self.assertFalse(any(row['kind'] in ('homework', 'required_test') for row in self.feed(begin.isoformat(), end.isoformat())))
+
+
+class PublicScheduleTests(BaseScheduleCase):
+    def test_public_lessons_are_seen_by_every_pupil_but_reminders_stay_with_own(self):
+        self.client.force_login(self.foreign)
+        self.assertFalse(any(e['title'] == 'Алгоритмы' for e in self.feed()))
+        self.assertEqual(self.client.get(reverse('schedule_detail', args=[self.event.pk])).status_code, 404)
+        self.client.force_login(self.teacher)
+        changelist = reverse('admin:learning_scheduleevent_changelist')
+        self.client.post(changelist, {'action': 'show_to_everyone', '_selected_action': [self.event.pk]})
+        self.event.refresh_from_db()
+        self.assertTrue(self.event.public)
+        self.client.force_login(self.foreign)
+        self.assertTrue(any(e['title'] == 'Алгоритмы' for e in self.feed()))
+        self.assertEqual(self.client.get(reverse('schedule_detail', args=[self.event.pk])).status_code, 200)
+        self.assertNotIn(self.foreign, event_students(self.event))
+        self.client.force_login(self.teacher)
+        self.client.post(changelist, {'action': 'show_to_own', '_selected_action': [self.event.pk]})
+        self.event.refresh_from_db()
+        self.assertFalse(self.event.public)
+        self.assertEqual(self.event.group, self.group)  # the group choice is kept
+
+    def test_editor_has_the_switch(self):
+        response = self.client.post(reverse('schedule_create'), self.data(public='on'))
+        self.assertEqual(response.status_code, 302)
+        self.assertTrue(ScheduleEvent.objects.get(title='Практика Python').public)

@@ -1,5 +1,6 @@
 from django.contrib import admin
 from django.db import transaction
+from django.db.models import F
 from .models import Topic, Task, StudyGroup, Variant, VariantItem, Section, Lesson, QuizQuestion, LessonFile, Practice, ExamAttempt, LessonProgress
 from .models import TaskBlock, StudentAssignment, Course, Step, Notebook
 
@@ -203,10 +204,22 @@ from .models import ScheduleEvent
 
 @admin.register(ScheduleEvent)
 class ScheduleEventAdmin(admin.ModelAdmin):
-    list_display = ['title', 'teacher', 'starts_at', 'ends_at', 'recurrence', 'cancelled']
-    list_filter = ['cancelled', 'recurrence']
+    list_display = ['title', 'teacher', 'starts_at', 'ends_at', 'recurrence', 'public', 'cancelled']
+    list_filter = ['public', 'cancelled', 'recurrence']
     search_fields = ['title']
-    actions = None
+    actions = ['show_to_everyone', 'show_to_own']
+
+    def _set_public(self, request, queryset, value, text):
+        changed = queryset.update(public=value, revision=F('revision') + 1)
+        self.message_user(request, f'{text}: {changed}.')
+
+    @admin.action(description='Показывать всем ученикам платформы')
+    def show_to_everyone(self, request, queryset):
+        self._set_public(request, queryset, True, 'Видно всем ученикам')
+
+    @admin.action(description='Показывать только моим ученикам')
+    def show_to_own(self, request, queryset):
+        self._set_public(request, queryset, False, 'Видно только вашим ученикам')
 
     def get_queryset(self, request):
         from .schedule_services import editable_events
