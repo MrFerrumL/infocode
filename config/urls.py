@@ -9,7 +9,7 @@ from learning import accounts
 from learning.health import health
 from learning.task_management import delete_task
 from learning.readiness import platform_check
-from learning import notebooks
+from learning import notebooks, notebook_import_views
 from learning import homework, schedule_views as schedule
 from learning import public
 from learning import collections_views, similar_views
@@ -31,6 +31,8 @@ urlpatterns = [
     path('notebooks/<int:pk>/', notebooks.detail, name='notebook_detail'),
     path('teacher/notebooks/', notebooks.library, name='teacher_notebooks'),
     path('teacher/notebooks/new/', notebooks.editor, name='notebook_create'),
+    path('teacher/notebooks/import/', notebook_import_views.import_ipynb, name='notebook_import'),
+    path('teacher/notebooks/<int:pk>/import/', notebook_import_views.import_ipynb, name='notebook_import_into'),
     path('teacher/notebooks/<int:pk>/edit/', notebooks.editor, name='notebook_editor'),
     path('teacher/notebooks/<int:pk>/delete/', notebooks.delete, name='notebook_delete'),
     path('health/', health, name='health'),

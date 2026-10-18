@@ -1,0 +1,11 @@
+{% extends 'base.html' %}
+{% block title %}Загрузить из Colab · Конспекты{% endblock %}
+{% block content %}
+<a class="back-link" href="{% if notebook %}{% url 'notebook_editor' notebook.pk %}{% else %}{% url 'teacher_notebooks' %}{% endif %}">← {% if notebook %}{{ notebook.title }}{% else %}Конспекты{% endif %}</a>
+<div class="page-heading"><div><div class="eyebrow">КОНСПЕКТЫ · ИМПОРТ</div><h1>{% if notebook %}Обновить из Colab{% else %}Загрузить из Colab{% endif %}<span class="accent">.</span></h1><p>Блокнот переносится ячейка за ячейкой: текст, картинки, код и то, что код вывел в Colab.{% if notebook %} Все ячейки «{{ notebook.title }}» заменятся новыми.{% endif %}</p></div></div>
+<form method="post" enctype="multipart/form-data" class="panel stack notebook-import">{% csrf_token %}
+{{ form.non_field_errors }}{{ form.file.as_field_group }}{{ form.title.as_field_group }}{{ form.group.as_field_group }}{{ form.published.as_field_group }}
+<p class="muted">Код на сайте не запускается: ученики видят его и вывод, как в Colab, и могут скопировать.</p>
+<button class="button" type="submit">{% if notebook %}Заменить ячейки{% else %}Загрузить{% endif %}</button>
+</form>
+{% endblock %}

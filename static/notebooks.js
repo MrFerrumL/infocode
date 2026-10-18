@@ -103,7 +103,16 @@
   });
   const readOutline = document.querySelector('[data-notebook-read-outline]');
   if (readOutline) {
-    document.querySelectorAll('[data-notebook-cell]').forEach((cell, i) => {
+    // Long notebooks (from Colab) list their headings only; short ones list every cell.
+    const headings = document.querySelectorAll('[data-notebook-cell] .rich-content h2, [data-notebook-cell] .rich-content h3');
+    if (headings.length >= 3) {
+      headings.forEach(h => {
+        const cell = h.closest('[data-notebook-cell]');
+        const link = document.createElement('a'); link.href = '#' + cell.id; link.textContent = h.textContent.trim().slice(0, 60);
+        if (h.tagName === 'H3') link.className = 'outline-sub';
+        readOutline.append(link);
+      });
+    } else document.querySelectorAll('[data-notebook-cell]').forEach((cell, i) => {
       const title = cell.querySelector('h2,h3')?.textContent || (cell.classList.contains('notebook-cell-code') ? 'Python-код' : cell.querySelector('figcaption')?.textContent || cell.querySelector('.rich-content')?.textContent || 'Материал');
       const link = document.createElement('a'); link.href = '#' + cell.id; link.textContent = `${i+1}. ${title.trim().slice(0,60)}`; readOutline.append(link);
     });

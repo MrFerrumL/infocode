@@ -35,7 +35,7 @@ def validate_archives(source, bundle):
             raise ValueError('Only the 135-card pilot may be installed by this helper.')
 
 
-def remote_script(user, images=False, number1=False, categories=False, numbers=(), replace=False, variants=False, polyakov=()):
+def remote_script(user, images=False, number1=False, categories=False, numbers=(), replace=False, variants=False, polyakov=(), notebooks=()):
     home = '/root' if user == 'root' else '/home/' + user
     stamp = datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-%f')
     refresh = f'docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps -v {home}/kompege-condition-images.zip:/tmp/condition-images.zip:ro web python manage.py refresh_kompege_images /tmp/condition-images.zip < /dev/null\n' if images else ''
@@ -50,6 +50,9 @@ def remote_script(user, images=False, number1=False, categories=False, numbers=(
     for selected_numbers, name in polyakov:
         selected = ' '.join(str(n) for n in selected_numbers)
         bank += f'docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps -v {home}/{name}:/tmp/{name}:ro web python manage.py import_kompege_numbers /tmp/{name} --numbers {selected} --publish < /dev/null\nrm -f {home}/{name}\n'
+    # Colab notebooks for «Конспекты»: a notebook with the same title is updated in place.
+    for name in notebooks:
+        bank += f'docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps -v {home}/{name}:/tmp/{name}:ro web python manage.py import_ipynb /tmp/{name} --publish < /dev/null\nrm -f {home}/{name}\n'
     if variants:
         bank += f'docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps -v {home}/kompege-variants.zip:/tmp/kompege-variants.zip:ro web python manage.py import_kompege_variants /tmp/kompege-variants.zip --publish < /dev/null\n'
     return f'''set -Eeuo pipefail
@@ -95,6 +98,7 @@ def main(argv=None):
     parser.add_argument('--categories', type=Path, help='Complete reviewed high-resolution category snapshots')
     parser.add_argument('--numbers', nargs='+', type=int, help='Exact categories to import from --categories')
     parser.add_argument('--variants', type=Path, help='Reviewed KOMPEGE exam variants package')
+    parser.add_argument('--notebooks', type=Path, nargs='+', default=[], help='Colab notebooks (.ipynb) to publish in «Конспекты»')
     parser.add_argument('--polyakov', type=Path, nargs='+', default=[], help="K. Polyakov's bundles (deploy/prepare_polyakov_bank.py)")
     parser.add_argument('--replace-existing', action='store_true', help='Replace earlier KOMPEGE tasks of --numbers (refused if pupils used them)')
     args = parser.parse_args(argv)
@@ -111,7 +115,7 @@ def main(argv=None):
         print('OpenSSH client and scp must be installed.', file=sys.stderr)
         return 2
     key = args.key.expanduser().resolve()
-    if not key.is_file() or not args.source.is_file() or not args.bundle.is_file() or (args.images and not args.images.is_file()) or (args.number1 and not args.number1.is_file()) or (args.categories and not args.categories.is_file()) or (args.variants and not args.variants.is_file()) or any(not p.is_file() for p in args.polyakov):
+    if not key.is_file() or not args.source.is_file() or not args.bundle.is_file() or (args.images and not args.images.is_file()) or (args.number1 and not args.number1.is_file()) or (args.categories and not args.categories.is_file()) or (args.variants and not args.variants.is_file()) or any(not p.is_file() for p in [*args.polyakov, *args.notebooks]):
         print('SSH key, current source archive or pilot archive is missing.', file=sys.stderr)
         return 2
     try:
@@ -161,7 +165,7 @@ def main(argv=None):
                    '-o', 'ServerAliveInterval=30', '-o', 'ServerAliveCountMax=6', '-o', 'ConnectTimeout=15', '-i', str(key)]
         target = f'{args.user}@{args.host}'
         home = '/root' if args.user == 'root' else '/home/' + args.user
-        payload = remote_script(args.user, images=bool(args.images), number1=bool(args.number1), categories=bool(args.categories), numbers=args.numbers or (), replace=args.replace_existing, variants=bool(args.variants), polyakov=[(n, name) for n, name, _ in polyakov])
+        payload = remote_script(args.user, images=bool(args.images), number1=bool(args.number1), categories=bool(args.categories), numbers=args.numbers or (), replace=args.replace_existing, variants=bool(args.variants), polyakov=[(n, name) for n, name, _ in polyakov], notebooks=[f'notebook-{i}.ipynb' for i, _ in enumerate(args.notebooks, 1)])
         result = subprocess.run([ssh, '-T', *options, target, 'bash -n'], input=payload, check=False)
         if result.returncode:
             print('SSH connection or remote syntax check failed; nothing was installed.', file=sys.stderr)
@@ -173,6 +177,7 @@ def main(argv=None):
         if args.categories: uploads.append((args.categories, 'kompege-categories.zip'))
         if args.variants: uploads.append((args.variants, 'kompege-variants.zip'))
         uploads += [(path, name) for _, name, path in polyakov]
+        uploads += [(path, f'notebook-{i}.ipynb') for i, path in enumerate(args.notebooks, 1)]
         for local, remote in uploads:
             result = subprocess.run([scp, *options, str(local.resolve()), f'{target}:{home}/{remote}'], check=False)
             if result.returncode:

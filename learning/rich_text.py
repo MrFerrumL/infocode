@@ -4,8 +4,10 @@ from html.parser import HTMLParser
 from urllib.parse import urlsplit
 
 TAGS = {'p', 'br', 'h2', 'h3', 'strong', 'em', 'u', 's', 'sup', 'sub', 'pre',
-        'code', 'blockquote', 'ol', 'ul', 'li', 'hr', 'a', 'mark'}
-ALIASES = {'b': 'strong', 'i': 'em', 'strike': 's', 'div': 'p'}
+        'code', 'blockquote', 'ol', 'ul', 'li', 'hr', 'a', 'mark',
+        # Notebooks imported from Colab: tables and folded blocks ("Текст условия").
+        'details', 'summary', 'table', 'thead', 'tbody', 'tr', 'th', 'td'}
+ALIASES = {'b': 'strong', 'i': 'em', 'strike': 's', 'div': 'p', 'h1': 'h2', 'h4': 'h3', 'h5': 'h3', 'h6': 'h3'}
 VOID = {'br', 'hr'}
 
 

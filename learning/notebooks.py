@@ -87,6 +87,9 @@ def library(request):
 @transaction.atomic
 def editor(request, pk=None):
     notebook = get_object_or_404(editable_notebooks(request.user).select_for_update(), pk=pk) if pk else Notebook(owner=request.user)
+    from .notebook_import_views import EDITOR_LIMIT, large_settings
+    if pk and notebook.cells.count() > EDITOR_LIMIT:
+        return large_settings(request, notebook)
     version = notebook.edit_version
     original_title, original_published = notebook.title, notebook.published
     before = content_signature(list(notebook.cells.values())) if pk else []

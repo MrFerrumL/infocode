@@ -44,6 +44,8 @@ class NotebookCell(models.Model):
     position = models.PositiveIntegerField('Порядок', default=1)
     text = models.TextField('Текст / Python-код', blank=True)
     caption = models.CharField('Подпись', max_length=300, blank=True)
+    # What the code printed in Colab; shown under the code like a Colab output.
+    output = models.TextField('Вывод кода', blank=True)
     image = models.ImageField('Изображение', upload_to='notebooks/images/', blank=True, validators=[file_size, FileExtensionValidator(['png', 'jpg', 'jpeg', 'webp'])])
     video = models.FileField('Видео', upload_to='notebooks/videos/', blank=True, validators=[video_size, FileExtensionValidator(['mp4', 'webm'])])
     file = models.FileField('Файл', upload_to='notebooks/files/', blank=True, validators=[file_size, FileExtensionValidator(['txt', 'csv', 'xlsx', 'pdf', 'zip', 'docx', 'py'])])
