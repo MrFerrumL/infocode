@@ -1,0 +1,4 @@
+<div class="similar-list">
+  <p class="similar-note muted">{% if how == 'model' %}Подобрано нейросетью по тексту условия{% else %}Задачи того же номера и уровня{% endif %} · сначала нерешённые</p>
+  {% for task in cards %}{% include 'partials/catalog_card.html' %}{% empty %}<p class="muted">Похожих задач пока нет.</p>{% endfor %}
+</div>

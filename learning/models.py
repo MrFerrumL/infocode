@@ -79,6 +79,11 @@ class Task(models.Model):
     def __str__(self):
         return f'#{self.pk} · №{self.topic.number} · {self.title}'
 
+    @property
+    def polyakov_ref(self):
+        from .sources import polyakov_ref
+        return polyakov_ref(self.topic.number, self.external_id)
+
 
 class Practice(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE)
@@ -487,3 +492,4 @@ from .platform_models import (LoginBucket, StudentAccess, ActionReceipt, Teacher
 from .notebook_models import Notebook, NotebookCell
 from .schedule_models import ScheduleEvent, ScheduleOccurrence, ScheduleReminder
 from .collection_models import Collection, CollectionItem
+from .similar_models import TaskSimilarity

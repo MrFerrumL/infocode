@@ -91,3 +91,10 @@ html[data-theme="dark"] { --condition-filter: invert(1) hue-rotate(180deg) brigh
 .source-note.kind-demo { background: #e6f0ff; color: #1d4ed8; }
 .source-note.kind-exam { background: #e7f6ee; color: #1d6b45; }
 .source-note.kind-probe { background: #fff4d6; color: #8a5a00; }
+
+/* "Похожие" under a task: a small button and the similar tasks below the card */
+.similar-toggle { flex: none; min-height: 30px; padding: 4px 12px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--muted); font-size: 12px; cursor: pointer; }
+.similar-toggle:hover, .similar-toggle[aria-expanded="true"] { color: var(--purple); border-color: currentColor; }
+.similar-box { margin-top: 16px; padding: 14px 0 0 16px; border-left: 3px solid var(--line); }
+.similar-box .task-card { margin-bottom: 16px; }
+.similar-note { font-size: 12px; margin: 0 0 12px; }

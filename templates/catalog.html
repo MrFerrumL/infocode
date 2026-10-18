@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load content_blocks static %}
 {% block title %}Каталог заданий · Инфокод{% endblock %}
-{% block extra_head %}<script defer src="{% static 'catalog-answers.js' %}"></script>{% endblock %}
+{% block extra_head %}<script defer src="{% static 'catalog-answers.js' %}"></script><script defer src="{% static 'similar-tasks.js' %}"></script>{% endblock %}
 {% block content %}
 <div class="page-heading">
   <div><div class="eyebrow">ПРАКТИКА</div><h1>Каталог заданий<span class="accent">.</span></h1><p>Выберите номер — условия задач сразу появятся в списке.</p></div>

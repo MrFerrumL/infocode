@@ -8,6 +8,20 @@ import re
 # Task.source_system → site shown in the catalogue filter. New banks (K. Polyakov, Yandex) add a line here.
 SITES = {'kompege': 'КЕГЭ', 'polyakov': 'К. Поляков', 'yandex': 'Яндекс', '': 'Свои задачи'}
 
+# K. Polyakov's extra documents of one number: task 2015 of number 7 is "7-2.15", 3003 is "7-v.3".
+POLYAKOV_PARTS = {2: '2', 3: 'v'}
+
+
+def polyakov_ref(number, ident):
+    """Task number as on K. Polyakov's site: '17.5', '7-2.15', '19-21.4'."""
+    if not ident:
+        return str(number)
+    part, n = divmod(ident, 1000)
+    if number in (19, 20, 21):
+        return f'19-21.{ident}'
+    return f'{number}-{POLYAKOV_PARTS[part]}.{n}' if part in POLYAKOV_PARTS else f'{number}.{ident}'
+
+
 KINDS = [('demo', 'Демоверсия'), ('exam', 'Реальный ЕГЭ'), ('probe', 'Пробники и ЕГКР'), ('author', 'Авторские')]
 
 EXAM = ('основная волна', 'резерв', 'пересдача', 'досрочн', 'егэ-20', 'егэ 20')

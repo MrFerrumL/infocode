@@ -48,6 +48,14 @@ class PilotInstallerTests(SimpleTestCase):
         self.assertNotIn('down -v', payload)
         self.assertIn('check_content --strict', payload)
 
+    def test_polyakov_bundles_are_imported_after_backup_then_removed(self):
+        payload = remote_script('ubuntu', polyakov=[([1, 2], 'polyakov-1.zip'), ([19, 20, 21], 'polyakov-2.zip')]).decode('utf-8')
+        first = payload.index('import_kompege_numbers /tmp/polyakov-1.zip --numbers 1 2 --publish')
+        self.assertLess(payload.index('backup_platform'), first)
+        self.assertLess(first, payload.index('rm -f /home/ubuntu/polyakov-1.zip'))
+        self.assertIn('/tmp/polyakov-2.zip --numbers 19 20 21 --publish', payload)
+        self.assertLess(payload.index('polyakov-2.zip --numbers'), payload.index('sync_similar_tasks'))
+
     def test_verified_upload_and_success_after_remote_and_public_checks(self):
         result, output, errors, run, health = self.run_installer([0, 0, 0, 0])
         self.assertEqual(result, 0)

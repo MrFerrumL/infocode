@@ -1,6 +1,6 @@
 {% extends 'base.html' %}{% load static %}
 {% block title %}{{ collection.title }} · Подборки{% endblock %}
-{% block extra_head %}<script defer src="{% static 'catalog-answers.js' %}"></script>{% endblock %}
+{% block extra_head %}<script defer src="{% static 'catalog-answers.js' %}"></script><script defer src="{% static 'similar-tasks.js' %}"></script>{% endblock %}
 {% block content %}
 <a class="back-link" href="{% url 'collections' %}">← Все подборки</a>
 <div class="page-heading"><div><div class="eyebrow">{% if collection.source == 'yandex' %}ПОДБОРКА ЯНДЕКС УЧЕБНИКА{% else %}ПОДБОРКА ИНФОКОДА{% endif %}</div><h1>{{ collection.title }}</h1><p>{{ collection.description }}</p></div><span class="pill">Решено {{ done }} из {{ cards|length }}</span></div>

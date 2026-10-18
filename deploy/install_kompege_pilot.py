@@ -35,7 +35,7 @@ def validate_archives(source, bundle):
             raise ValueError('Only the 135-card pilot may be installed by this helper.')
 
 
-def remote_script(user, images=False, number1=False, categories=False, numbers=(), replace=False, variants=False):
+def remote_script(user, images=False, number1=False, categories=False, numbers=(), replace=False, variants=False, polyakov=()):
     home = '/root' if user == 'root' else '/home/' + user
     stamp = datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-%f')
     refresh = f'docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps -v {home}/kompege-condition-images.zip:/tmp/condition-images.zip:ro web python manage.py refresh_kompege_images /tmp/condition-images.zip < /dev/null\n' if images else ''
@@ -46,6 +46,10 @@ def remote_script(user, images=False, number1=False, categories=False, numbers=(
         selected = ' '.join(str(n) for n in sorted(set(numbers)))
         replace_flag = ' --replace-existing' if replace else ''
         bank += f'docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps -v {home}/kompege-categories.zip:/tmp/kompege-categories.zip:ro web python manage.py import_kompege_numbers /tmp/kompege-categories.zip --numbers {selected} --publish{replace_flag} < /dev/null\n'
+    # K. Polyakov's bundles: [(numbers, uploaded name)], imported one after another and then removed.
+    for selected_numbers, name in polyakov:
+        selected = ' '.join(str(n) for n in selected_numbers)
+        bank += f'docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps -v {home}/{name}:/tmp/{name}:ro web python manage.py import_kompege_numbers /tmp/{name} --numbers {selected} --publish < /dev/null\nrm -f {home}/{name}\n'
     if variants:
         bank += f'docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps -v {home}/kompege-variants.zip:/tmp/kompege-variants.zip:ro web python manage.py import_kompege_variants /tmp/kompege-variants.zip --publish < /dev/null\n'
     return f'''set -Eeuo pipefail
@@ -67,6 +71,7 @@ printf '[4/6] Verifying and importing the 135-card pilot...\\n'
 docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps -v {home}/kompege-pilot-135.zip:/tmp/kompege-pilot-135.zip:ro web python manage.py import_kompege_pilot /tmp/kompege-pilot-135.zip --publish --sync-empty-topic-titles < /dev/null
 {refresh}
 {bank}
+docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps web python manage.py sync_similar_tasks < /dev/null
 printf '[5/6] Starting the updated platform...\\n'
 docker compose --env-file .env.production -f compose.production.yaml up -d --wait --wait-timeout 120 < /dev/null
 printf '[6/6] Checking database, media and application health...\\n'
@@ -90,6 +95,7 @@ def main(argv=None):
     parser.add_argument('--categories', type=Path, help='Complete reviewed high-resolution category snapshots')
     parser.add_argument('--numbers', nargs='+', type=int, help='Exact categories to import from --categories')
     parser.add_argument('--variants', type=Path, help='Reviewed KOMPEGE exam variants package')
+    parser.add_argument('--polyakov', type=Path, nargs='+', default=[], help="K. Polyakov's bundles (deploy/prepare_polyakov_bank.py)")
     parser.add_argument('--replace-existing', action='store_true', help='Replace earlier KOMPEGE tasks of --numbers (refused if pupils used them)')
     args = parser.parse_args(argv)
     if args.replace_existing and not args.categories:
@@ -105,7 +111,7 @@ def main(argv=None):
         print('OpenSSH client and scp must be installed.', file=sys.stderr)
         return 2
     key = args.key.expanduser().resolve()
-    if not key.is_file() or not args.source.is_file() or not args.bundle.is_file() or (args.images and not args.images.is_file()) or (args.number1 and not args.number1.is_file()) or (args.categories and not args.categories.is_file()) or (args.variants and not args.variants.is_file()):
+    if not key.is_file() or not args.source.is_file() or not args.bundle.is_file() or (args.images and not args.images.is_file()) or (args.number1 and not args.number1.is_file()) or (args.categories and not args.categories.is_file()) or (args.variants and not args.variants.is_file()) or any(not p.is_file() for p in args.polyakov):
         print('SSH key, current source archive or pilot archive is missing.', file=sys.stderr)
         return 2
     try:
@@ -117,10 +123,20 @@ def main(argv=None):
                 category_manifest = json.loads(archive.read('manifest.json'))
                 category_rows = category_manifest.get('tasks', [])
                 selected = sorted(set(args.numbers))
-                if category_manifest.get('format') not in ('infocode-kompege-numbers-v1', 'infocode-kompege-games-v1', 'infocode-polyakov-doc-v1') or category_manifest.get('numbers') != selected or not 1 <= len(category_rows) <= 2000 or any(r.get('number') not in selected for r in category_rows):
+                if category_manifest.get('format') not in ('infocode-kompege-numbers-v1', 'infocode-kompege-games-v1', 'infocode-polyakov-doc-v1', 'infocode-polyakov-games-v1') or category_manifest.get('numbers') != selected or not 1 <= len(category_rows) <= 2000 or any(r.get('number') not in selected for r in category_rows):
                     raise ValueError('Expected the complete selected categories')
                 if category_manifest.get('source_counts') != {str(n):sum(r['number'] == n for r in category_rows) for n in selected}:
                     raise ValueError('Category snapshot counts do not match')
+        polyakov = []
+        for index, path in enumerate(args.polyakov, 1):
+            with zipfile.ZipFile(path) as archive:
+                if archive.getinfo('manifest.json').file_size > 8 * 1024 * 1024:
+                    raise ValueError('Polyakov manifest is too large')
+                manifest = json.loads(archive.read('manifest.json'))
+            rows, selected = manifest.get('tasks', []), manifest.get('numbers')
+            if manifest.get('format') not in ('infocode-polyakov-doc-v1', 'infocode-polyakov-games-v1') or not rows or len(rows) > 5000                     or not isinstance(selected, list) or any(type(n) is not int or not 1 <= n <= 27 for n in selected)                     or manifest.get('source_counts') != {str(n): sum(r['number'] == n for r in rows) for n in selected}:
+                raise ValueError(f'{path.name}: expected a complete K. Polyakov bundle')
+            polyakov.append((sorted(selected), f'polyakov-{index}.zip', path))
         if args.variants:
             with zipfile.ZipFile(args.variants) as archive:
                 if archive.getinfo('manifest.json').file_size > 16 * 1024 * 1024:
@@ -145,7 +161,7 @@ def main(argv=None):
                    '-o', 'ServerAliveInterval=30', '-o', 'ServerAliveCountMax=6', '-o', 'ConnectTimeout=15', '-i', str(key)]
         target = f'{args.user}@{args.host}'
         home = '/root' if args.user == 'root' else '/home/' + args.user
-        payload = remote_script(args.user, images=bool(args.images), number1=bool(args.number1), categories=bool(args.categories), numbers=args.numbers or (), replace=args.replace_existing, variants=bool(args.variants))
+        payload = remote_script(args.user, images=bool(args.images), number1=bool(args.number1), categories=bool(args.categories), numbers=args.numbers or (), replace=args.replace_existing, variants=bool(args.variants), polyakov=[(n, name) for n, name, _ in polyakov])
         result = subprocess.run([ssh, '-T', *options, target, 'bash -n'], input=payload, check=False)
         if result.returncode:
             print('SSH connection or remote syntax check failed; nothing was installed.', file=sys.stderr)
@@ -156,6 +172,7 @@ def main(argv=None):
         if args.number1: uploads.append((args.number1, 'kompege-number1.zip'))
         if args.categories: uploads.append((args.categories, 'kompege-categories.zip'))
         if args.variants: uploads.append((args.variants, 'kompege-variants.zip'))
+        uploads += [(path, name) for _, name, path in polyakov]
         for local, remote in uploads:
             result = subprocess.run([scp, *options, str(local.resolve()), f'{target}:{home}/{remote}'], check=False)
             if result.returncode:

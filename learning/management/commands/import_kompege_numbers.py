@@ -14,7 +14,7 @@ from PIL import Image
 from learning.models import Bookmark, Practice, Task, TaskBlock, Topic, VariantItem
 from .import_kompege_pilot import checked_member
 from learning.topic_defaults import TOPICS
-from learning.sources import classify, label as source_label
+from learning.sources import classify, label as source_label, polyakov_ref
 
 # Number 24 alone carries ~1.1 GB of TXT data; data files are streamed, never held together.
 MAX_TOTAL = 3 * 1024 * 1024 * 1024
@@ -27,13 +27,15 @@ GAMES = [19, 20, 21]
 VARIANTS_FORMAT = 'infocode-kompege-variants-v1'
 # K. Polyakov's collection: tasks cut from his DOC files (deploy/prepare_polyakov_doc.py).
 POLYAKOV_FORMAT = 'infocode-polyakov-doc-v1'
+# Polyakov's 19–21: each task has the condition and the section's question as two pictures.
+POLYAKOV_GAMES_FORMAT = 'infocode-polyakov-games-v1'
 SOURCES = {
     'https://kompege.ru': {'system': 'kompege', 'name': 'КОМПЕГЭ', 'formats': (FORMAT, GAMES_FORMAT, VARIANTS_FORMAT),
                            'url': lambda ident: f'https://kompege.ru/task?id={ident}',
                            'title': lambda number, ident: f'КОМПЕГЭ №{ident} · задание {number}'},
-    'https://kpolyakov.spb.ru': {'system': 'polyakov', 'name': 'К. Поляков', 'formats': (POLYAKOV_FORMAT,),
+    'https://kpolyakov.spb.ru': {'system': 'polyakov', 'name': 'К. Поляков', 'formats': (POLYAKOV_FORMAT, POLYAKOV_GAMES_FORMAT),
                                  'url': lambda ident: 'https://kpolyakov.spb.ru/school/ege.htm',
-                                 'title': lambda number, ident: f'К. Поляков {number}.{ident}'},
+                                 'title': lambda number, ident: f'К. Поляков {polyakov_ref(number, ident)}'},
 }
 
 
@@ -45,7 +47,8 @@ def inspect_bundle(archive, numbers=None):
         raise ValueError('Oversized manifest')
     manifest = json.loads(archive.read('manifest.json'))
     rows = manifest.get('tasks')
-    games = manifest.get('format') == GAMES_FORMAT
+    polyakov_games = manifest.get('format') == POLYAKOV_GAMES_FORMAT
+    games = manifest.get('format') == GAMES_FORMAT or polyakov_games
     variants = manifest.get('format') == VARIANTS_FORMAT
     spec = SOURCES.get(manifest.get('source'))
     if spec is None or manifest.get('format') not in spec['formats'] or not isinstance(rows, list) or not (0 if variants else 1) <= len(rows) <= 5000:
@@ -80,7 +83,7 @@ def inspect_bundle(archive, numbers=None):
             raise ValueError('Invalid source kind')
         if 'solution' in row and (not isinstance(row['solution'], str) or len(row['solution']) > 2000):
             raise ValueError('Invalid solution')
-        if not isinstance(row.get('images'), list) or len(row['images']) != (2 if (games and row['number'] != 19) or (variants and row['number'] in (20, 21)) else 1) or not isinstance(row.get('files'), list) or len(row['files']) > 20:
+        if not isinstance(row.get('images'), list) or len(row['images']) != (2 if (games and (row['number'] != 19 or polyakov_games)) or (variants and row['number'] in (20, 21)) else 1) or not isinstance(row.get('files'), list) or len(row['files']) > 20:
             raise ValueError('A complete condition image is required')
         for image, items in ((True, row['images']), (False, row['files'])):
             for item in items:

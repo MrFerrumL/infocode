@@ -61,3 +61,52 @@ class PolyakovImportTests(TestCase):
         self.assertContains(page, 'Найдено: 1')
         self.assertContains(page, '<option value="polyakov"')
         self.assertContains(page, 'Сайт К. Полякова · задача 17.472')
+
+
+class PolyakovGamesAndPartsTests(TestCase):
+    """Polyakov's 19–21 come as groups (condition + the section's question); extra documents keep his numbering."""
+
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.root = Path(self.temp.name)
+        override = self.settings(MEDIA_ROOT=self.root / 'media')
+        override.enable()
+        self.addCleanup(override.disable)
+
+    def bundle(self, name, manifest, assets):
+        path = self.root / name
+        with zipfile.ZipFile(path, 'w') as archive:
+            archive.writestr('manifest.json', json.dumps(manifest, ensure_ascii=False))
+            for asset, data in assets.items():
+                archive.writestr(asset, data)
+        return path
+
+    def picture(self, colour):
+        out = io.BytesIO()
+        Image.new('RGB', (1920, 200), colour).save(out, 'JPEG')
+        return out.getvalue()
+
+    def row(self, number, ident, answer, images):
+        return {'number': number, 'source_id': ident, 'source_url': 'https://kpolyakov.spb.ru/school/ege.htm', 'author': '',
+                'label': 'Авторская · К. Поляков', 'kind': 'author', 'answer': answer, 'difficulty': 'medium', 'images': images, 'files': []}
+
+    def test_game_groups_and_numbering(self):
+        assets = {'screenshots/1921-4-condition.jpg': self.picture('white')}
+        assets.update({f'screenshots/1921-s1-q{q}.jpg': self.picture(c) for q, c in ((19, 'red'), (20, 'green'), (21, 'blue'))})
+        ref = lambda path: {'path': path, 'sha256': hashlib.sha256(assets[path]).hexdigest()}
+        rows = [self.row(q, 4, str(q), [ref('screenshots/1921-4-condition.jpg'), ref(f'screenshots/1921-s1-q{q}.jpg')]) for q in (19, 20, 21)]
+        games = self.bundle('games.zip', {'format': 'infocode-polyakov-games-v1', 'source': 'https://kpolyakov.spb.ru', 'numbers': [19, 20, 21],
+                                          'source_counts': {'19': 1, '20': 1, '21': 1}, 'source_sha256': {str(n): 'e' * 64 for n in (19, 20, 21)}, 'tasks': rows}, assets)
+        call_command('import_kompege_numbers', str(games), numbers=[19, 20, 21], publish=True, stdout=io.StringIO())
+        self.assertEqual(sorted(Task.objects.values_list('title', flat=True)), ['К. Поляков 19-21.4'] * 3)
+        parts = {'screenshots/7-2-15-condition.jpg': self.picture('white')}
+        part = self.bundle('parts.zip', {'format': 'infocode-polyakov-doc-v1', 'source': 'https://kpolyakov.spb.ru', 'numbers': [7],
+                                         'source_counts': {'7': 1}, 'source_sha256': {'7': 'f' * 64},
+                                         'tasks': [self.row(7, 2015, '128', [{'path': 'screenshots/7-2-15-condition.jpg', 'sha256': hashlib.sha256(parts['screenshots/7-2-15-condition.jpg']).hexdigest()}])]}, parts)
+        call_command('import_kompege_numbers', str(part), numbers=[7], publish=True, stdout=io.StringIO())
+        self.assertTrue(Task.objects.filter(title='К. Поляков 7-2.15').exists())
+        self.client.force_login(get_user_model().objects.create_user('pupil'))
+        page = self.client.get('/catalog/', {'number': 19, 'site': 'polyakov'})
+        self.assertContains(page, 'Найдено: 1')  # one card for the 19–21 group
+        self.assertContains(page, 'задача 19-21.4')
