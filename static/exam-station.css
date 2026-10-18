@@ -83,7 +83,7 @@ body.station-focus .main-shell main { max-width: none; }
 
 /* Collections: one row per number, own sets next to Yandex Uchebnik links */
 .collections-table { display: grid; gap: 10px; }
-.collections-row { display: grid; grid-template-columns: 64px minmax(0, 1fr); gap: 14px; align-items: start; padding: 12px 0; border-bottom: 1px solid var(--line); }
+.collections-row { display: grid; grid-template-columns: 64px minmax(0, 1fr) minmax(0, 1.2fr); gap: 14px; align-items: start; padding: 12px 0; border-bottom: 1px solid var(--line); }
 .collections-row > strong { font-size: 18px; padding-top: 6px; }
 .collections-head { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 1px; padding-bottom: 4px; }
 @media (max-width: 900px) { .collections-row { grid-template-columns: 1fr; gap: 8px; } .collections-head { display: none; } }

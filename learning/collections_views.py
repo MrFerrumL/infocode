@@ -1,4 +1,4 @@
-"""Collections section: step-by-step sets solved right on the page."""
+"""Collections section: own sets solved right on the page, Yandex Uchebnik sets as links."""
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count
 from django.shortcuts import get_object_or_404, render
@@ -20,7 +20,12 @@ def collections(request):
     for collection in own:
         collection.done = sum(1 for item in collection.items.all() if item.task_id in solved)
         numbers.setdefault(collection.number, []).append(collection)
-    rows = [{'number': '19–21' if n == 19 else str(n), 'own': items} for n, items in sorted(numbers.items())]
+    yandex = {}
+    for collection in Collection.objects.filter(source='yandex', published=True):
+        yandex.setdefault(collection.number, []).append(collection)
+    # One row per exam number: the platform's sets next to Yandex Uchebnik's.
+    rows = [{'number': '19–21' if n == 19 else str(n), 'own': numbers.get(n, []), 'yandex': yandex.get(n, [])}
+            for n in sorted(set(numbers) | set(yandex))]
     return render(request, 'collections.html', {'rows': rows, 'nav': 'collections'})
 
 
