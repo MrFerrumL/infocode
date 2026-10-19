@@ -13,6 +13,7 @@ def platform_context(request):
         'tasks': {'teacher_tasks', 'task_create', 'task_editor', 'task_delete', 'bulk_tasks', 'block_create', 'block_editor', 'import_tasks', 'duplicates'},
         'works': {'journal', 'assignment_create', 'assignment_detail', 'review_homework', 'review_queue', 'variant_create', 'result', 'print_variant'},
         'students': {'student_account_create', 'student_password_reset', 'teacher_students', 'teacher_student', 'analytics', 'teacher_groups'},
+        'coverage': {'teacher_coverage'},
     }
     return {
         'unread_notifications': Notification.objects.filter(user=request.user, read_at=None).count(),

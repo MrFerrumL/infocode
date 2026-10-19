@@ -1,0 +1,29 @@
+{% extends 'base.html' %}{% load static %}
+{% block title %}Пройденные номера · Инфокод{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'coverage.css' %}">{% if editable %}<script defer src="{% static 'coverage.js' %}"></script>{% endif %}{% endblock %}
+{% block content %}
+<div class="page-heading"><div><div class="eyebrow">{% if editable %}УЧЕНИКИ · ГРУППЫ{% else %}МОЯ ПОДГОТОВКА{% endif %}</div><h1>Пройденные номера<span class="accent">.</span></h1><p>{% if editable %}Отмечайте, какие номера каждая группа уже прошла на занятиях. Ученики видят эту таблицу у себя.{% else %}Какие номера ЕГЭ уже пройдены на занятиях — у твоей группы и у остальных групп.{% endif %}</p></div></div>
+{% if editable %}
+<form method="post" action="{% url 'coverage_mark' %}" class="coverage-form" data-coverage-form>{% csrf_token %}
+<fieldset class="coverage-tools"><legend>Инструмент</legend>
+  <label><input type="radio" name="tool" value="check" {% if request.GET.tool != 'yellow' and request.GET.tool != 'red' and request.GET.tool != 'clear' %}checked{% endif %}><span class="cov-box is-done">✓</span>Отметка «пройдено»</label>
+  <label><input type="radio" name="tool" value="yellow" {% if request.GET.tool == 'yellow' %}checked{% endif %}><span class="cov-swatch yellow"></span>Жёлтый — на повторение</label>
+  <label><input type="radio" name="tool" value="red" {% if request.GET.tool == 'red' %}checked{% endif %}><span class="cov-swatch red"></span>Красный — требует внимания</label>
+  <label><input type="radio" name="tool" value="clear" {% if request.GET.tool == 'clear' %}checked{% endif %}><span class="cov-swatch"></span>Убрать цвет</label>
+</fieldset>
+{% endif %}
+<div class="coverage-wrap panel">
+<table class="coverage-table">
+  <thead><tr><th scope="col" class="cov-name">{% if editable %}Группа{% else %}Группа{% endif %}</th>{% for column, label in columns %}<th scope="col" class="{% if column == 0 %}cov-intro{% endif %}">{{ label }}</th>{% endfor %}<th scope="col" class="cov-total">Всего</th></tr></thead>
+  <tbody>
+  {% for row in rows %}<tr id="group-{{ row.group.pk }}" class="{% if row.mine %}is-mine{% endif %}"><th scope="row" class="cov-name">{{ row.title }}{% if row.mine %} <small>твоя группа</small>{% endif %}</th>
+    {% for cell in row.cells %}<td class="cov-cell {{ cell.color }}">{% if editable %}<button type="submit" name="cell" value="{{ row.group.pk }}:{{ cell.column }}" aria-label="{{ row.title }}, {{ cell.label }}: {% if cell.done %}пройдено{% else %}не пройдено{% endif %}"><span class="cov-box {% if cell.done %}is-done{% endif %}">✓</span></button>{% else %}<span class="cov-box {% if cell.done %}is-done{% endif %}" title="{{ cell.label }}: {% if cell.done %}пройдено{% else %}ещё нет{% endif %}{% if cell.color == 'yellow' %} · на повторение{% elif cell.color == 'red' %} · требует внимания{% endif %}">✓</span>{% endif %}</td>{% endfor %}
+    <td class="cov-total" data-row-done>{{ row.done }}/{{ size }}</td></tr>
+  {% empty %}<tr><td colspan="30" class="muted">{% if editable %}Создайте группы в разделе «Группы и приглашения» — они появятся здесь строками.{% else %}Ты пока не состоишь в группе — таблица появится, когда преподаватель добавит тебя.{% endif %}</td></tr>{% endfor %}
+  </tbody>
+  {% if rows|length > 1 %}<tfoot><tr><th scope="row" class="cov-name">Групп прошли</th>{% for total in totals %}<td>{{ total }}</td>{% endfor %}<td></td></tr></tfoot>{% endif %}
+</table>
+</div>
+<p class="coverage-legend"><span><span class="cov-box is-done">✓</span> пройдено</span><span><span class="cov-swatch yellow"></span> на повторение</span><span><span class="cov-swatch red"></span> требует внимания</span></p>
+{% if editable %}</form>{% endif %}
+{% endblock %}

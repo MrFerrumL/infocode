@@ -1,0 +1,42 @@
+/* «Пройденные номера»: a sheet-like table — groups in rows, «введение» and 1–27 in columns. */
+.coverage-tools { display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; border: 0; padding: 0; margin: 0 0 16px; }
+.coverage-tools legend { float: left; margin-right: 6px; font-size: 13px; color: var(--muted); }
+.coverage-tools label { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border: 1px solid var(--line); border-radius: 10px; font-size: 13px; cursor: pointer; margin: 0; }
+.coverage-tools label:has(input:checked) { border-color: var(--purple); box-shadow: 0 0 0 2px rgba(87, 69, 212, .15); }
+.coverage-tools input { position: absolute; opacity: 0; pointer-events: none; }
+.coverage-tools label:focus-within { outline: 2px solid var(--purple); outline-offset: 2px; }
+.coverage-wrap { overflow-x: auto; padding: 0; }
+.coverage-table { border-collapse: collapse; width: 100%; min-width: 1100px; font-size: 13px; }
+.coverage-table th, .coverage-table td { border: 1px solid var(--line); text-align: center; padding: 0; height: 40px; }
+.coverage-table thead th { font-weight: 600; padding: 8px 4px; background: var(--surface); position: sticky; top: 0; }
+.coverage-table .cov-intro { font-size: 12px; padding: 8px 10px; }
+.coverage-table .cov-name { position: sticky; left: 0; z-index: 1; text-align: left; padding: 6px 12px; white-space: nowrap; font-weight: 600; background: var(--paper, #fff); min-width: 210px; }
+.coverage-table .cov-name small { display: block; font-weight: 500; color: var(--purple); font-size: 11px; }
+.coverage-table tr.is-mine th, .coverage-table tr.is-mine td { background: rgba(87, 69, 212, .07); }
+.coverage-table .cov-total { padding: 0 10px; white-space: nowrap; color: var(--muted); }
+.coverage-table tfoot td, .coverage-table tfoot th { color: var(--muted); font-size: 12px; background: var(--surface); }
+.cov-cell button { width: 100%; height: 100%; min-height: 40px; border: 0; background: transparent; cursor: pointer; display: grid; place-items: center; }
+.cov-cell button:hover .cov-box { border-color: var(--purple); }
+.cov-cell.yellow { background: #fde68a !important; }
+.cov-cell.red { background: #f87171 !important; }
+.cov-cell.cov-error { outline: 2px solid #dc2626; outline-offset: -2px; }
+.cov-box { display: inline-grid; place-items: center; width: 22px; height: 22px; border: 2px solid #9ca3af; border-radius: 5px; color: transparent; font-size: 14px; font-weight: 700; line-height: 1; background: var(--paper, #fff); }
+.cov-box.is-done { background: #6b7280; border-color: #6b7280; color: #fff; }
+.cov-cell.red .cov-box.is-done { background: #fff; border-color: #fff; color: #dc2626; }
+.cov-cell.yellow .cov-box.is-done { background: #3f3f46; border-color: #3f3f46; }
+.cov-swatch { display: inline-block; width: 18px; height: 18px; border-radius: 4px; border: 1px solid var(--line); background: var(--paper, #fff); }
+.cov-swatch.yellow { background: #fde68a; border-color: #facc15; }
+.cov-swatch.red { background: #f87171; border-color: #dc2626; }
+.coverage-legend { display: flex; flex-wrap: wrap; gap: 18px; margin-top: 14px; font-size: 13px; color: var(--muted); }
+.coverage-legend > span { display: inline-flex; align-items: center; gap: 8px; }
+:root[data-theme="dark"] .coverage-table .cov-name { background: #1d1a26; }
+:root[data-theme="dark"] .coverage-table thead th, :root[data-theme="dark"] .coverage-table tfoot td, :root[data-theme="dark"] .coverage-table tfoot th { background: #211d2c; }
+:root[data-theme="dark"] .cov-box { background: transparent; border-color: #6b6578; }
+:root[data-theme="dark"] .cov-cell.yellow { background: #a16207 !important; }
+:root[data-theme="dark"] .cov-cell.red { background: #b91c1c !important; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .coverage-table .cov-name { background: #1d1a26; }
+  :root:not([data-theme="light"]) .cov-cell.yellow { background: #a16207 !important; }
+  :root:not([data-theme="light"]) .cov-cell.red { background: #b91c1c !important; }
+}
+@media print { .coverage-tools { display: none; } .coverage-table { min-width: 0; font-size: 10px; } }

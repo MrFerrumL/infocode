@@ -11,6 +11,7 @@
     <a {% if workspace_section == 'homework' %}class="active" aria-current="page"{% endif %} href="{% url 'teacher_homework' %}"><span class="nav-icon" aria-hidden="true">⌂</span>Домашние задания</a>
     <a {% if workspace_section == 'schedule' %}class="active" aria-current="page"{% endif %} href="{% url 'teacher_schedule' %}"><span class="nav-icon" aria-hidden="true">▦</span>Расписание</a>
     <a {% if workspace_section == 'students' %}class="active" aria-current="page"{% endif %} href="{% url 'teacher_students' %}"><span class="nav-icon" aria-hidden="true">◎</span>Ученики</a>
+    <a {% if workspace_section == 'coverage' %}class="active" aria-current="page"{% endif %} href="{% url 'teacher_coverage' %}"><span class="nav-icon" aria-hidden="true">☑</span>Пройденные номера</a>
     <details class="sidebar-more" {% if workspace_section == 'more' %}open{% endif %}><summary>Ещё <span aria-hidden="true">⌄</span></summary>
       <a href="{% url 'analytics' %}">Аналитика</a><a href="{% url 'teacher_groups' %}">Группы и приглашения</a><a href="{% url 'media_library' %}">Медиатека</a><a href="{% url 'import_tasks' %}">Импорт задач</a><a href="{% url 'duplicates' %}">Поиск дубликатов</a><a href="{% url 'trash' %}">Корзина</a><a href="{% url 'audit' %}">История изменений</a>{% if user.is_superuser %}<a href="{% url 'platform_check' %}">Проверка платформы</a>{% endif %}<a href="/admin/">Полная админка ↗</a>
     </details>
@@ -26,6 +27,7 @@
     <a class="{% if nav == 'schedule' %}active{% endif %}" href="{% url 'schedule' %}"><span class="nav-icon" aria-hidden="true">▦</span>Расписание</a>
     <a class="{% if nav == 'variants' %}active{% endif %}" href="{% url 'variants' %}"><span class="nav-icon" aria-hidden="true">▤</span>Варианты</a>
     <a class="{% if nav == 'tests' %}active{% endif %}" href="{% url 'tests' %}"><span class="nav-icon" aria-hidden="true">◎</span>КР по темам</a>
+    <a class="{% if nav == 'coverage' %}active{% endif %}" href="{% url 'coverage' %}"><span class="nav-icon" aria-hidden="true">☑</span>Пройденные номера</a>
     <a class="{% if nav == 'stats' %}active{% endif %}" href="{% url 'stats' %}"><span class="nav-icon" aria-hidden="true">▥</span>Мой прогресс</a>
   {% endif %}
   </nav>
