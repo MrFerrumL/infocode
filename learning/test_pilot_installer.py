@@ -33,7 +33,9 @@ class PilotInstallerTests(SimpleTestCase):
         response = io.BytesIO(b'{"status":"ok"}')
         response.status = 200
         with patch('deploy.install_kompege_pilot.shutil.which', side_effect=lambda name: name + '.exe'), \
-                patch('deploy.install_kompege_pilot.subprocess.run', side_effect=[SimpleNamespace(returncode=code) for code in codes]) as run, \
+                patch('deploy.install_kompege_pilot.subprocess.run', side_effect=[SimpleNamespace(returncode=code, stdout=out) for code, out in
+                      ((c if isinstance(c, tuple) else (c, b'')) for c in codes)]) as run, \
+                patch('deploy.install_kompege_pilot.time.sleep'), \
                 patch('deploy.install_kompege_pilot.urlopen', return_value=response) as health, \
                 redirect_stdout(output), redirect_stderr(errors):
             result = main(['--key', str(self.key), '--source', str(self.source), '--bundle', str(self.bundle)])
@@ -59,15 +61,20 @@ class PilotInstallerTests(SimpleTestCase):
         self.assertLess(payload.index('polyakov-2.zip --numbers'), payload.index('sync_similar_tasks'))
 
     def test_verified_upload_and_success_after_remote_and_public_checks(self):
-        result, output, errors, run, health = self.run_installer([0, 0, 0, 0])
+        # syntax check, two uploads, script upload, detached start, a dropped poll, the finished log, cleanup
+        result, output, errors, run, health = self.run_installer([0, 0, 0, 0, 0, 255, (0, b'[6/6] ok\nINFOCODE_EXIT=0\n'), 0])
         self.assertEqual(result, 0)
         self.assertEqual(errors, '')
-        self.assertEqual(run.call_count, 4)
+        self.assertEqual(run.call_count, 8)
         self.assertEqual(run.call_args_list[0].args[0][-1], 'bash -n')
-        self.assertEqual(run.call_args_list[0].kwargs['input'], run.call_args.kwargs['input'])
+        self.assertEqual(run.call_args_list[0].kwargs['input'], run.call_args_list[3].kwargs['input'])
+        self.assertIn('cat > /home/ubuntu/infocode-install.sh', run.call_args_list[3].args[0][-1])
+        start = run.call_args_list[4].args[0][-1]
+        self.assertIn('nohup sudo -n setsid bash', start)
+        self.assertIn('INFOCODE_EXIT=$?', start)
         self.assertIn('StrictHostKeyChecking=yes', run.call_args.args[0])
-        self.assertEqual(run.call_args.args[0][-1], 'sudo -n bash -s')
-        self.assertIsInstance(run.call_args.kwargs['input'], bytes)
+        self.assertIsInstance(run.call_args_list[3].kwargs['input'], bytes)
+        self.assertIn('[6/6] ok', output)
         self.assertIn('Pilot installed and health checked', output)
         health.assert_called_once_with('https://infocode1.ru/health/', timeout=20)
         self.assertEqual(self.key.read_text(encoding='ascii'), 'test placeholder, not a private key')
@@ -80,7 +87,7 @@ class PilotInstallerTests(SimpleTestCase):
         self.assertNotIn('Pilot installed', output)
 
     def test_remote_failure_is_not_reported_as_success(self):
-        result, output, errors, run, health = self.run_installer([0, 0, 0, 1])
+        result, output, errors, run, health = self.run_installer([0, 0, 0, 0, 0, (0, b'stopped at line 9\nINFOCODE_EXIT=1\n'), 0])
         self.assertEqual(result, 1)
         self.assertIn('Installation did not finish', errors)
         health.assert_not_called()

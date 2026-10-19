@@ -7,8 +7,53 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 from urllib.request import urlopen
 import zipfile
+
+
+POLL_SECONDS = 10
+MAX_POLL_FAILURES = 90  # 15 minutes without a connection
+MAX_WAIT_SECONDS = 3 * 3600
+
+
+def run_detached(ssh, options, target, home, payload):
+    """Run the install script on the server detached from this SSH session and follow its log.
+
+    A long backup step used to outlive the SSH connection ("Connection reset by peer"), which killed
+    the installation halfway. Now the script runs under nohup/setsid and writes INFOCODE_EXIT=<code>
+    when it ends; dropped connections while polling are retried.
+    """
+    script, log = f'{home}/infocode-install.sh', f'{home}/infocode-install.log'
+    result = subprocess.run([ssh, '-T', *options, target, f'umask 077; cat > {script}'], input=payload, check=False)
+    if result.returncode:
+        return result.returncode
+    start = (f'rm -f {log}; nohup sudo -n setsid bash -c \'bash {script}; echo INFOCODE_EXIT=$?\' '
+             f'> {log} 2>&1 < /dev/null & echo started')
+    result = subprocess.run([ssh, '-T', *options, target, start], check=False)
+    if result.returncode:
+        return result.returncode
+    shown, failures, waited = 0, 0, 0
+    while waited < MAX_WAIT_SECONDS:
+        time.sleep(POLL_SECONDS)
+        waited += POLL_SECONDS
+        result = subprocess.run([ssh, '-T', *options, target, f'cat {log}'], check=False, capture_output=True)
+        if result.returncode:
+            failures += 1
+            if failures > MAX_POLL_FAILURES:
+                print('Lost the connection to the server; the installation may still be running there.', file=sys.stderr)
+                return result.returncode
+            continue
+        failures = 0
+        text = (result.stdout or b'').decode('utf-8', 'replace')
+        print(text[shown:], end='', flush=True)
+        shown = len(text)
+        match = re.search(r'INFOCODE_EXIT=(\d+)', text)
+        if match:
+            subprocess.run([ssh, '-T', *options, target, f'rm -f {script}'], check=False)
+            return int(match.group(1))
+    print('The installation is taking too long; check the server log ' + log, file=sys.stderr)
+    return 124
 
 
 def validate_archives(source, bundle):
@@ -185,10 +230,10 @@ def main(argv=None):
             result = subprocess.run([scp, *options, str(local.resolve()), f'{target}:{home}/{remote}'], check=False)
             if result.returncode:
                 return result.returncode
-        result = subprocess.run([ssh, '-T', *options, target, 'sudo -n bash -s'], input=payload, check=False)
-        if result.returncode:
+        code = run_detached(ssh, options, target, home, payload)
+        if code:
             print('Installation did not finish; see the error above. No success is assumed.', file=sys.stderr)
-            return result.returncode
+            return code
         with urlopen(f'https://{args.domain}/health/', timeout=20) as response:
             if response.status != 200 or json.load(response).get('status') != 'ok':
                 raise ValueError('The public health check did not pass.')
