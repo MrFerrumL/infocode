@@ -71,7 +71,9 @@ def dashboard(request):
     available_lessons = Lesson.objects.filter(published=True, section__course__in=available_courses(request.user)).prefetch_related('steps')
     done = [lesson.pk for lesson in available_lessons if (ids := {s.pk for s in lesson.steps.all() if s.published}) and ids.issubset(completed_steps)]
     next_lesson = available_lessons.exclude(id__in=done).first()
-    return render(request, 'dashboard.html', {'topics': topics, 'solved_count': len(solved), 'accuracy': accuracy, 'total': total, 'completed_lessons': len(done), 'next_lesson': next_lesson, 'recent': ExamAttempt.objects.filter(user=request.user, submitted_at__isnull=False).select_related('variant')[:4], 'nav': 'dashboard'})
+    from .daily_views import daily_progress
+    daily, daily_done = daily_progress(request.user)
+    return render(request, 'dashboard.html', {'daily_size': len(daily), 'daily_done': len(daily_done), 'topics': topics, 'solved_count': len(solved), 'accuracy': accuracy, 'total': total, 'completed_lessons': len(done), 'next_lesson': next_lesson, 'recent': ExamAttempt.objects.filter(user=request.user, submitted_at__isnull=False).select_related('variant')[:4], 'nav': 'dashboard'})
 
 
 CATALOG_SORTS = [('', 'По умолчанию'), ('asc', 'По номеру: с первой задачи'), ('desc', 'По номеру: с последней'),

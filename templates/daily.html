@@ -1,0 +1,11 @@
+{% extends 'base.html' %}{% load static %}
+{% block title %}Тренировка дня · Инфокод{% endblock %}
+{% block extra_head %}<script defer src="{% static 'catalog-answers.js' %}"></script><script defer src="{% static 'similar-tasks.js' %}"></script>{% endblock %}
+{% block content %}
+<div class="page-heading"><div><div class="eyebrow">ЛИЧНАЯ ТРЕНИРОВКА · {% now 'd.m.Y' %}</div><h1>Тренировка дня<span class="accent">.</span></h1><p>{{ size }} задач, подобранных для тебя: похожие на те, где были ошибки, слабые номера и новые темы. Завтра будет новый набор.</p></div><span class="pill">Решено {{ done }} из {{ size }}</span></div>
+<div class="daily-track" role="progressbar" aria-valuemin="0" aria-valuemax="{{ size }}" aria-valuenow="{{ done }}" aria-label="Решено задач тренировки"><i style="width:{% widthratio done size 100 %}%"></i></div>
+{% if done == size and size %}<div class="notice success">Тренировка дня пройдена! Можно продолжить в <a href="{% url 'catalog' %}?state=mistakes">работе над ошибками</a> или в <a href="{% url 'collections' %}">подборках</a>.</div>{% endif %}
+<div class="task-list catalog-conditions">
+  {% for task in cards %}<p class="daily-reason">{{ forloop.counter }}. {{ task.daily_reason }}</p>{% include 'partials/catalog_card.html' %}{% empty %}<div class="empty"><h2>Все задачи каталога решены</h2><p>Невероятно! Загляни в варианты, чтобы проверить себя на время.</p></div>{% endfor %}
+</div>
+{% endblock %}

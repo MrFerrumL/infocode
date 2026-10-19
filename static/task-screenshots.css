@@ -98,3 +98,10 @@ html[data-theme="dark"] { --condition-filter: invert(1) hue-rotate(180deg) brigh
 .similar-box { margin-top: 16px; padding: 14px 0 0 16px; border-left: 3px solid var(--line); }
 .similar-box .task-card { margin-bottom: 16px; }
 .similar-note { font-size: 12px; margin: 0 0 12px; }
+
+/* «Тренировка дня»: progress bar and why each task was picked */
+.daily-track { height: 8px; border-radius: 999px; background: var(--line); overflow: hidden; margin: 0 0 22px; }
+.daily-track i { display: block; height: 100%; background: var(--purple); border-radius: inherit; transition: width .3s; }
+.daily-reason { margin: 22px 0 8px; font-size: 13px; color: var(--muted); font-weight: 600; }
+.daily-reason:first-child { margin-top: 0; }
+.bottom-grid .daily-card { grid-column: 1 / -1; }
