@@ -6,6 +6,7 @@ attached below it. Tasks without a 19 partner (e.g. written by a teacher) stay s
 from django.db.models import Exists, OuterRef, Prefetch, Q
 
 from .models import Practice, Task, TaskBlock
+from .subjects import current
 
 FIRST = 19
 FOLLOW_UPS = (20, 21)
@@ -17,8 +18,15 @@ def partner_19():
                                external_id=OuterRef('external_id')).exclude(source_system='')
 
 
+def active():
+    """Only informatics has 19–21 game groups; in physics 19, 20 and 21 are separate numbers."""
+    return current() == 'inf'
+
+
 def grouped_follow_up():
     """Q for 20/21 tasks that are shown inside their 19 card."""
+    if not active():
+        return Q(pk__in=[])
     return Q(topic__number__in=FOLLOW_UPS, external_id__isnull=False) & Q(Exists(partner_19()))
 
 
@@ -35,6 +43,8 @@ def fold_follow_ups(qs):
 
 def attach_follow_ups(tasks, user):
     """Set task.follow_ups for 19 cards; their statement blocks exclude the shared condition."""
+    if not active():
+        return {}
     firsts = [t for t in tasks if t.topic.number == FIRST and t.external_id and t.source_system]
     if not firsts:
         return {}

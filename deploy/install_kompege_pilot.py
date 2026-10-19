@@ -80,7 +80,7 @@ def validate_archives(source, bundle):
             raise ValueError('Only the 135-card pilot may be installed by this helper.')
 
 
-def remote_script(user, images=False, number1=False, categories=False, numbers=(), replace=False, variants=False, polyakov=(), notebooks=()):
+def remote_script(user, images=False, number1=False, categories=False, numbers=(), replace=False, variants=False, polyakov=(), notebooks=(), physics=False):
     home = '/root' if user == 'root' else '/home/' + user
     stamp = datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-%f')
     refresh = f'docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps -v {home}/kompege-condition-images.zip:/tmp/condition-images.zip:ro web python manage.py refresh_kompege_images /tmp/condition-images.zip < /dev/null\n' if images else ''
@@ -95,6 +95,8 @@ def remote_script(user, images=False, number1=False, categories=False, numbers=(
     for selected_numbers, name in polyakov:
         selected = ' '.join(str(n) for n in selected_numbers)
         bank += f'docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps -v {home}/{name}:/tmp/{name}:ro web python manage.py import_kompege_numbers /tmp/{name} --numbers {selected} --publish < /dev/null\nrm -f {home}/{name}\n'
+    if physics:  # the platform's physics content (learning/data/physics), created or updated in place
+        bank += 'docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps web python manage.py seed_physics < /dev/null\n'
     # Colab notebooks for «Конспекты»: a notebook with the same title is updated in place.
     for name in notebooks:
         bank += f'docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps -v {home}/{name}:/tmp/{name}:ro web python manage.py import_ipynb /tmp/{name} --publish < /dev/null\nrm -f {home}/{name}\n'
@@ -146,6 +148,7 @@ def main(argv=None):
     parser.add_argument('--categories', type=Path, help='Complete reviewed high-resolution category snapshots')
     parser.add_argument('--numbers', nargs='+', type=int, help='Exact categories to import from --categories')
     parser.add_argument('--variants', type=Path, help='Reviewed KOMPEGE exam variants package')
+    parser.add_argument('--physics', action='store_true', help='Create or update the physics platform content (seed_physics)')
     parser.add_argument('--notebooks', type=Path, nargs='+', default=[], help='Colab notebooks (.ipynb) to publish in «Конспекты»')
     parser.add_argument('--polyakov', type=Path, nargs='+', default=[], help="K. Polyakov's bundles (deploy/prepare_polyakov_bank.py)")
     parser.add_argument('--replace-existing', action='store_true', help='Replace earlier KOMPEGE tasks of --numbers (refused if pupils used them)')
@@ -213,7 +216,7 @@ def main(argv=None):
                    '-o', 'ServerAliveInterval=30', '-o', 'ServerAliveCountMax=6', '-o', 'ConnectTimeout=15', '-i', str(key)]
         target = f'{args.user}@{args.host}'
         home = '/root' if args.user == 'root' else '/home/' + args.user
-        payload = remote_script(args.user, images=bool(args.images), number1=bool(args.number1), categories=bool(args.categories), numbers=args.numbers or (), replace=args.replace_existing, variants=bool(args.variants), polyakov=[(n, name) for n, name, _ in polyakov], notebooks=[f'notebook-{i}.ipynb' for i, _ in enumerate(args.notebooks, 1)])
+        payload = remote_script(args.user, images=bool(args.images), number1=bool(args.number1), categories=bool(args.categories), numbers=args.numbers or (), replace=args.replace_existing, variants=bool(args.variants), polyakov=[(n, name) for n, name, _ in polyakov], notebooks=[f'notebook-{i}.ipynb' for i, _ in enumerate(args.notebooks, 1)], physics=args.physics)
         result = subprocess.run([ssh, '-T', *options, target, 'bash -n'], input=payload, check=False)
         if result.returncode:
             print('SSH connection or remote syntax check failed; nothing was installed.', file=sys.stderr)

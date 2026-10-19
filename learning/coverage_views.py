@@ -13,10 +13,15 @@ from django.views.decorators.http import require_POST
 from .assignments import own_groups
 from .coverage_models import GroupTopicMark
 from .models import StudyGroup
+from .subjects import info
 from .views import staff_required
 
-COLUMNS = [(0, 'введение')] + [(n, str(n)) for n in range(1, 28)]
 TOOLS = ('check', 'yellow', 'red', 'clear')
+
+
+def columns():
+    """«введение» and the numbers of the current subject (1–27 informatics, 1–26 physics)."""
+    return [(0, 'введение')] + [(n, str(n)) for n in range(1, info()['numbers'] + 1)]
 
 
 def short_title(group):
@@ -29,19 +34,19 @@ def table(groups, mine=()):
     rows = []
     for group in groups:
         cells = []
-        for column, label in COLUMNS:
+        for column, label in columns():
             mark = marks.get((group.pk, column))
             cells.append({'column': column, 'label': label, 'done': bool(mark and mark.done), 'color': mark.color if mark else ''})
         rows.append({'group': group, 'title': short_title(group), 'cells': cells, 'done': sum(c['done'] for c in cells), 'mine': group.pk in mine})
-    totals = [sum(row['cells'][i]['done'] for row in rows) for i in range(len(COLUMNS))]
+    totals = [sum(row['cells'][i]['done'] for row in rows) for i in range(len(columns()))]
     return rows, totals
 
 
 @staff_required
 def teacher_coverage(request):
     rows, totals = table(own_groups(request.user))
-    return render(request, 'coverage.html', {'rows': rows, 'totals': totals, 'columns': COLUMNS, 'editable': True,
-                                             'size': len(COLUMNS), 'nav': 'coverage'})
+    return render(request, 'coverage.html', {'rows': rows, 'totals': totals, 'columns': columns(), 'editable': True,
+                                             'size': len(columns()), 'nav': 'coverage'})
 
 
 @staff_required
@@ -51,7 +56,7 @@ def mark(request):
     group_id, _, column = request.POST.get('cell', '').partition(':')
     group = get_object_or_404(own_groups(request.user), pk=int(group_id) if group_id.isdigit() else 0)
     tool = request.POST.get('tool', 'check')
-    if not column.isdigit() or not 0 <= int(column) <= 27 or tool not in TOOLS:
+    if not column.isdigit() or not 0 <= int(column) <= info()['numbers'] or tool not in TOOLS:
         return JsonResponse({'error': 'Неверная ячейка.'}, status=400)
     item, _ = GroupTopicMark.objects.get_or_create(group=group, column=int(column))
     if tool == 'check':
@@ -76,5 +81,5 @@ def coverage(request):
     groups = StudyGroup.objects.filter(teachers | Q(pk__in=mine)).distinct()
     rows, totals = table(groups, mine)
     rows.sort(key=lambda row: not row['mine'])
-    return render(request, 'coverage.html', {'rows': rows, 'totals': totals, 'columns': COLUMNS, 'editable': False,
-                                             'size': len(COLUMNS), 'nav': 'coverage'})
+    return render(request, 'coverage.html', {'rows': rows, 'totals': totals, 'columns': columns(), 'editable': False,
+                                             'size': len(columns()), 'nav': 'coverage'})

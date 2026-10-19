@@ -61,6 +61,8 @@ MIDDLEWARE.insert(MIDDLEWARE.index('django.contrib.auth.middleware.Authenticatio
 MIDDLEWARE.insert(MIDDLEWARE.index('learning.middleware.LoginThrottleMiddleware') + 1, 'learning.middleware.TemporaryPasswordMiddleware')
 TEMPLATES[0]['OPTIONS']['context_processors'].append('learning.context_processors.platform_context')
 TEMPLATES[0]['OPTIONS']['context_processors'].append('learning.context_processors.season_context')
+TEMPLATES[0]['OPTIONS']['context_processors'].append('learning.subject_views.subject_context')
+MIDDLEWARE.insert(MIDDLEWARE.index('django.contrib.auth.middleware.AuthenticationMiddleware') + 1, 'learning.subjects.SubjectMiddleware')
 LOG_DIR = Path(os.environ.get('LOG_DIR', str(BASE_DIR / 'logs')))
 LOG_DIR.mkdir(parents=True, exist_ok=True)
 LOGGING = {'version': 1, 'disable_existing_loggers': False, 'formatters': {'plain': {'format': '{asctime} {levelname} {message}', 'style': '{'}}, 'handlers': {'file': {'class': 'logging.handlers.RotatingFileHandler', 'filename': str(LOG_DIR / 'errors.log'), 'maxBytes': 2_000_000, 'backupCount': 3, 'formatter': 'plain', 'encoding': 'utf-8'}}, 'loggers': {'platform': {'handlers': ['file'], 'level': 'WARNING', 'propagate': False}}}

@@ -1,9 +1,13 @@
 """Task collections: links to external collections (Yandex Uchebnik) and the platform's own sets."""
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+from .subjects import SubjectManager, subject_field
 
 
 class Collection(models.Model):
+    objects = SubjectManager()
+    all_objects = models.Manager()
+    subject = subject_field()
     SOURCES = [('infocode', 'Инфокод'), ('yandex', 'Яндекс Учебник')]
     key = models.CharField(max_length=80, unique=True, editable=False, help_text='Stable identity for repeatable imports.')
     source = models.CharField('Источник', max_length=12, choices=SOURCES, default='infocode')

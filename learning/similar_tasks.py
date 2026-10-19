@@ -44,7 +44,7 @@ def similar_to(task, user, count=SHOWN):
     how = 'model'
     if not linked:
         how = 'number'
-        numbers = game_groups.NUMBERS if task.topic.number in game_groups.NUMBERS else [task.topic.number]
+        numbers = game_groups.NUMBERS if task.topic.number in game_groups.NUMBERS and game_groups.active() else [task.topic.number]
         base = visible.filter(topic__number__in=numbers).exclude(pk=task.pk)
         linked = list(base.filter(difficulty=task.difficulty).order_by('?').values_list('pk', flat=True)[:count * 3]) or \
             list(base.order_by('?').values_list('pk', flat=True)[:count * 3])

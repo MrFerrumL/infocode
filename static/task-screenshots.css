@@ -105,3 +105,13 @@ html[data-theme="dark"] { --condition-filter: invert(1) hue-rotate(180deg) brigh
 .daily-reason { margin: 22px 0 8px; font-size: 13px; color: var(--muted); font-weight: 600; }
 .daily-reason:first-child { margin-top: 0; }
 .bottom-grid .daily-card { grid-column: 1 / -1; }
+
+/* Subject switch in the top bar: «Информатика | Физика» */
+.topbar-context { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.subject-switch { display: inline-flex; padding: 3px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface); gap: 2px; }
+.subject-switch button { border: 0; background: transparent; color: var(--muted); font: inherit; font-size: 13px; font-weight: 600; padding: 6px 12px; border-radius: 8px; cursor: pointer; white-space: nowrap; }
+.subject-switch button span { font-size: 12px; opacity: .8; }
+.subject-switch button.active { background: var(--paper, #fff); color: var(--purple); box-shadow: 0 1px 3px rgba(30, 20, 60, .12); }
+.subject-switch button:hover:not(.active) { color: var(--ink); }
+:root[data-theme="dark"] .subject-switch button.active { background: #2b2539; }
+@media (max-width: 600px) { .topbar-label { display: none; } .subject-switch button { padding: 5px 8px; font-size: 12px; } }

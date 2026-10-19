@@ -4,6 +4,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.utils import timezone
 from .models import Task, Variant, VariantItem, ExamAnswer, ExamAttempt
+from .subjects import current as current_subject
 
 
 def normalize(value):
@@ -14,16 +15,76 @@ def check_answer(value, expected):
     return bool(normalize(value)) and normalize(value) == normalize(expected)
 
 
+# Physics (FIPI 2026): multiple choice — digits in any order; matching / change of quantities — order matters.
+PHYS_UNORDERED = (5, 9, 14, 18)
+PHYS_ORDERED_PAIRS = (6, 10, 15, 17)
+PHYS_MAX = {5: 2, 6: 2, 9: 2, 10: 2, 14: 2, 15: 2, 17: 2, 18: 2, 21: 3, 22: 2, 23: 2, 24: 3, 25: 3, 26: 4}
+# Primary (0–45) to test score for physics, 2026 (as published by Т—Ж, 14.04.2026).
+PHYS_SCALE = [0, 5, 9, 14, 18, 23, 27, 32, 36, 39, 41, 43, 44, 46, 48, 49, 51, 53, 54, 56, 58, 59, 61, 62, 64, 65, 67, 68, 70, 71,
+              73, 74, 76, 77, 79, 80, 82, 84, 86, 88, 90, 92, 94, 96, 98, 100]
+
+
+def physics_value(value):
+    """'2,5' and '2.5' are the same physics answer."""
+    return normalize(value).replace(',', '.')
+
+
+def physics_points(number, value, expected):
+    got, key = physics_value(value), physics_value(expected)
+    if not got:
+        return 0
+    if number in PHYS_UNORDERED:
+        a, b = set(got.replace(' ', '')), set(key.replace(' ', ''))
+        return 2 if a == b else 1 if len(a ^ b) == 1 else 0
+    if number in PHYS_ORDERED_PAIRS:
+        a, b = got.replace(' ', ''), key.replace(' ', '')
+        if a == b:
+            return 2
+        return 1 if len(a) == len(b) and sum(x != y for x, y in zip(a, b)) == 1 else 0
+    if number == 20:  # numbers of the chosen experiments, any order
+        return 1 if sorted(got.replace(' ', '')) == sorted(key.replace(' ', '')) else 0
+    # Short answers; for part 2 the final answer stands in for the full solution (self-check).
+    return PHYS_MAX.get(number, 1) if got == key or same_numbers(got, key) else 0
+
+
+def same_numbers(got, key):
+    """'2', '2.0' and '2,00' are one answer; '1,8 0,2' is compared number by number."""
+    a, b = got.split(), key.split()
+    if len(a) != len(b):
+        return False
+    try:
+        return all(abs(float(x) - float(y)) < 1e-9 for x, y in zip(a, b))
+    except ValueError:
+        return False
+
+
+def check_task_answer(value, task):
+    """Practice check that knows the subject: physics digits in any order where the exam allows it."""
+    topic = task.topic
+    if topic.subject == 'phys':
+        return physics_points(topic.number, value, task.answer) == PHYS_MAX.get(topic.number, 1)
+    return check_answer(value, task.answer)
+
+
 # Primary (0–29) to test score, as on KOMPEGE.
 EGE_SCALE = [0, 7, 14, 20, 27, 34, 40, 43, 46, 48, 51, 54, 56, 59, 62, 64, 67, 70, 72, 75, 78, 80, 83, 85, 88, 90, 93, 95, 98, 100]
 
 
-def max_points(number):
+def max_points(number, subject=None):
+    if (subject or current_subject()) == 'phys':
+        return PHYS_MAX.get(number, 1)
     return 2 if number in (26, 27) else 1
 
 
-def ege_points(number, value, expected):
+def test_score(primary, subject=None):
+    scale = PHYS_SCALE if (subject or current_subject()) == 'phys' else EGE_SCALE
+    return scale[min(max(primary, 0), len(scale) - 1)]
+
+
+def ege_points(number, value, expected, subject=None):
     """KOMPEGE rules: 1 point for 1–25; for 26 and 27 two points, one for a partly right answer."""
+    if (subject or current_subject()) == 'phys':
+        return physics_points(number, value, expected)
     rows = [normalize(row).split() for row in value.splitlines() if normalize(row)]
     keys = [normalize(row).split() for row in expected.splitlines() if normalize(row)]
     if not rows:
@@ -91,22 +152,25 @@ def finish_attempt(attempt):
         return
     score = 0
     ege = attempt.variant.scoring == 'ege'
+    # Background expiry runs outside a request: the variant's own subject decides the rules.
+    subject = attempt.variant.subject
     for item in attempt.variant.items.all():
         answer, _ = ExamAnswer.objects.get_or_create(attempt=attempt, item=item)
         code_ok = item.code_mode != 'required' or bool(answer.python_code.strip())
         if ege:
-            answer.points = ege_points(item.number, answer.answer, item.answer) if code_ok else 0
-            answer.correct = answer.points == max_points(item.number)
+            answer.points = ege_points(item.number, answer.answer, item.answer, subject) if code_ok else 0
+            answer.correct = answer.points == max_points(item.number, subject)
             score += answer.points
         else:
-            answer.correct = check_answer(answer.answer, item.answer) and code_ok
+            right = physics_points(item.number, answer.answer, item.answer) == PHYS_MAX.get(item.number, 1) if subject == 'phys' else check_answer(answer.answer, item.answer)
+            answer.correct = right and code_ok
             answer.points = int(answer.correct)
             score += int(answer.correct)
         answer.save(update_fields=['correct', 'points'])
     attempt.score = score
     if ege:
         attempt.primary_score = score
-        attempt.test_score = EGE_SCALE[min(score, len(EGE_SCALE) - 1)]
+        attempt.test_score = test_score(score, subject)
     attempt.submitted_at = timezone.now()
     attempt.save(update_fields=['score', 'primary_score', 'test_score', 'submitted_at'])
     from .assignments import sync_exam_result

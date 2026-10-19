@@ -16,7 +16,10 @@ html[data-theme=dark] .notebook-document,html[data-theme=dark] .notebook-embedde
 .notebook-cell .rich-content details{margin:10px 0;padding:8px 12px;border:1px solid #e6e2ec;border-radius:6px;background:var(--surface)}
 .notebook-cell .rich-content summary{cursor:pointer;color:var(--muted);font-size:14px}
 .notebook-cell .rich-content details[open] summary{margin-bottom:8px}
-.notebook-cell .rich-content table{border-collapse:collapse;margin:12px 0;font-size:14px;display:block;overflow-x:auto}
+.notebook-cell .rich-content table{border-collapse:collapse;margin:12px 0;font-size:14px;width:100%}
+.notebook-cell .rich-content{overflow-x:auto}
+.notebook-cell .rich-content td:first-child,.notebook-cell .rich-content th:first-child{white-space:nowrap}
+.notebook-cell .rich-content td:nth-child(2){min-width:140px}
 .notebook-cell .rich-content th,.notebook-cell .rich-content td{border:1px solid #e1dde8;padding:6px 10px;text-align:left;vertical-align:top}
 .notebook-cell .rich-content th{background:var(--surface)}
 .notebook-cell .rich-content pre{background:#f7f7f8;border-radius:6px;padding:12px 14px;overflow:auto;font-size:13px}

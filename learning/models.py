@@ -4,6 +4,7 @@ from django.core.exceptions import ValidationError
 from django.core.validators import MinValueValidator, MaxValueValidator, FileExtensionValidator
 from django.db import models
 from .python_answers import CODE_MODES, CODE_HELP, MAX_CODE_LENGTH
+from .subjects import SubjectManager, current as current_subject, subject_field
 
 
 def file_size(value):
@@ -28,15 +29,23 @@ class ActiveManager(models.Manager):
         parents = {'taskblock': ['task'], 'section': ['course'], 'lesson': ['section', 'section__course'], 'step': ['lesson', 'lesson__section', 'lesson__section__course']}
         for parent in parents.get(self.model._meta.model_name, []):
             qs = qs.filter(**{parent+'__archived_at': None})
+        if self.model._meta.model_name == 'task':
+            qs = qs.filter(topic__subject=current_subject())
+        elif any(f.name == 'subject' for f in self.model._meta.fields):
+            qs = qs.filter(subject=current_subject())
         return qs
 
 
 class Topic(models.Model):
-    number = models.PositiveSmallIntegerField('Номер ЕГЭ', unique=True, validators=[MinValueValidator(1), MaxValueValidator(27)])
+    objects = SubjectManager()
+    all_objects = models.Manager()
+    subject = subject_field()
+    number = models.PositiveSmallIntegerField('Номер ЕГЭ', validators=[MinValueValidator(1), MaxValueValidator(27)])
     title = models.CharField('Тема', max_length=150)
     description = models.TextField('Описание', blank=True)
     class Meta:
         ordering = ['number']
+        constraints = [models.UniqueConstraint(fields=['subject', 'number'], name='unique_subject_topic_number')]
         verbose_name = 'тема'
         verbose_name_plural = 'темы'
     def __str__(self):
@@ -116,6 +125,9 @@ class StudyGroup(models.Model):
 
 
 class Variant(models.Model):
+    objects = SubjectManager()
+    all_objects = models.Manager()
+    subject = subject_field()
     title = models.CharField('Название', max_length=180)
     kind = models.CharField('Тип', max_length=10, choices=[('exam', 'Вариант'), ('test', 'Контрольная')], default='exam')
     creator = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
@@ -252,6 +264,7 @@ class StudentAssignment(models.Model):
 class Course(models.Model):
     objects = ActiveManager()
     all_objects = models.Manager()
+    subject = subject_field()
     title = models.CharField('Название курса', max_length=180)
     description = models.TextField('Описание', blank=True)
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, blank=True, on_delete=models.PROTECT, related_name='authored_courses', verbose_name='Автор')

@@ -17,9 +17,10 @@ from django.template.loader import render_to_string
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from .forms import RegisterForm, AnswerForm, VariantForm, TaskForm
+from .subjects import current as current_subject
 from .models import Topic, Task, Practice, Bookmark, Variant, ExamAttempt, ExamAnswer, Section, Lesson, LessonProgress, LessonFile, VariantItem, TaskBlock, Course, Step, StudentAssignment
 from .security import form_token, claim_submission
-from .services import check_answer, create_variant, finish_attempt, expire_attempts
+from .services import check_answer, create_variant, finish_attempt, expire_attempts, check_task_answer
 from . import game_groups
 from .sources import KINDS, SITES
 
@@ -63,7 +64,7 @@ def topic_stats(user):
 def dashboard(request):
     expire_attempts(request.user)
     topics, solved = topic_stats(request.user)
-    attempts = Practice.objects.filter(user=request.user)
+    attempts = Practice.objects.filter(user=request.user, task__topic__subject=current_subject())
     total = attempts.count()
     accuracy = round(attempts.filter(correct=True).count() / total * 100) if total else 0
     from .course_services import available_courses, current_progress
@@ -97,7 +98,7 @@ def practice_answer(request):
             if claim_submission(request, f'task:{submitted.pk}'):
                 result = Practice.objects.create(user=request.user, task=submitted,
                     answer=answer_form.cleaned_data['answer'], python_code=answer_form.cleaned_data.get('python_code', ''),
-                    correct=check_answer(answer_form.cleaned_data['answer'], submitted.answer))
+                    correct=check_task_answer(answer_form.cleaned_data['answer'], submitted))
         # A retry with the same token never creates a second attempt.
         if result is None:
             result = Practice.objects.filter(user=request.user, task=submitted).first()
@@ -142,9 +143,9 @@ def catalog(request):
     topics, solved = topic_stats(request.user)
     qs = Task.objects.filter(published=True, in_catalog=True)
     number = request.GET.get('number', '')
-    if number in ('20', '21'):
+    if number in ('20', '21') and game_groups.active():
         number = '19'
-    if number == '19':
+    if number == '19' and game_groups.active():
         qs = qs.filter(topic__number__in=game_groups.NUMBERS)
     elif number.isdigit():
         qs = qs.filter(topic__number=int(number))
@@ -181,7 +182,7 @@ def catalog(request):
     sort = {'old': 'asc'}.get(request.GET.get('sort', ''), request.GET.get('sort', ''))
     rank = Case(*[When(difficulty=value, then=Value(i)) for i, (value, _) in enumerate(Task.LEVELS)], output_field=IntegerField())
     bank = Case(When(source_system='kompege', then=Value(0)), When(source_system='polyakov', then=Value(1)), default=Value(2), output_field=IntegerField())
-    polyakov_first = Case(When(source_system='polyakov', then=F('external_id')), default=Value(0), output_field=IntegerField())
+    polyakov_first = Case(When(source_system__in=['polyakov', 'infocode-phys'], then=F('external_id')), default=Value(0), output_field=IntegerField())
     order = {'asc': [bank, F('external_id').asc(nulls_last=True), 'id'],
              'desc': [bank, F('external_id').desc(nulls_last=True), '-id'],
              'easy': [rank, bank, polyakov_first, F('external_id').desc(nulls_last=True), '-id'],
@@ -193,8 +194,8 @@ def catalog(request):
     page = Paginator(qs, 12).get_page(request.GET.get('page'))
     prepare_cards(page.object_list, request.user, solved, saved, submitted, answer_form)
     for topic in topics:
-        topic.chip = '19–21' if topic.number == game_groups.FIRST else str(topic.number)
-        topic.folded = topic.number in game_groups.FOLLOW_UPS
+        topic.chip = '19–21' if topic.number == game_groups.FIRST and game_groups.active() else str(topic.number)
+        topic.folded = topic.number in game_groups.FOLLOW_UPS and game_groups.active()
     params = request.GET.copy()
     params.pop('page', None)
     return render(request, 'catalog.html', {'levels': Task.LEVELS, 'topics': topics, 'page': page, 'number': number, 'difficulty': difficulty, 'query': query, 'state': state, 'sort': sort, 'sorts': CATALOG_SORTS, 'kind': kind, 'kinds': KINDS, 'site': site,
@@ -212,7 +213,7 @@ def task_detail(request, pk):
     form = AnswerForm(request.POST or None, mode=task.code_mode, initial={'python_code': latest.python_code if latest else ''})
     result = None
     if request.method == 'POST' and form.is_valid() and claim_submission(request, f'task:{pk}'):
-        result = Practice.objects.create(user=request.user, task=task, answer=form.cleaned_data['answer'], python_code=form.cleaned_data.get('python_code', ''), correct=check_answer(form.cleaned_data['answer'], task.answer))
+        result = Practice.objects.create(user=request.user, task=task, answer=form.cleaned_data['answer'], python_code=form.cleaned_data.get('python_code', ''), correct=check_task_answer(form.cleaned_data['answer'], task))
     history = Practice.objects.filter(user=request.user, task=task)[:5]
     can_reveal = request.user.is_staff or result is not None or history.exists()
     return render(request, 'task.html', {'submit_token': form_token(request.user, f'task:{pk}'), 'task': task, 'form': form, 'result': result, 'history': history, 'can_reveal': can_reveal, 'saved': Bookmark.objects.filter(user=request.user, task=task).exists(), 'nav': 'catalog'})
@@ -391,7 +392,7 @@ def result(request, pk):
     from .services import max_points
     answers = list(attempt.answers.select_related('item').order_by('item__position'))
     for a in answers:
-        a.max_points = max_points(a.item.number) if attempt.variant.scoring == 'ege' else 1
+        a.max_points = max_points(a.item.number, attempt.variant.subject) if attempt.variant.scoring == 'ege' else 1
     max_primary = sum(a.max_points for a in answers)
     return render(request, 'result.html', {'attempt': attempt, 'answers': answers, 'total': total, 'percent': round(attempt.score / total * 100) if total else 0,
         'ege': attempt.variant.scoring == 'ege', 'max_primary': max_primary, 'full_count': sum(1 for a in answers if a.correct), 'show_answers': not attempt.variant.hide_answers or request.user.is_staff,

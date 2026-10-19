@@ -12,7 +12,7 @@ from learning.readiness import platform_check
 from learning import notebooks, notebook_import_views
 from learning import homework, schedule_views as schedule
 from learning import public
-from learning import collections_views, coverage_views, daily_views, similar_views
+from learning import collections_views, coverage_views, daily_views, similar_views, subject_views
 
 urlpatterns = [
     path('homework/', homework.index, name='homework'),
@@ -68,6 +68,7 @@ urlpatterns = [
     path('catalog/', v.catalog, name='catalog'),
     path('catalog/<int:pk>/similar/', similar_views.similar, name='similar_tasks'),
     path('practice/today/', daily_views.daily, name='daily_practice'),
+    path('subject/', subject_views.switch, name='switch_subject'),
     path('progress/numbers/', coverage_views.coverage, name='coverage'),
     path('teacher/progress/', coverage_views.teacher_coverage, name='teacher_coverage'),
     path('teacher/progress/mark/', coverage_views.mark, name='coverage_mark'),

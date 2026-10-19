@@ -5,12 +5,14 @@ from django.core.validators import FileExtensionValidator
 from django.db import models
 from .models import ActiveManager, file_size, video_size
 from .rich_text import sanitize_html
+from .subjects import subject_field
 
 
 class Notebook(models.Model):
     objects = ActiveManager()
     all_objects = models.Manager()
     owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name='authored_notebooks', verbose_name='Автор')
+    subject = subject_field()
     title = models.CharField('Название конспекта', max_length=180)
     description = models.TextField('Краткое описание', blank=True, max_length=2000)
     group = models.ForeignKey('learning.StudyGroup', on_delete=models.PROTECT, null=True, blank=True, verbose_name='Доступ в разделе «Конспекты»', help_text='Без группы — все ученики. В курсе доступ определяется настройками курса.')

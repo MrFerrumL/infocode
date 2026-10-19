@@ -13,16 +13,17 @@ from django.utils import timezone
 from . import game_groups
 from .models import Practice, Task
 from .similar_models import TaskSimilarity
+from .subjects import current as current_subject
 
 SIZE = 8
 
 
 def number_of(n):
-    return 19 if n in game_groups.FOLLOW_UPS else n
+    return 19 if n in game_groups.FOLLOW_UPS and game_groups.active() else n
 
 
 def label(n):
-    return '19–21' if n == 19 else str(n)
+    return '19–21' if n == 19 and game_groups.active() else str(n)
 
 
 def daily_tasks(user, day=None, size=SIZE):
@@ -30,7 +31,7 @@ def daily_tasks(user, day=None, size=SIZE):
     day = day or timezone.localdate()
     start = timezone.make_aware(datetime.combine(day, time.min))
     rng = random.Random(f'{user.pk}:{day.isoformat()}')
-    before = Practice.objects.filter(user=user, created_at__lt=start)
+    before = Practice.objects.filter(user=user, created_at__lt=start, task__topic__subject=current_subject())
     solved = set(before.filter(correct=True).values_list('task_id', flat=True))
     latest, attempts = {}, {}
     for task_id, correct, number, at in before.order_by('-created_at', '-pk').values_list('task_id', 'correct', 'task__topic__number', 'created_at'):

@@ -52,6 +52,11 @@ class PilotInstallerTests(SimpleTestCase):
         # Old installer backups are pruned only after the new one exists.
         self.assertLess(payload.index('backup_platform'), payload.index('tail -n +4 | xargs -r rm -f'))
 
+    def test_physics_content_is_seeded_only_on_request(self):
+        self.assertNotIn('seed_physics', remote_script('ubuntu').decode('utf-8'))
+        payload = remote_script('ubuntu', physics=True).decode('utf-8')
+        self.assertLess(payload.index('run --rm migrate'), payload.index('manage.py seed_physics'))
+
     def test_polyakov_bundles_are_imported_after_backup_then_removed(self):
         payload = remote_script('ubuntu', polyakov=[([1, 2], 'polyakov-1.zip'), ([19, 20, 21], 'polyakov-2.zip')]).decode('utf-8')
         first = payload.index('import_kompege_numbers /tmp/polyakov-1.zip --numbers 1 2 --publish')

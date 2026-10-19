@@ -17,7 +17,7 @@
     </details>
   {% else %}
     <a class="{% if nav == 'dashboard' %}active{% endif %}" href="{% url 'dashboard' %}"><span class="nav-icon" aria-hidden="true">◫</span>Моя подготовка</a>
-    <a class="{% if nav == 'catalog' %}active{% endif %}" href="{% url 'catalog' %}"><span class="nav-icon" aria-hidden="true">▦</span>Каталог заданий<span class="nav-count">27</span></a>
+    <a class="{% if nav == 'catalog' %}active{% endif %}" href="{% url 'catalog' %}"><span class="nav-icon" aria-hidden="true">▦</span>Каталог заданий<span class="nav-count">{{ subject.numbers }}</span></a>
     <a class="{% if nav == 'daily' %}active{% endif %}" href="{% url 'daily_practice' %}"><span class="nav-icon" aria-hidden="true">✦</span>Тренировка дня</a>
     <a class="{% if nav == 'collections' %}active{% endif %}" href="{% url 'collections' %}"><span class="nav-icon" aria-hidden="true">☰</span>Подборки</a>
     <a class="{% if nav == 'course' %}active{% endif %}" href="{% url 'course' %}"><span class="nav-icon" aria-hidden="true">▷</span>Курсы</a>
