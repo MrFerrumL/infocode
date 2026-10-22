@@ -10,6 +10,14 @@
     handle_path /calendar/* {
         reverse_proxy campus-day-bot:8765
     }
+    # Test platform «Инфокод · КР» (separate project /opt/infocode-kr on the same Docker network).
+    redir /kr /kr/ 308
+    handle_path /kr/* {
+        reverse_proxy kr:8000 {
+        header_up X-Forwarded-Proto {scheme}
+        header_up X-Forwarded-For {remote_host}
+        }
+    }
     handle {
         reverse_proxy web:8000 {
         header_up X-Forwarded-Proto {scheme}

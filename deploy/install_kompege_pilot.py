@@ -129,6 +129,8 @@ docker compose --env-file .env.production -f compose.production.yaml run --rm --
 docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps web python manage.py sync_similar_tasks < /dev/null
 printf '[5/6] Starting the updated platform...\\n'
 docker compose --env-file .env.production -f compose.production.yaml up -d --wait --wait-timeout 120 < /dev/null
+# A changed Caddyfile (bind-mounted) is picked up without restarting the proxy.
+docker compose --env-file .env.production -f compose.production.yaml exec -T caddy caddy reload --config /etc/caddy/Caddyfile < /dev/null
 printf '[6/6] Checking database, media and application health...\\n'
 docker compose --env-file .env.production -f compose.production.yaml exec -T web python manage.py check_content --strict < /dev/null
 docker compose --env-file .env.production -f compose.production.yaml exec -T web python deploy/healthcheck.py < /dev/null
