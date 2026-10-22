@@ -25,6 +25,7 @@ x-app: &app
     SITE_CONTACT_TELEGRAM: ${SITE_CONTACT_TELEGRAM:-}
     GOOGLE_SITE_VERIFICATION: ${GOOGLE_SITE_VERIFICATION:-}
     SITE_SEASON: ${SITE_SEASON:-auto}
+    KR_API_TOKEN: ${KR_API_TOKEN:-}
   volumes:
     - media:/app/uploads
     - logs:/data

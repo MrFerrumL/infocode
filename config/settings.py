@@ -47,6 +47,7 @@ SITE_CONTACT_TELEGRAM = os.environ.get('SITE_CONTACT_TELEGRAM', '')
 # Google Search Console ownership check (HTML tag method): the tag's content value.
 GOOGLE_SITE_VERIFICATION = os.environ.get('GOOGLE_SITE_VERIFICATION', '')
 # Seasonal decoration: 'winter' adds frost and optional snowfall; empty turns it off.
+KR_API_TOKEN = os.environ.get('KR_API_TOKEN', '')  # shared secret of the separate test platform (learning/kr_api.py)
 SITE_SEASON = os.environ.get('SITE_SEASON', 'auto')  # learning/seasons.py
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/login/'
