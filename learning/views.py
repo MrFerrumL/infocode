@@ -18,6 +18,8 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 from .forms import RegisterForm, AnswerForm, VariantForm, TaskForm
 from .subjects import current as current_subject
+from .fipi_check import Unavailable as FipiUnavailable
+FIPI_DOWN = 'Сайт ФИПИ сейчас не отвечает — ответ не засчитан. Попробуйте ещё раз через минуту.'
 from .models import Topic, Task, Practice, Bookmark, Variant, ExamAttempt, ExamAnswer, Section, Lesson, LessonProgress, LessonFile, VariantItem, TaskBlock, Course, Step, StudentAssignment
 from .security import form_token, claim_submission
 from .services import check_answer, create_variant, finish_attempt, expire_attempts, check_task_answer
@@ -94,11 +96,17 @@ def practice_answer(request):
     submitted = get_object_or_404(Task.objects.select_related('topic'), pk=request.POST.get('task_id') if request.POST.get('task_id', '').isdigit() else 0, published=True, in_catalog=True)
     answer_form = AnswerForm(request.POST, mode=submitted.code_mode, prefix=f'task-{submitted.pk}')
     if answer_form.is_valid():
+        # FIPI tasks may be checked by FIPI itself: ask before saving, so an outage records nothing.
+        try:
+            correct = check_task_answer(answer_form.cleaned_data['answer'], submitted)
+        except FipiUnavailable:
+            answer_form.add_error('answer', FIPI_DOWN)
+    if answer_form.is_valid():
         with transaction.atomic():
             if claim_submission(request, f'task:{submitted.pk}'):
                 result = Practice.objects.create(user=request.user, task=submitted,
                     answer=answer_form.cleaned_data['answer'], python_code=answer_form.cleaned_data.get('python_code', ''),
-                    correct=check_task_answer(answer_form.cleaned_data['answer'], submitted))
+                    correct=correct)
         # A retry with the same token never creates a second attempt.
         if result is None:
             result = Practice.objects.filter(user=request.user, task=submitted).first()
@@ -212,8 +220,14 @@ def task_detail(request, pk):
     latest = Practice.objects.filter(user=request.user, task=task).first() if task.code_mode != 'off' else None
     form = AnswerForm(request.POST or None, mode=task.code_mode, initial={'python_code': latest.python_code if latest else ''})
     result = None
-    if request.method == 'POST' and form.is_valid() and claim_submission(request, f'task:{pk}'):
-        result = Practice.objects.create(user=request.user, task=task, answer=form.cleaned_data['answer'], python_code=form.cleaned_data.get('python_code', ''), correct=check_task_answer(form.cleaned_data['answer'], task))
+    correct = None
+    if request.method == 'POST' and form.is_valid():
+        try:
+            correct = check_task_answer(form.cleaned_data['answer'], task)
+        except FipiUnavailable:
+            form.add_error('answer', FIPI_DOWN)
+    if correct is not None and claim_submission(request, f'task:{pk}'):
+        result = Practice.objects.create(user=request.user, task=task, answer=form.cleaned_data['answer'], python_code=form.cleaned_data.get('python_code', ''), correct=correct)
     history = Practice.objects.filter(user=request.user, task=task)[:5]
     can_reveal = request.user.is_staff or result is not None or history.exists()
     return render(request, 'task.html', {'submit_token': form_token(request.user, f'task:{pk}'), 'task': task, 'form': form, 'result': result, 'history': history, 'can_reveal': can_reveal, 'saved': Bookmark.objects.filter(user=request.user, task=task).exists(), 'nav': 'catalog'})

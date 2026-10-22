@@ -115,3 +115,9 @@ html[data-theme="dark"] { --condition-filter: invert(1) hue-rotate(180deg) brigh
 .subject-switch button:hover:not(.active) { color: var(--ink); }
 :root[data-theme="dark"] .subject-switch button.active { background: #2b2539; }
 @media (max-width: 600px) { .topbar-label { display: none; } .subject-switch button { padding: 5px 8px; font-size: 12px; } }
+
+/* FIPI conditions: formatted text with tables */
+.rich-statement { white-space: normal; }
+.rich-statement table { border-collapse: collapse; margin: 12px 0; max-width: 100%; display: block; overflow-x: auto; }
+.rich-statement td, .rich-statement th { border: 1px solid var(--line); padding: 4px 9px; text-align: center; }
+.rich-statement p { margin: 0 0 10px; }

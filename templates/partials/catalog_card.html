@@ -25,7 +25,7 @@
   {% endfor %}
   <footer class="catalog-condition-footer">
     <button type="button" class="similar-toggle" data-similar="{% url 'similar_tasks' task.pk %}" aria-expanded="false">≈ Похожие</button>
-    <div class="catalog-condition-source"><span>{{ task.source }}</span>{% if task.source_url %}<a href="{{ task.source_url }}" target="_blank" rel="noopener noreferrer">{% if task.source_system == 'polyakov' %}Сайт К. Полякова · задача {{ task.polyakov_ref }}{% elif task.source_system == 'yandex' %}Яндекс Учебник{% else %}Оригинал{% if task.external_id %} №{{ task.external_id }}{% endif %}{% endif %} ↗</a>{% endif %}</div>
+    <div class="catalog-condition-source"><span>{{ task.source }}</span>{% if task.source_url %}<a href="{{ task.source_url }}" target="_blank" rel="noopener noreferrer">{% if task.source_system == 'polyakov' %}Сайт К. Полякова · задача {{ task.polyakov_ref }}{% elif task.source_system == 'yandex' %}Яндекс Учебник{% elif task.source_system == 'fipi' %}Открытый банк ФИПИ{% else %}Оригинал{% if task.external_id %} №{{ task.external_id }}{% endif %}{% endif %} ↗</a>{% endif %}</div>
   </footer>
   <div class="similar-box" hidden></div>
 </article>

@@ -52,6 +52,11 @@ class PilotInstallerTests(SimpleTestCase):
         # Old installer backups are pruned only after the new one exists.
         self.assertLess(payload.index('backup_platform'), payload.index('tail -n +4 | xargs -r rm -f'))
 
+    def test_fipi_bundle_is_imported_after_backup_then_removed(self):
+        payload = remote_script('ubuntu', fipi=True).decode('utf-8')
+        self.assertLess(payload.index('backup_platform'), payload.index('import_fipi /tmp/fipi-bank.zip'))
+        self.assertLess(payload.index('import_fipi'), payload.index('rm -f /home/ubuntu/fipi-bank.zip'))
+
     def test_physics_content_is_seeded_only_on_request(self):
         self.assertNotIn('seed_physics', remote_script('ubuntu').decode('utf-8'))
         payload = remote_script('ubuntu', physics=True).decode('utf-8')

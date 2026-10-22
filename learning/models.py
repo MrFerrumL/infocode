@@ -67,6 +67,8 @@ class Task(models.Model):
     source_system = models.CharField('Банк-источник', max_length=32, blank=True, default='', editable=False)
     external_id = models.PositiveIntegerField('ID в исходном банке', null=True, blank=True, editable=False)
     source_url = models.URLField('Ссылка на оригинал', max_length=500, blank=True, default='', editable=False)
+    # FIPI open bank: the task's GUID for FIPI's own answer check (learning/fipi_check.py).
+    check_ref = models.CharField('Код проверки ФИПИ', max_length=64, blank=True, default='', editable=False)
     # As on KOMPEGE: a note above the task ("Демоверсия 2027", "Авторская · Л. Шастин") and its kind for filtering.
     source_label = models.CharField('Пометка источника', max_length=120, blank=True, default='')
     source_kind = models.CharField('Тип задания', max_length=10, blank=True, default='',
@@ -222,7 +224,8 @@ class Section(models.Model):
 class TaskBlock(models.Model):
     objects = ActiveManager()
     all_objects = models.Manager()
-    KINDS = [('text', 'Текст'), ('heading', 'Заголовок'), ('image', 'Изображение'), ('file', 'Файл'), ('code', 'Python-код')]
+    # 'html': formatted text with tables (FIPI conditions), shown through the safe HTML filter.
+    KINDS = [('text', 'Текст'), ('heading', 'Заголовок'), ('image', 'Изображение'), ('file', 'Файл'), ('code', 'Python-код'), ('html', 'Текст с таблицами')]
     task = models.ForeignKey(Task, on_delete=models.CASCADE, related_name='content_blocks')
     purpose = models.CharField('Часть задания', max_length=12, choices=[('statement', 'Условие'), ('solution', 'Разбор')], default='statement')
     kind = models.CharField('Тип блока', max_length=12, choices=KINDS)
@@ -236,7 +239,7 @@ class TaskBlock(models.Model):
         verbose_name = 'блок задания'
         verbose_name_plural = 'блоки задания'
     def clean(self):
-        if self.kind in ('text', 'heading', 'code') and not self.text.strip():
+        if self.kind in ('text', 'heading', 'code', 'html') and not self.text.strip():
             raise ValidationError({'text': 'Введите текст блока.'})
         if self.kind == 'image' and not self.image:
             raise ValidationError({'image': 'Добавьте изображение.'})

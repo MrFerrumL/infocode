@@ -60,6 +60,14 @@ def same_numbers(got, key):
 
 def check_task_answer(value, task):
     """Practice check that knows the subject: physics digits in any order where the exam allows it."""
+    if task.source_system == 'fipi' and not task.answer:
+        # FIPI keeps its answers: ask FIPI, remember the first right answer (raises fipi_check.Unavailable).
+        from .fipi_check import check
+        right = check(task.check_ref, value)
+        if right:
+            task.answer = ' '.join(str(value).split())
+            Task.all_objects.filter(pk=task.pk, answer='').update(answer=task.answer)
+        return right
     topic = task.topic
     if topic.subject == 'phys':
         return physics_points(topic.number, value, task.answer) == PHYS_MAX.get(topic.number, 1)
@@ -116,16 +124,16 @@ def create_variant(*, creator, title, topics, count=1, difficulty='', task_ids='
             raise ValidationError('Укажите ID заданий через пробел или запятую.')
         if not ids or len(ids) > 100:
             raise ValidationError('Выберите от 1 до 100 заданий.')
-        found = {t.id: t for t in Task.objects.filter(id__in=ids, published=True).select_related('topic').prefetch_related('content_blocks')}
+        found = {t.id: t for t in Task.objects.filter(id__in=ids, published=True).exclude(answer='').select_related('topic').prefetch_related('content_blocks')}
         if len(found) != len(ids):
-            raise ValidationError('Некоторые ID не найдены или задания не опубликованы.')
+            raise ValidationError('Некоторые ID не найдены, не опубликованы или их ответ ещё неизвестен (задачи ФИПИ до первого верного решения).')
         selected = [found[i] for i in ids]
     else:
         if not topics:
             raise ValidationError('Выберите хотя бы один номер или укажите ID вручную.')
         selected, groups = [], []
         for topic in sorted(topics, key=lambda t: t.number):
-            qs = Task.objects.filter(topic=topic, published=True, in_catalog=True).select_related('topic').prefetch_related('content_blocks')
+            qs = Task.objects.filter(topic=topic, published=True, in_catalog=True).exclude(answer='').select_related('topic').prefetch_related('content_blocks')
             if difficulty:
                 qs = qs.filter(difficulty=difficulty)
             pool = list(qs)

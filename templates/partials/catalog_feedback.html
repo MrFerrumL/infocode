@@ -1,7 +1,7 @@
 {% load content_blocks %}
 {% if result %}<div class="notice {% if result.correct %}success{% else %}warning{% endif %}">{% if result.correct %}✓ Верно! Задание решено.{% else %}Пока неверно. Попробуйте ещё раз или посмотрите ответ.{% endif %}</div>{% endif %}
 {% if can_reveal %}
-<details class="solution"><summary>Посмотреть ответ и разбор</summary><strong>Ответ: {{ task.answer }}</strong>{% if task.solution %}<div class="statement">{{ task.solution }}</div>{% endif %}{% task_blocks task 'solution' %}</details>
+<details class="solution"><summary>Посмотреть ответ и разбор</summary><strong>Ответ: {% if task.answer %}{{ task.answer }}{% else %}проверяется на сайте ФИПИ — появится после первого верного решения{% endif %}</strong>{% if task.solution %}<div class="statement">{{ task.solution }}</div>{% endif %}{% task_blocks task 'solution' %}</details>
 {% else %}<p class="muted">Ответ и разбор откроются после первой попытки.</p>{% endif %}
 <details class="catalog-history"{% if history %} open{% endif %}><summary>История моих ответов</summary>
 {% for a in history %}<div class="history-row"><code>{{ a.answer }}</code><span>{% if a.correct %}✓{% else %}×{% endif %} {{ a.created_at|date:'d.m H:i' }}</span></div>{% include 'partials/submitted_code.html' with code=a.python_code %}{% empty %}<p class="muted">Вы ещё не отвечали на это задание.</p>{% endfor %}

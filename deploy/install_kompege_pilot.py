@@ -80,7 +80,7 @@ def validate_archives(source, bundle):
             raise ValueError('Only the 135-card pilot may be installed by this helper.')
 
 
-def remote_script(user, images=False, number1=False, categories=False, numbers=(), replace=False, variants=False, polyakov=(), notebooks=(), physics=False):
+def remote_script(user, images=False, number1=False, categories=False, numbers=(), replace=False, variants=False, polyakov=(), notebooks=(), physics=False, fipi=False):
     home = '/root' if user == 'root' else '/home/' + user
     stamp = datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-%f')
     refresh = f'docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps -v {home}/kompege-condition-images.zip:/tmp/condition-images.zip:ro web python manage.py refresh_kompege_images /tmp/condition-images.zip < /dev/null\n' if images else ''
@@ -95,6 +95,8 @@ def remote_script(user, images=False, number1=False, categories=False, numbers=(
     for selected_numbers, name in polyakov:
         selected = ' '.join(str(n) for n in selected_numbers)
         bank += f'docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps -v {home}/{name}:/tmp/{name}:ro web python manage.py import_kompege_numbers /tmp/{name} --numbers {selected} --publish < /dev/null\nrm -f {home}/{name}\n'
+    if fipi:  # new FIPI open-bank tasks; answers are checked by FIPI and remembered
+        bank += f'docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps -v {home}/fipi-bank.zip:/tmp/fipi-bank.zip:ro web python manage.py import_fipi /tmp/fipi-bank.zip < /dev/null\nrm -f {home}/fipi-bank.zip\n'
     if physics:  # the platform's physics content (learning/data/physics), created or updated in place
         bank += 'docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps web python manage.py seed_physics < /dev/null\n'
     # Colab notebooks for «Конспекты»: a notebook with the same title is updated in place.
@@ -148,6 +150,7 @@ def main(argv=None):
     parser.add_argument('--categories', type=Path, help='Complete reviewed high-resolution category snapshots')
     parser.add_argument('--numbers', nargs='+', type=int, help='Exact categories to import from --categories')
     parser.add_argument('--variants', type=Path, help='Reviewed KOMPEGE exam variants package')
+    parser.add_argument('--fipi', type=Path, help='FIPI open-bank bundle (manage.py import_fipi)')
     parser.add_argument('--physics', action='store_true', help='Create or update the physics platform content (seed_physics)')
     parser.add_argument('--notebooks', type=Path, nargs='+', default=[], help='Colab notebooks (.ipynb) to publish in «Конспекты»')
     parser.add_argument('--polyakov', type=Path, nargs='+', default=[], help="K. Polyakov's bundles (deploy/prepare_polyakov_bank.py)")
@@ -166,7 +169,7 @@ def main(argv=None):
         print('OpenSSH client and scp must be installed.', file=sys.stderr)
         return 2
     key = args.key.expanduser().resolve()
-    if not key.is_file() or not args.source.is_file() or not args.bundle.is_file() or (args.images and not args.images.is_file()) or (args.number1 and not args.number1.is_file()) or (args.categories and not args.categories.is_file()) or (args.variants and not args.variants.is_file()) or any(not p.is_file() for p in [*args.polyakov, *args.notebooks]):
+    if not key.is_file() or not args.source.is_file() or not args.bundle.is_file() or (args.images and not args.images.is_file()) or (args.number1 and not args.number1.is_file()) or (args.categories and not args.categories.is_file()) or (args.variants and not args.variants.is_file()) or any(not p.is_file() for p in [*args.polyakov, *args.notebooks, *([args.fipi] if args.fipi else [])]):
         print('SSH key, current source archive or pilot archive is missing.', file=sys.stderr)
         return 2
     try:
@@ -216,7 +219,7 @@ def main(argv=None):
                    '-o', 'ServerAliveInterval=30', '-o', 'ServerAliveCountMax=6', '-o', 'ConnectTimeout=15', '-i', str(key)]
         target = f'{args.user}@{args.host}'
         home = '/root' if args.user == 'root' else '/home/' + args.user
-        payload = remote_script(args.user, images=bool(args.images), number1=bool(args.number1), categories=bool(args.categories), numbers=args.numbers or (), replace=args.replace_existing, variants=bool(args.variants), polyakov=[(n, name) for n, name, _ in polyakov], notebooks=[f'notebook-{i}.ipynb' for i, _ in enumerate(args.notebooks, 1)], physics=args.physics)
+        payload = remote_script(args.user, images=bool(args.images), number1=bool(args.number1), categories=bool(args.categories), numbers=args.numbers or (), replace=args.replace_existing, variants=bool(args.variants), polyakov=[(n, name) for n, name, _ in polyakov], notebooks=[f'notebook-{i}.ipynb' for i, _ in enumerate(args.notebooks, 1)], physics=args.physics, fipi=bool(args.fipi))
         result = subprocess.run([ssh, '-T', *options, target, 'bash -n'], input=payload, check=False)
         if result.returncode:
             print('SSH connection or remote syntax check failed; nothing was installed.', file=sys.stderr)
@@ -229,6 +232,7 @@ def main(argv=None):
         if args.variants: uploads.append((args.variants, 'kompege-variants.zip'))
         uploads += [(path, name) for _, name, path in polyakov]
         uploads += [(path, f'notebook-{i}.ipynb') for i, path in enumerate(args.notebooks, 1)]
+        if args.fipi: uploads.append((args.fipi, 'fipi-bank.zip'))
         for local, remote in uploads:
             result = subprocess.run([scp, *options, str(local.resolve()), f'{target}:{home}/{remote}'], check=False)
             if result.returncode:
