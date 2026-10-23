@@ -7,6 +7,7 @@
     request_body {
         max_size 525000000
     }
+    redir /calendar /calendar/ 308
     handle_path /calendar/* {
         reverse_proxy campus-day-bot:8765
     }
