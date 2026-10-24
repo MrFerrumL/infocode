@@ -1,0 +1,37 @@
+/* «КР без регистрации»: steps, the teacher's КР with codes, and the builder. */
+.kr-steps ol { margin: 0; padding-left: 22px; display: grid; gap: 8px; }
+.kr-list { display: grid; gap: 14px; margin: 26px 0; }
+.kr-list .section-heading { display: flex; align-items: center; gap: 10px; }
+.kr-test { display: grid; gap: 12px; }
+.kr-test.is-new { box-shadow: 0 0 0 2px var(--purple); }
+.kr-test-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+.kr-test-head h3 { margin: 0 0 4px; }
+.kr-test-head p { margin: 0; }
+.kr-session { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding: 12px 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.kr-session.is-closed { opacity: .65; }
+.kr-code { display: grid; }
+.kr-code span { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.kr-code strong { font-size: 28px; letter-spacing: 4px; color: var(--purple); font-family: ui-monospace, Consolas, monospace; }
+.kr-counts { display: flex; gap: 14px; flex: 1; flex-wrap: wrap; color: var(--muted); }
+.kr-counts b { color: inherit; font-size: 18px; }
+.kr-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.kr-builder { display: grid; gap: 16px; }
+.kr-builder .section-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.kr-builder h2, .kr-builder h3 { margin: 0; }
+.kr-subject { display: flex; gap: 6px; }
+.kr-subject a { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); color: inherit; text-decoration: none; }
+.kr-subject a.active { border-color: var(--purple); color: var(--purple); font-weight: 700; }
+.kr-fields { display: grid; grid-template-columns: 2fr 1.4fr 1fr 1fr; gap: 12px; }
+.kr-fields label { display: grid; gap: 6px; font-weight: 600; }
+.kr-numbers { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; }
+.kr-number { display: grid; justify-items: center; gap: 6px; padding: 10px 6px; border: 1px solid var(--line); border-radius: 12px; }
+.kr-number b { font-size: 18px; }
+.kr-number input { width: 64px; text-align: center; }
+.kr-number small { color: var(--muted); font-size: 11px; }
+.kr-number.has-tasks { border-color: var(--purple); }
+.kr-number.is-empty { opacity: .45; }
+.kr-submit { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+@media (max-width: 760px) { .kr-fields { grid-template-columns: 1fr 1fr; } }
+.kr-actions .button.small { min-height: 38px; padding: 8px 14px; }
+.kr-builder .link { background: none; border: 0; padding: 0; color: var(--purple); font-weight: 600; font-size: 14px; }
+.kr-builder .link + .link { margin-left: 14px; }

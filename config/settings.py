@@ -48,6 +48,8 @@ SITE_CONTACT_TELEGRAM = os.environ.get('SITE_CONTACT_TELEGRAM', '')
 GOOGLE_SITE_VERIFICATION = os.environ.get('GOOGLE_SITE_VERIFICATION', '')
 # Seasonal decoration: 'winter' adds frost and optional snowfall; empty turns it off.
 KR_API_TOKEN = os.environ.get('KR_API_TOKEN', '')  # shared secret of the separate test platform (learning/kr_api.py)
+KR_INTERNAL_URL = os.environ.get('KR_INTERNAL_URL', 'http://kr:8000')  # the test platform inside the Docker network
+KR_PUBLIC_URL = os.environ.get('KR_PUBLIC_URL', '/kr')  # where teachers and pupils open it
 SITE_SEASON = os.environ.get('SITE_SEASON', 'auto')  # learning/seasons.py
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/login/'

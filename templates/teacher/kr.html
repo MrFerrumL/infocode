@@ -1,0 +1,68 @@
+{% extends 'base.html' %}{% load static %}
+{% block title %}КР без регистрации · Инфокод{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'kr-teacher.css' %}"><script defer src="{% static 'kr-teacher.js' %}"></script>{% endblock %}
+{% block content %}
+{% include 'layout/work_tabs.html' %}
+<div class="page-heading"><div><div class="eyebrow">КОНТРОЛЬНЫЕ · ОТДЕЛЬНАЯ ПЛАТФОРМА</div><h1>КР без регистрации<span class="accent">.</span></h1>
+<p>Соберите КР из банка — платформа сразу даст <strong>код</strong>. Ученики открывают <a href="{{ pupils_url }}" target="_blank" rel="noopener">{{ pupils_url }}</a>, выбирают свою КР (или вводят код), пишут фамилию и имя и ждут, пока вы их пустите.</p></div></div>
+
+{% if not enabled %}<div class="notice error">Платформа КР не подключена: задайте общий секрет <code>KR_API_TOKEN</code> в настройках сервера.</div>{% endif %}
+{% if unavailable %}<div class="notice error">{{ unavailable }}</div>{% endif %}
+
+<section class="panel kr-steps">
+  <ol>
+    <li><strong>Соберите КР</strong> ниже: номера ЕГЭ, сколько задач по каждому, число вариантов и время. Задачи не повторяются ни внутри варианта, ни между вариантами.</li>
+    <li><strong>Назовите ученикам код</strong> или дайте ссылку. Код появится в списке «Мои КР».</li>
+    <li><strong>Откройте «Ход КР»</strong>: там видно, кто вошёл, — нажмите «Открыть всем ждущим». Соседи получат разные варианты; результаты и подозрительные действия видите только вы.</li>
+  </ol>
+</section>
+
+<section class="kr-list">
+  <div class="section-heading"><h2>Мои КР</h2>{% if tests %}<span class="pill">{{ tests|length }}</span>{% endif %}</div>
+  {% for test in tests %}
+  <article class="panel kr-test{% for s in test.sessions %}{% if s.code == new_code %} is-new{% endif %}{% endfor %}">
+    <div class="kr-test-head">
+      <div><h3>{{ test.title }}</h3><p class="muted">{% if test.group %}{{ test.group }} · {% endif %}{{ test.subject_title }} · {{ test.variants }} вар. по {{ test.tasks }} задач · {{ test.duration }} мин · собрана {{ test.created|date:'d.m H:i' }}</p></div>
+      <a class="button secondary" href="{% url 'teacher_kr_open' %}?to=test:{{ test.id }}" target="_blank" rel="noopener">Варианты и ответы ↗</a>
+    </div>
+    {% for s in test.sessions %}
+    <div class="kr-session{% if s.closed %} is-closed{% endif %}">
+      <div class="kr-code"><span>Код</span><strong>{{ s.code }}</strong></div>
+      <div class="kr-counts"><span><b>{{ s.waiting }}</b> ждут</span><span><b>{{ s.writing }}</b> пишут</span><span><b>{{ s.finished }}</b> сдали</span>{% if s.closed %}<span class="pill">закрыта</span>{% endif %}</div>
+      <div class="kr-actions">
+        <button type="button" class="button secondary small" data-copy="{{ s.link }}">Скопировать ссылку</button>
+        <a class="button small" href="{% url 'teacher_kr_open' %}?to=session:{{ s.code }}" target="_blank" rel="noopener">Ход КР ↗</a>
+      </div>
+    </div>
+    {% endfor %}
+  </article>
+  {% empty %}
+  {% if enabled and not unavailable %}<p class="muted">Пока нет ни одной КР — соберите первую ниже.</p>{% endif %}
+  {% endfor %}
+</section>
+
+{% if enabled %}
+<form method="post" class="panel kr-builder" data-kr-builder>{% csrf_token %}
+  <div class="section-heading"><h2>Собрать новую КР</h2>
+    <div class="kr-subject">{% for code, title in subject_choices %}<a href="?subject={{ code }}" class="{% if code == subject_code %}active{% endif %}">{{ title }}</a>{% endfor %}</div></div>
+  <input type="hidden" name="subject" value="{{ subject_code }}">
+  {% if error %}<div class="notice error">{{ error }}</div>{% endif %}
+  <div class="kr-fields">
+    <label>Название<input name="title" value="{{ form.title }}" maxlength="160" required></label>
+    <label>Группа<input name="group" value="{{ form.group }}" maxlength="120" placeholder="Например, Пара 03"></label>
+    <label>Вариантов<input type="number" name="variants" value="{{ form.variants }}" min="1" max="{{ max_variants }}" required></label>
+    <label>Время, мин<input type="number" name="duration" value="{{ form.duration }}" min="5" max="300" required></label>
+  </div>
+  <div class="section-heading kr-numbers-head"><h3>Сколько задач каждого номера в варианте</h3>
+    <div><button type="button" class="link" data-fill="1">По 1 на все номера</button> <button type="button" class="link" data-fill="0">Очистить</button></div></div>
+  <div class="kr-numbers">
+    {% for row in rows %}
+    <label class="kr-number{% if not row.available %} is-empty{% endif %}"><b>{{ row.number }}</b>
+      <input type="number" name="n{{ row.number }}" value="{{ row.count }}" min="0" max="{{ max_per_number }}" {% if not row.available %}disabled{% endif %} aria-label="Задач № {{ row.number }}">
+      <small>в банке {{ row.available }}</small></label>
+    {% endfor %}
+  </div>
+  <div class="kr-submit"><span class="muted" data-summary></span><button class="button">Собрать и открыть КР →</button></div>
+</form>
+{% endif %}
+{% endblock %}

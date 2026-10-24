@@ -60,6 +60,15 @@ def task_json(task, request):
             'title': task.title, 'blocks': blocks}
 
 
+def available(code):
+    """{number: tasks with a known answer} of a subject."""
+    with using(code):
+        counts = {}
+        for number in pool().values_list('topic__number', flat=True):
+            counts[number] = counts.get(number, 0) + 1
+    return counts
+
+
 @csrf_exempt
 @require_GET
 @guarded
@@ -67,10 +76,7 @@ def numbers(request):
     code = request.GET.get('subject', 'inf')
     if code not in SUBJECTS:
         raise Http404
-    with using(code):
-        counts = {}
-        for number in pool().values_list('topic__number', flat=True):
-            counts[number] = counts.get(number, 0) + 1
+    counts = available(code)
     return JsonResponse({'subject': code, 'title': SUBJECTS[code]['title'], 'numbers': [{'number': n, 'count': c} for n, c in sorted(counts.items())]})
 
 
