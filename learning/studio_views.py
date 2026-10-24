@@ -268,7 +268,7 @@ def lesson_editor(request, section_pk, pk=None):
                         title=row['title'] or spec['label'], published=False,
                         quiz_mode=spec.get('quiz_mode', 'auto'),
                         options=['Верно', 'Неверно'] if row['type'] == 'boolean' else [],
-                        points=1 if kind in ('quiz', 'answer', 'numeric', 'gaps', 'matching') else 0)
+                        points=1 if kind in ('quiz', 'answer', 'numeric', 'gaps', 'matching', 'task') else 0)
                 if plan:
                     messages.info(request, 'Слайды созданы в выбранном порядке. Откройте каждый, добавьте содержимое и опубликуйте.')
         return redirect('lesson_editor', section_pk=section.pk, pk=lesson.pk)
@@ -303,7 +303,7 @@ def step_editor(request, lesson_pk, pk=None):
     preset = request.GET.get('preset', '')
     initial = {'kind': kind}
     if not pk:
-        initial.update(points=1 if kind in ('quiz', 'answer', 'numeric', 'gaps', 'matching') else 0, quiz_mode='multiple' if preset == 'multiple' else 'single')
+        initial.update(points=1 if kind in ('quiz', 'answer', 'numeric', 'gaps', 'matching', 'task') else 0, quiz_mode='multiple' if preset == 'multiple' else 'single')
     options = [{'text': text, 'correct': i in step.correct_choices} for i, text in enumerate(step.options)]
     if not pk and preset == 'boolean':
         options = [{'text': 'Верно'}, {'text': 'Неверно'}]
@@ -331,7 +331,7 @@ def step_editor(request, lesson_pk, pk=None):
             messages.info(request, 'Строка добавлена. Выберите прикреплённые файлы повторно перед сохранением.')
     if request.method == 'POST' and not adding and not stale and form.is_valid() and blocks_valid and (kind != 'quiz' or option_formset is None or option_formset.is_valid()):
         step = form.save(commit=False)
-        content_fields = {'kind', 'body', 'code', 'image', 'video', 'file', 'answer', 'code_mode', 'points', 'max_attempts', 'pairs', 'tolerance', 'pass_percent'}
+        content_fields = {'kind', 'body', 'code', 'image', 'video', 'file', 'task_id', 'answer', 'code_mode', 'points', 'max_attempts', 'pairs', 'tolerance', 'pass_percent'}
         original = Step.objects.get(pk=pk) if pk else None
         if step.kind == 'quiz' or (original and original.kind == 'quiz'):
             content_fields.add('quiz_mode')

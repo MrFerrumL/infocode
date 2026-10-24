@@ -62,6 +62,12 @@ class PilotInstallerTests(SimpleTestCase):
         payload = remote_script('ubuntu', physics=True).decode('utf-8')
         self.assertLess(payload.index('run --rm migrate'), payload.index('manage.py seed_physics'))
 
+    def test_informatics_course_is_seeded_only_on_request(self):
+        self.assertNotIn('seed_course_inf', remote_script('ubuntu').decode('utf-8'))
+        payload = remote_script('ubuntu', course=True).decode('utf-8')
+        self.assertLess(payload.index('run --rm migrate'), payload.index('manage.py seed_course_inf < /dev/null'))
+        self.assertIn('seed_course_inf --publish', remote_script('ubuntu', course=True, publish_course=True).decode('utf-8'))
+
     def test_polyakov_bundles_are_imported_after_backup_then_removed(self):
         payload = remote_script('ubuntu', polyakov=[([1, 2], 'polyakov-1.zip'), ([19, 20, 21], 'polyakov-2.zip')]).decode('utf-8')
         first = payload.index('import_kompege_numbers /tmp/polyakov-1.zip --numbers 1 2 --publish')

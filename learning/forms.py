@@ -149,8 +149,8 @@ class StepForm(AssetForm):
     correct_numbers = forms.CharField(label='Номера верных ответов', required=False, help_text='Нумерация с 1. Например: 2 или 1, 3. Несколько номеров включают множественный выбор.')
     class Meta:
         model = Step
-        fields = ['title', 'kind', 'body', 'code', 'quiz_mode', 'image', 'video', 'file', 'answer', 'code_mode', 'explanation', 'points', 'max_attempts', 'tolerance', 'pass_percent', 'published']
-        widgets = {'body': forms.Textarea(attrs={'rows': 6}), 'code': forms.Textarea(attrs={'rows': 8, 'class': 'code-input', 'spellcheck': 'false'}), 'explanation': forms.Textarea(attrs={'rows': 4})}
+        fields = ['title', 'kind', 'body', 'code', 'quiz_mode', 'image', 'video', 'file', 'task', 'answer', 'code_mode', 'explanation', 'points', 'max_attempts', 'tolerance', 'pass_percent', 'published']
+        widgets = {'task': forms.NumberInput(attrs={'min': 1, 'placeholder': 'Например, 616'}), 'body': forms.Textarea(attrs={'rows': 6}), 'code': forms.Textarea(attrs={'rows': 8, 'class': 'code-input', 'spellcheck': 'false'}), 'explanation': forms.Textarea(attrs={'rows': 4})}
     def __init__(self, *args, **kwargs):
         self.option_formset = kwargs.pop('option_formset', None)
         # Inactive assessment controls may still be in the browser draft. They
@@ -168,7 +168,9 @@ class StepForm(AssetForm):
                     data['pass_percent'] = '100'
                 if kind != 'quiz':
                     data.update({'quiz_mode': 'auto', 'choices_text': '', 'correct_numbers': ''})
-                if kind not in ('quiz', 'answer', 'numeric', 'gaps', 'matching'):
+                if kind != 'task':
+                    data['task'] = ''
+                if kind not in ('quiz', 'answer', 'numeric', 'gaps', 'matching', 'task'):
                     data.update({'points': '0', 'max_attempts': '0', 'code_mode': 'off', 'explanation': ''})
             args = (data, *args[1:])
         super().__init__(*args, **kwargs)
@@ -182,7 +184,11 @@ class StepForm(AssetForm):
             ('numeric', 'Практика — числовой ответ'),
             ('gaps', 'Заполнение пропусков'),
             ('matching', 'Сопоставление пар'),
+            ('task', 'Задача из банка — по ID из каталога'),
         ]
+        self.fields['task'].label = 'ID задачи из банка'
+        self.fields['task'].queryset = Task.objects.filter(published=True)
+        self.fields['task'].error_messages['invalid_choice'] = 'Задача с таким ID не найдена среди опубликованных задач этого предмета.'
         self.fields['title'].label = 'Название слайда'
         self.fields['quiz_mode'].required = False
         self.fields['code_mode'].required = False
@@ -197,7 +203,7 @@ class StepForm(AssetForm):
         data = super().clean()
         data['quiz_mode'] = data.get('quiz_mode') or 'auto'
         data['code_mode'] = data.get('code_mode') or self.instance.code_mode or 'off'
-        if data.get('kind') not in ('quiz', 'answer', 'numeric', 'gaps', 'matching'):
+        if data.get('kind') not in ('quiz', 'answer', 'numeric', 'gaps', 'matching', 'task'):
             data['code_mode'] = 'off'
         data['tolerance'] = data.get('tolerance') or 0
         data['pass_percent'] = data.get('pass_percent') or 100

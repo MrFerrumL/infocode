@@ -286,8 +286,9 @@ class Course(models.Model):
 class Step(models.Model):
     objects = ActiveManager()
     all_objects = models.Manager()
-    KINDS = [('text', 'Текст и иллюстрация'), ('video', 'Видео'), ('quiz', 'Выбор ответа'), ('answer', 'Короткий ответ'), ('numeric', 'Числовой ответ'), ('gaps', 'Заполнение пропусков'), ('matching', 'Сопоставление пар'), ('file', 'Файл'), ('notebook', 'Конспект')]
+    KINDS = [('text', 'Текст и иллюстрация'), ('video', 'Видео'), ('quiz', 'Выбор ответа'), ('answer', 'Короткий ответ'), ('numeric', 'Числовой ответ'), ('gaps', 'Заполнение пропусков'), ('matching', 'Сопоставление пар'), ('file', 'Файл'), ('notebook', 'Конспект'), ('task', 'Задача из банка')]
     lesson = models.ForeignKey('Lesson', on_delete=models.CASCADE, related_name='steps')
+    task = models.ForeignKey(Task, null=True, blank=True, on_delete=models.PROTECT, related_name='course_steps', verbose_name='Задача из банка', help_text='Условие, файлы и проверка берутся из каталога; ответ засчитывается и в каталоге.')
     title = models.CharField('Название шага', max_length=180)
     kind = models.CharField('Тип шага', max_length=12, choices=KINDS, default='text')
     position = models.PositiveIntegerField('Порядок', default=1)
@@ -334,6 +335,8 @@ class Step(models.Model):
                 raise ValidationError('Укажите корректные номера правильных ответов.')
             if self.quiz_mode == 'single' and len(set(self.correct_choices)) != 1:
                 raise ValidationError('В тесте с одним ответом отметьте ровно один правильный вариант.')
+        if self.kind == 'task' and self.published and not (self.task_id and self.task.published):
+            raise ValidationError({'task': 'Выберите опубликованную задачу из банка.'})
         if self.kind == 'answer' and self.published and not self.answer.strip():
             raise ValidationError({'answer': 'Укажите правильный ответ.'})
         if self.use_blocks:

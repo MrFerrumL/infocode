@@ -6,13 +6,15 @@ from django.db.models import F, Q, Prefetch
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
-from .models import Course, Lesson, Step, StepContentBlock, Enrollment, StepProgress, StepSubmission, StepComment
+from .models import Course, Lesson, Step, StepContentBlock, Enrollment, StepProgress, StepSubmission, StepComment, Practice
 from .course_services import available_courses, can_edit, published_steps, current_progress, sync_lesson_progress
-from .services import check_answer
+from .services import check_answer, check_task_answer
+from .fipi_check import Unavailable as FipiUnavailable
 from .security import form_token, claim_submission
 from .python_answers import PythonCodeForm
 
-ASSESSED = ('quiz', 'answer', 'numeric', 'gaps', 'matching')
+ASSESSED = ('quiz', 'answer', 'numeric', 'gaps', 'matching', 'task')
+FIPI_DOWN = 'Сайт ФИПИ сейчас не отвечает, поэтому ответ не проверен и не записан. Попробуйте чуть позже.'
 
 
 def evaluate_step(step, data):
@@ -29,6 +31,10 @@ def evaluate_step(step, data):
         percent = score * 100 / len(step.pairs) if step.pairs else 0
         return bool(step.pairs) and percent >= step.pass_percent, ' | '.join(answers), round(percent)
     value = data.get('answer', '')[:250]
+    if step.kind == 'task':
+        # The bank checks it as in the catalogue (FIPI tasks may raise FipiUnavailable).
+        correct = check_task_answer(value, step.task)
+        return correct, value, 100 if correct else 0
     if step.kind == 'numeric':
         from decimal import Decimal, InvalidOperation
         try:
@@ -112,7 +118,7 @@ def player(request, pk):
     if request.method == 'POST':
         from django.contrib.auth import get_user_model
         get_user_model().objects.select_for_update().get(pk=request.user.pk)
-    step = get_object_or_404(Step.objects.select_related('lesson__section__course').prefetch_related(
+    step = get_object_or_404(Step.objects.select_related('lesson__section__course', 'task__topic').prefetch_related(
         Prefetch('content_blocks', queryset=StepContentBlock.objects.select_related('notebook').prefetch_related('notebook__cells'))), pk=pk)
     course = step_access(request.user, step)
     editor = can_edit(request.user, course)
@@ -122,6 +128,7 @@ def player(request, pk):
     next_step = all_steps[index+1] if index+1 < len(all_steps) else None
     previous = all_steps[index-1] if index else None
     feedback = request.session.pop(f'step_feedback_{step.pk}', None)
+    task_ready = step.kind != 'task' or bool(step.task and step.task.published and not step.task.archived_at)
     progress = StepProgress.objects.select_for_update().filter(user=request.user, step=step, revision=step.revision).first()
     limited = bool(step.max_attempts and progress and progress.attempts >= step.max_attempts)
     previous_code = StepSubmission.objects.filter(user=request.user, step=step, revision=step.revision).first() if step.code_mode != 'off' else None
@@ -149,8 +156,14 @@ def player(request, pk):
             correct = False
             submitted = ''
             percent = 0
+            if step.kind == 'task' and not task_ready:
+                raise PermissionDenied('Задача из банка сейчас недоступна.')
             if step.kind in ASSESSED and action == 'answer':
-                correct, submitted, percent = evaluate_step(step, request.POST)
+                try:
+                    correct, submitted, percent = evaluate_step(step, request.POST)
+                except FipiUnavailable:
+                    messages.error(request, FIPI_DOWN)
+                    return redirect('learn_step', pk=pk)
             elif step.kind not in ASSESSED and action == 'complete':
                 correct = True
             else:
@@ -162,6 +175,9 @@ def player(request, pk):
                 if step.kind in ASSESSED:
                     progress.attempts += 1
                     StepSubmission.objects.create(user=request.user, step=step, revision=step.revision, answer=submitted, python_code=code_form.cleaned_data.get('python_code', ''), correct=correct)
+                if step.kind == 'task':
+                    # A bank task solved in a course counts in the catalogue, daily practice and analytics too.
+                    Practice.objects.create(user=request.user, task=step.task, answer=submitted, python_code=code_form.cleaned_data.get('python_code', ''), correct=correct)
                 progress.completed = progress.completed or correct
                 progress.points = step.points if progress.completed and step.kind in ASSESSED else 0
                 progress.save()
@@ -177,7 +193,7 @@ def player(request, pk):
     sections = list(course.sections.prefetch_related('lessons__steps'))
     public_count = published_steps(course).count()
     completed_count = current_progress(request.user).filter(step__in=published_steps(course)).count()
-    return render(request, 'courses/player.html', {'code_form': code_form, 'answer_value': request.POST.get('answer', '')[:250] if code_invalid else '', 'selected_choices': [int(v) for v in request.POST.getlist('choice') if v.isdecimal() and len(v) < 4] if code_invalid else [], 'pair_rows': [{'prompt': p['prompt'], 'value': request.POST.get(f'pair_{i}', '')[:250] if code_invalid else ''} for i, p in enumerate(step.pairs)], 'submit_token': form_token(request.user, f'step:{pk}'), 'assessed': step.kind in ASSESSED, 'pair_prompts': [p['prompt'] for p in step.pairs], 'match_options': sorted({p['answer'] for p in step.pairs}, key=lambda s: s.casefold()), 'course': course, 'step': step, 'lesson': step.lesson, 'steps': steps, 'sections': sections, 'editor': editor, 'completed': completed, 'next_step': next_step, 'previous': previous, 'progress': progress, 'feedback': feedback, 'limited': limited, 'multiple': step.quiz_mode == 'multiple' or (step.quiz_mode == 'auto' and len(step.correct_choices)>1), 'reveal': bool(editor or (progress and progress.completed) or limited), 'comments': step.comments.filter(hidden=False).select_related('user'), 'attempts': StepSubmission.objects.filter(user=request.user, step=step, revision=step.revision)[:5], 'percent': round(completed_count/public_count*100) if public_count else 0, 'nav': 'course'})
+    return render(request, 'courses/player.html', {'code_form': code_form, 'answer_value': request.POST.get('answer', '')[:250] if code_invalid else '', 'selected_choices': [int(v) for v in request.POST.getlist('choice') if v.isdecimal() and len(v) < 4] if code_invalid else [], 'pair_rows': [{'prompt': p['prompt'], 'value': request.POST.get(f'pair_{i}', '')[:250] if code_invalid else ''} for i, p in enumerate(step.pairs)], 'submit_token': form_token(request.user, f'step:{pk}'), 'assessed': step.kind in ASSESSED and task_ready, 'task_ready': task_ready, 'pair_prompts': [p['prompt'] for p in step.pairs], 'match_options': sorted({p['answer'] for p in step.pairs}, key=lambda s: s.casefold()), 'course': course, 'step': step, 'lesson': step.lesson, 'steps': steps, 'sections': sections, 'editor': editor, 'completed': completed, 'next_step': next_step, 'previous': previous, 'progress': progress, 'feedback': feedback, 'limited': limited, 'multiple': step.quiz_mode == 'multiple' or (step.quiz_mode == 'auto' and len(step.correct_choices)>1), 'reveal': bool(editor or (progress and progress.completed) or limited), 'comments': step.comments.filter(hidden=False).select_related('user'), 'attempts': StepSubmission.objects.filter(user=request.user, step=step, revision=step.revision)[:5], 'percent': round(completed_count/public_count*100) if public_count else 0, 'nav': 'course'})
 
 
 @login_required

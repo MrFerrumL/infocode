@@ -80,7 +80,7 @@ def validate_archives(source, bundle):
             raise ValueError('Only the 135-card pilot may be installed by this helper.')
 
 
-def remote_script(user, images=False, number1=False, categories=False, numbers=(), replace=False, variants=False, polyakov=(), notebooks=(), physics=False, fipi=False):
+def remote_script(user, images=False, number1=False, categories=False, numbers=(), replace=False, variants=False, polyakov=(), notebooks=(), physics=False, fipi=False, course=False, publish_course=False):
     home = '/root' if user == 'root' else '/home/' + user
     stamp = datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-%f')
     refresh = f'docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps -v {home}/kompege-condition-images.zip:/tmp/condition-images.zip:ro web python manage.py refresh_kompege_images /tmp/condition-images.zip < /dev/null\n' if images else ''
@@ -99,6 +99,8 @@ def remote_script(user, images=False, number1=False, categories=False, numbers=(
         bank += f'docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps -v {home}/fipi-bank.zip:/tmp/fipi-bank.zip:ro web python manage.py import_fipi /tmp/fipi-bank.zip < /dev/null\nrm -f {home}/fipi-bank.zip\n'
     if physics:  # the platform's physics content (learning/data/physics), created or updated in place
         bank += 'docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps web python manage.py seed_physics < /dev/null\n'
+    if course:  # the informatics course №1–27 (learning/data/course_inf), created or updated in place
+        bank += 'docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps web python manage.py seed_course_inf' + (' --publish' if publish_course else '') + ' < /dev/null\n'
     # Colab notebooks for «Конспекты»: a notebook with the same title is updated in place.
     for name in notebooks:
         bank += f'docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps -v {home}/{name}:/tmp/{name}:ro web python manage.py import_ipynb /tmp/{name} --publish < /dev/null\nrm -f {home}/{name}\n'
@@ -154,6 +156,8 @@ def main(argv=None):
     parser.add_argument('--variants', type=Path, help='Reviewed KOMPEGE exam variants package')
     parser.add_argument('--fipi', type=Path, help='FIPI open-bank bundle (manage.py import_fipi)')
     parser.add_argument('--physics', action='store_true', help='Create or update the physics platform content (seed_physics)')
+    parser.add_argument('--course', action='store_true', help='Create or update the informatics course №1–27 (seed_course_inf)')
+    parser.add_argument('--publish-course', action='store_true', help='With --course: publish the course for pupils')
     parser.add_argument('--notebooks', type=Path, nargs='+', default=[], help='Colab notebooks (.ipynb) to publish in «Конспекты»')
     parser.add_argument('--polyakov', type=Path, nargs='+', default=[], help="K. Polyakov's bundles (deploy/prepare_polyakov_bank.py)")
     parser.add_argument('--replace-existing', action='store_true', help='Replace earlier KOMPEGE tasks of --numbers (refused if pupils used them)')
@@ -221,7 +225,7 @@ def main(argv=None):
                    '-o', 'ServerAliveInterval=30', '-o', 'ServerAliveCountMax=6', '-o', 'ConnectTimeout=15', '-i', str(key)]
         target = f'{args.user}@{args.host}'
         home = '/root' if args.user == 'root' else '/home/' + args.user
-        payload = remote_script(args.user, images=bool(args.images), number1=bool(args.number1), categories=bool(args.categories), numbers=args.numbers or (), replace=args.replace_existing, variants=bool(args.variants), polyakov=[(n, name) for n, name, _ in polyakov], notebooks=[f'notebook-{i}.ipynb' for i, _ in enumerate(args.notebooks, 1)], physics=args.physics, fipi=bool(args.fipi))
+        payload = remote_script(args.user, images=bool(args.images), number1=bool(args.number1), categories=bool(args.categories), numbers=args.numbers or (), replace=args.replace_existing, variants=bool(args.variants), polyakov=[(n, name) for n, name, _ in polyakov], notebooks=[f'notebook-{i}.ipynb' for i, _ in enumerate(args.notebooks, 1)], physics=args.physics, fipi=bool(args.fipi), course=args.course, publish_course=args.publish_course)
         result = subprocess.run([ssh, '-T', *options, target, 'bash -n'], input=payload, check=False)
         if result.returncode:
             print('SSH connection or remote syntax check failed; nothing was installed.', file=sys.stderr)
