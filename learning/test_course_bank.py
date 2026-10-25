@@ -73,7 +73,7 @@ class SeedCourseTests(TestCase):
         from django.core.management import call_command
         self.call = lambda: call_command('seed_course_inf', stdout=__import__('io').StringIO())
         User.objects.create_superuser('seed-admin', password='x')
-        for number in range(1, 6):
+        for number in range(1, 11):
             topic, _ = Topic.objects.get_or_create(number=number, defaults={'title': f'№ {number}'})
             for n, (level, kind) in enumerate([('easy', 'demo'), ('easy', 'exam'), ('medium', 'exam'), ('medium', 'author'), ('hard', 'author'), ('easy', '')]):
                 Task.objects.create(topic=topic, title=f'{number}.{n}', statement='Условие', answer=str(n), difficulty=level,
@@ -86,8 +86,8 @@ class SeedCourseTests(TestCase):
         self.assertFalse(course.published)          # a draft until the teacher publishes it
         steps = Step.objects.filter(lesson__section__course=course)
         bank = steps.filter(kind='task')
-        self.assertEqual(bank.count(), 25)
-        self.assertEqual(bank.values('task').distinct().count(), 25)   # no task twice in the course
+        self.assertEqual(bank.count(), 50)
+        self.assertEqual(bank.values('task').distinct().count(), 50)   # no task twice in the course
         warmup = bank.get(lesson__section__order=1, title='Разминка')
         self.assertEqual((warmup.task.difficulty, warmup.task.source_kind), ('easy', 'demo'))
         theory = steps.get(lesson__section__order=2, kind='text')
@@ -96,6 +96,7 @@ class SeedCourseTests(TestCase):
         quiz = steps.get(lesson__section__order=4, kind='quiz')
         self.assertEqual(quiz.options[quiz.correct_choices[0]], '0, 10, 110, 111')
         self.assertEqual(steps.get(lesson__section__order=5, kind='answer').answer, '16')
+        self.assertEqual([steps.get(lesson__section__order=n, kind='answer').answer for n in range(6, 11)], ['55', '64', '320', '4', '4'])
         pupil = User.objects.create_user('seed-pupil')
         StepProgress.objects.create(user=pupil, step=warmup, revision=warmup.revision, completed=True, points=1)
         self.call()
