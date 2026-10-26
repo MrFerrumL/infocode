@@ -47,7 +47,13 @@
 
 Обычный ответ проверяется на сервере. Каталог обновляет результат в карточке и сохраняет историю. Подборки используют тот же механизм практики; тренировка дня выбирает задачи по результатам до начала дня, чтобы набор не менялся от каждого нажатия.
 
-В опубликованной версии связи похожих задач рассчитываются заранее по текстовым эмбеддингам. При отсутствии связей есть подбор по номеру и сложности: сайт не требует обращения к внешней языковой модели для каждого ответа.
+Похожие задачи ранжируются по векторам условий. При установленной модели `multilingual-e5-small` в формате 8-bit ONNX сервер вычисляет эмбеддинги новых или изменённых текстов; обслуживающая команда обновляет их в фоне. Само ранжирование использует сохранённые векторы, а не новый запрос к модели для каждого ответа ученика.
+
+Без установленной модели работают заранее подготовленные связи и подбор по номеру/сложности. Файлы модели поставляются отдельно от Git, поэтому минимальный локальный запуск не требует их скачивания.
+
+### Генераторы с независимой проверкой
+
+Для задач №23 реализована программная генерация параметров. Основной алгоритм и независимая проверка должны получить один ответ; иначе задача не принимается. Дополнительно исключаются повторы параметров и формулировок. Это проверка ограниченного семейства собственных задач, а не обещание автоматически создавать все типы ЕГЭ.
 
 ### Импорт как отдельный конвейер
 
@@ -77,7 +83,8 @@
 | Практика в каталоге | [`views.py`](../learning/views.py), [`catalog-answers.js`](../static/catalog-answers.js), [`test_catalog_answers.py`](../learning/test_catalog_answers.py) |
 | Версии и прохождение курса | [`course_services.py`](../learning/course_services.py), [`course_views.py`](../learning/course_views.py) |
 | Персональный набор | [`daily_practice.py`](../learning/daily_practice.py), [`test_daily_practice.py`](../learning/test_daily_practice.py) |
-| Похожие задачи | [`similar_tasks.py`](../learning/similar_tasks.py), [`build_similar_tasks.py`](../deploy/build_similar_tasks.py) |
+| Похожие задачи | [`similar_tasks.py`](../learning/similar_tasks.py), [`embeddings.py`](../learning/embeddings.py), [`embed_tasks.py`](../learning/management/commands/embed_tasks.py) |
+| Независимая проверка генерации | [`task_generators/`](../learning/task_generators/), [`test_task_generators.py`](../learning/test_task_generators.py) |
 | Внешняя проверка | [`fipi_check.py`](../learning/fipi_check.py), [`test_fipi.py`](../learning/test_fipi.py) |
 | Связь с КР | [`kr_api.py`](../learning/kr_api.py), [`kr_client.py`](../learning/kr_client.py), [`kr_views.py`](../learning/kr_views.py) |
 | Обслуживание и копии | [`run_maintenance.py`](../learning/management/commands/run_maintenance.py), [`backup_platform.py`](../learning/management/commands/backup_platform.py) |
