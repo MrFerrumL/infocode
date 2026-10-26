@@ -29,7 +29,8 @@ def fake_embed(texts):
 class EmbeddingTests(TestCase):
     def setUp(self):
         self.topic = Topic.objects.create(number=23, title='Исполнители')
-        make = lambda title, text, **kw: Task.objects.create(topic=self.topic, title=title, statement=text, answer='1',
+        # Different answers: an equal text with the same answer would count as a copy of the task.
+        make = lambda title, text, **kw: Task.objects.create(topic=self.topic, title=title, statement=text, answer=f'{title}-answer',
                                                              published=True, in_catalog=True, **kw)
         self.a = make('a', 'Исполнитель превращает число 3 в число 20. Сколько программ?')
         self.b = make('b', 'Исполнитель Альфа: сколько программ переводят 2 в 30?')
@@ -66,3 +67,19 @@ class EmbeddingTests(TestCase):
 
     def test_tasks_without_words_are_skipped(self, embed, _):
         self.assertIn('pictures only, no source text): 1', self.run_embed())
+
+
+@patch.object(embeddings, 'available', return_value=True)
+@patch.object(embeddings, 'embed', side_effect=fake_embed)
+class CopiesTests(TestCase):
+    def test_the_same_task_from_another_bank_is_not_similar(self, *_):
+        topic = Topic.objects.create(number=23, title='Исполнители')
+        make = lambda text, answer, **kw: Task.objects.create(topic=topic, title='t', statement=text, answer=answer, published=True, in_catalog=True, **kw)
+        task = make('Исполнитель превращает число 3 в число 20. Сколько программ?', '42')
+        copy = make('Исполнитель превращает число 3 в число 20. Сколько программ?', '42', source_system='polyakov', external_id=1)
+        other = make('Исполнитель Альфа: сколько программ переводят 2 в 30?', '7')
+        call_command('embed_tasks', stdout=StringIO())
+        ids, how = similar_to(task, get_user_model().objects.create_user('p'), count=2)
+        self.assertEqual(how, 'model')
+        self.assertNotIn(copy.pk, ids)
+        self.assertIn(other.pk, ids)

@@ -15,6 +15,7 @@ from .similar_models import TaskSimilarity, TaskVector
 
 DATA = Path(__file__).resolve().parent / 'data' / 'similar_tasks.json.gz'
 SHOWN = 5
+COPY = 0.985  # cosine above which two conditions are the same text
 
 
 def key_of(task):
@@ -48,7 +49,13 @@ def by_vector(task, visible, numbers, count):
         return []
     import numpy
     scores = embeddings.matrix([bytes(v) for _, v in rows]) @ embeddings.matrix([bytes(own)])[0]
-    return [rows[i][0] for i in numpy.argsort(-scores)[:count]]
+    best = [rows[i][0] for i in numpy.argsort(-scores)[:count + 10]]
+    # The same task copied into another bank is not «похожая»: an almost equal text with the same answer is skipped.
+    copies = {i for i, s in zip((r[0] for r in rows), scores) if s > COPY}
+    if copies:
+        answer = ' '.join(task.answer.split())
+        copies = {pk for pk, a in Task.all_objects.filter(pk__in=copies & set(best)).values_list('pk', 'answer') if ' '.join(a.split()) == answer}
+    return [pk for pk in best if pk not in copies][:count]
 
 
 def similar_to(task, user, count=SHOWN):
