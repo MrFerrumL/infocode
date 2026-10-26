@@ -30,6 +30,7 @@ x-app: &app
     - media:/app/uploads
     - logs:/data
     - backups:/backups
+    - ./models:/app/models:ro
   logging:
     driver: json-file
     options:

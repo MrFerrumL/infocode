@@ -25,3 +25,6 @@ backups/
 *.key
 credentials*.txt
 .DS_Store
+
+# Sentence-embedding model for «Похожие» (deploy/export_embedding_model.py), shipped with --model
+/models/

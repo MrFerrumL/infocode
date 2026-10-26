@@ -50,6 +50,7 @@ GOOGLE_SITE_VERIFICATION = os.environ.get('GOOGLE_SITE_VERIFICATION', '')
 KR_API_TOKEN = os.environ.get('KR_API_TOKEN', '')  # shared secret of the separate test platform (learning/kr_api.py)
 KR_INTERNAL_URL = os.environ.get('KR_INTERNAL_URL', 'http://kr:8000')  # the test platform inside the Docker network
 KR_PUBLIC_URL = os.environ.get('KR_PUBLIC_URL', '/kr')  # where teachers and pupils open it
+EMBED_MODEL_DIR = Path(os.environ.get('EMBED_MODEL_DIR', str(BASE_DIR / 'models' / 'e5-small')))  # learning/embeddings.py
 SITE_SEASON = os.environ.get('SITE_SEASON', 'auto')  # learning/seasons.py
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/login/'

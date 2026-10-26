@@ -11,3 +11,12 @@ class TaskSimilarity(models.Model):
     class Meta:
         ordering = ['rank']
         constraints = [models.UniqueConstraint(fields=['task', 'other'], name='unique_task_similarity')]
+
+
+class TaskVector(models.Model):
+    """A task's text and its sentence vector (learning/embeddings.py); re-embedded when the text changes."""
+    task = models.OneToOneField('learning.Task', on_delete=models.CASCADE, primary_key=True, related_name='text_vector')
+    source_text = models.TextField(blank=True, default='')  # words of a pictures-only condition, from its source bank
+    digest = models.CharField(max_length=40, blank=True, default='')
+    vector = models.BinaryField(null=True, blank=True)  # 384 × float16
+    updated_at = models.DateTimeField(auto_now=True)

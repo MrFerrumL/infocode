@@ -80,7 +80,7 @@ def validate_archives(source, bundle):
             raise ValueError('Only the 135-card pilot may be installed by this helper.')
 
 
-def remote_script(user, images=False, number1=False, categories=False, numbers=(), replace=False, variants=False, polyakov=(), notebooks=(), physics=False, fipi=False, course=False, publish_course=False):
+def remote_script(user, images=False, number1=False, categories=False, numbers=(), replace=False, variants=False, polyakov=(), notebooks=(), physics=False, fipi=False, course=False, publish_course=False, model=False, embed=False):
     home = '/root' if user == 'root' else '/home/' + user
     stamp = datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S-%f')
     refresh = f'docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps -v {home}/kompege-condition-images.zip:/tmp/condition-images.zip:ro web python manage.py refresh_kompege_images /tmp/condition-images.zip < /dev/null\n' if images else ''
@@ -106,6 +106,13 @@ def remote_script(user, images=False, number1=False, categories=False, numbers=(
         bank += f'docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps -v {home}/{name}:/tmp/{name}:ro web python manage.py import_ipynb /tmp/{name} --publish < /dev/null\nrm -f {home}/{name}\n'
     if variants:
         bank += f'docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps -v {home}/kompege-variants.zip:/tmp/kompege-variants.zip:ro web python manage.py import_kompege_variants /tmp/kompege-variants.zip --publish < /dev/null\n'
+    # The sentence-embedding model for «Похожие» (deploy/export_embedding_model.py) lives outside the code, in ./models.
+    models = ''
+    if model:
+        models = (f'mkdir -p /opt/infocode/models/e5-small\nmv -f {home}/embedding-model.onnx /opt/infocode/models/e5-small/model.onnx\n'
+                  f'mv -f {home}/embedding-tokenizer.json /opt/infocode/models/e5-small/tokenizer.json\nchmod -R a+rX /opt/infocode/models\n')
+    if embed:  # vectors of every catalogue task; only new or changed texts are embedded again
+        bank += 'docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps -e EMBED_THREADS=5 web python manage.py embed_tasks --texts learning/data/task_texts.json.gz < /dev/null\n'
     return f'''set -Eeuo pipefail
 trap 'printf "Pilot installation stopped at line %s. See the error above; keep the backups.\\n" "$LINENO" >&2' ERR
 umask 027
@@ -122,7 +129,8 @@ ls -1t /opt/infocode-code-backups/source-before-pilot-*.tar.gz | tail -n +4 | xa
 printf '[2/6] Installing updated source and building the application...\\n'
 unzip -oq {home}/infocode-source-update.zip -d /opt
 docker compose --env-file .env.production -f compose.production.yaml build web < /dev/null
-printf '[3/6] Applying the source-reference migration...\\n'
+mkdir -p /opt/infocode/models
+{models}printf '[3/6] Applying the source-reference migration...\\n'
 docker compose --env-file .env.production -f compose.production.yaml run --rm migrate < /dev/null
 printf '[4/6] Verifying and importing the 135-card pilot...\\n'
 docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps -v {home}/kompege-pilot-135.zip:/tmp/kompege-pilot-135.zip:ro web python manage.py import_kompege_pilot /tmp/kompege-pilot-135.zip --publish --sync-empty-topic-titles < /dev/null
@@ -158,6 +166,8 @@ def main(argv=None):
     parser.add_argument('--physics', action='store_true', help='Create or update the physics platform content (seed_physics)')
     parser.add_argument('--course', action='store_true', help='Create or update the informatics course №1–27 (seed_course_inf)')
     parser.add_argument('--publish-course', action='store_true', help='With --course: publish the course for pupils')
+    parser.add_argument('--model', type=Path, help='Folder with model.onnx and tokenizer.json (deploy/export_embedding_model.py)')
+    parser.add_argument('--embed', action='store_true', help='Embed catalogue tasks for «Похожие» (manage.py embed_tasks)')
     parser.add_argument('--notebooks', type=Path, nargs='+', default=[], help='Colab notebooks (.ipynb) to publish in «Конспекты»')
     parser.add_argument('--polyakov', type=Path, nargs='+', default=[], help="K. Polyakov's bundles (deploy/prepare_polyakov_bank.py)")
     parser.add_argument('--replace-existing', action='store_true', help='Replace earlier KOMPEGE tasks of --numbers (refused if pupils used them)')
@@ -225,7 +235,7 @@ def main(argv=None):
                    '-o', 'ServerAliveInterval=30', '-o', 'ServerAliveCountMax=6', '-o', 'ConnectTimeout=15', '-i', str(key)]
         target = f'{args.user}@{args.host}'
         home = '/root' if args.user == 'root' else '/home/' + args.user
-        payload = remote_script(args.user, images=bool(args.images), number1=bool(args.number1), categories=bool(args.categories), numbers=args.numbers or (), replace=args.replace_existing, variants=bool(args.variants), polyakov=[(n, name) for n, name, _ in polyakov], notebooks=[f'notebook-{i}.ipynb' for i, _ in enumerate(args.notebooks, 1)], physics=args.physics, fipi=bool(args.fipi), course=args.course, publish_course=args.publish_course)
+        payload = remote_script(args.user, images=bool(args.images), number1=bool(args.number1), categories=bool(args.categories), numbers=args.numbers or (), replace=args.replace_existing, variants=bool(args.variants), polyakov=[(n, name) for n, name, _ in polyakov], notebooks=[f'notebook-{i}.ipynb' for i, _ in enumerate(args.notebooks, 1)], physics=args.physics, fipi=bool(args.fipi), course=args.course, publish_course=args.publish_course, model=bool(args.model), embed=args.embed)
         result = subprocess.run([ssh, '-T', *options, target, 'bash -n'], input=payload, check=False)
         if result.returncode:
             print('SSH connection or remote syntax check failed; nothing was installed.', file=sys.stderr)
@@ -239,6 +249,8 @@ def main(argv=None):
         uploads += [(path, name) for _, name, path in polyakov]
         uploads += [(path, f'notebook-{i}.ipynb') for i, path in enumerate(args.notebooks, 1)]
         if args.fipi: uploads.append((args.fipi, 'fipi-bank.zip'))
+        if args.model:
+            uploads += [(args.model / 'model.onnx', 'embedding-model.onnx'), (args.model / 'tokenizer.json', 'embedding-tokenizer.json')]
         for local, remote in uploads:
             result = subprocess.run([scp, *options, str(local.resolve()), f'{target}:{home}/{remote}'], check=False)
             if result.returncode:

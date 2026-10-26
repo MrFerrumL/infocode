@@ -511,5 +511,5 @@ from .platform_models import (LoginBucket, StudentAccess, ActionReceipt, Teacher
 from .notebook_models import Notebook, NotebookCell
 from .schedule_models import ScheduleEvent, ScheduleOccurrence, ScheduleReminder
 from .collection_models import Collection, CollectionItem
-from .similar_models import TaskSimilarity
+from .similar_models import TaskSimilarity, TaskVector
 from .coverage_models import GroupTopicMark

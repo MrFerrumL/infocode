@@ -27,3 +27,4 @@ credentials*.txt
 
 .git/
 .github/
+models

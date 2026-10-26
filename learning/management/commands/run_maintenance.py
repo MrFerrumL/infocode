@@ -25,6 +25,13 @@ class Command(BaseCommand):
         archives = sorted((p for p in folder.glob('infocode-????-??-??.zip') if p.is_file() and not p.is_symlink()), reverse=True)
         for old in archives[keep:]:
             old.unlink()
+        # New or edited tasks get their vectors for «Похожие»; a problem here never stops backups.
+        from learning import embeddings
+        if embeddings.available():
+            try:
+                call_command('embed_tasks', verbosity=0)
+            except Exception as exc:
+                self.stderr.write(f'Task vectors were not updated ({type(exc).__name__}).')
         return today
 
     def handle(self, backup_dir, keep, once, **options):

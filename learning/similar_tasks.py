@@ -1,17 +1,17 @@
 """The "Похожие" button: tasks of the same number with a similar condition.
 
-Neighbours are computed offline by a multilingual sentence-embedding model from the source texts of the
-KOMPEGE and K. Polyakov tasks (deploy/build_similar_tasks.py → learning/data/similar_tasks.json.gz) and
-loaded with `manage.py sync_similar_tasks`. Tasks without a text (own and Yandex tasks) fall back to the
-same number and difficulty.
+First choice: the closest tasks by meaning, from sentence vectors the server makes itself for every catalogue
+task (learning/embeddings.py, `manage.py embed_tasks`). Without vectors: the links computed offline for KOMPEGE and
+K. Polyakov (deploy/build_similar_tasks.py → `manage.py sync_similar_tasks`); without either: the same number and
+difficulty.
 """
 import gzip
 import json
 from pathlib import Path
 from django.db import transaction
-from . import game_groups
+from . import embeddings, game_groups
 from .models import Practice, Task
-from .similar_models import TaskSimilarity
+from .similar_models import TaskSimilarity, TaskVector
 
 DATA = Path(__file__).resolve().parent / 'data' / 'similar_tasks.json.gz'
 SHOWN = 5
@@ -37,14 +37,30 @@ def sync(path=DATA):
     return len({r.task_id for r in rows}), len(rows)
 
 
+def by_vector(task, visible, numbers, count):
+    """The closest tasks by meaning of the condition (vectors made on this server by learning/embeddings.py)."""
+    own = TaskVector.objects.filter(task=task, vector__isnull=False).values_list('vector', flat=True).first()
+    if own is None:
+        return []
+    rows = list(TaskVector.objects.filter(task__in=visible.filter(topic__number__in=numbers).exclude(pk=task.pk), vector__isnull=False)
+                .values_list('task_id', 'vector'))
+    if not rows:
+        return []
+    import numpy
+    scores = embeddings.matrix([bytes(v) for _, v in rows]) @ embeddings.matrix([bytes(own)])[0]
+    return [rows[i][0] for i in numpy.argsort(-scores)[:count]]
+
+
 def similar_to(task, user, count=SHOWN):
     """(tasks, how) — the pupil's unsolved similar tasks first, then solved ones."""
     visible = Task.objects.filter(published=True, in_catalog=True).exclude(game_groups.grouped_follow_up())
-    linked = list(TaskSimilarity.objects.filter(task=task, other__in=visible).values_list('other_id', flat=True))
+    numbers = game_groups.NUMBERS if task.topic.number in game_groups.NUMBERS and game_groups.active() else [task.topic.number]
+    linked = by_vector(task, visible, numbers, count * 3)
     how = 'model'
     if not linked:
+        linked = list(TaskSimilarity.objects.filter(task=task, other__in=visible).values_list('other_id', flat=True))
+    if not linked:
         how = 'number'
-        numbers = game_groups.NUMBERS if task.topic.number in game_groups.NUMBERS and game_groups.active() else [task.topic.number]
         base = visible.filter(topic__number__in=numbers).exclude(pk=task.pk)
         linked = list(base.filter(difficulty=task.difficulty).order_by('?').values_list('pk', flat=True)[:count * 3]) or \
             list(base.order_by('?').values_list('pk', flat=True)[:count * 3])
