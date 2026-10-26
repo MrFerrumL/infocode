@@ -144,3 +144,6 @@ html[data-theme="dark"] { --condition-filter: invert(1) hue-rotate(180deg) brigh
 .similar-variants label:not(.check-field) { display: grid; gap: 6px; font-size: 13px; font-weight: 600; }
 .similar-variants input[type=number] { width: 110px; }
 .similar-variants .check-field { margin: 0 0 12px; font-size: 14px; }
+.similar-variants select { min-width: 150px; }
+.similar-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; flex: 1 1 100%; }
+.similar-actions .check-field { margin: 0; }

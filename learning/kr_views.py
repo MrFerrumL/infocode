@@ -207,9 +207,11 @@ def teacher_kr_draft(request):
                 used = {i for ids in draft['variants'] for i in ids}
                 with using(draft['subject']):
                     current = Task.all_objects.select_related('topic').get(pk=draft['variants'][v][at])
-                    found = by_vector(current, pool().exclude(pk__in=used), [current.topic.number], 1)
+                    found = by_vector(current, _filtered(pool(), draft.get('level'), draft.get('source')).exclude(pk__in=used),
+                                      [current.topic.number], 1)
                 if not found:
-                    raise ComposeError('Для этой задачи нет похожих по смыслу — попробуйте «↻ Другая» или «🔍 Выбрать».')
+                    raise ComposeError('Для этой задачи нет похожих по смыслу с уровнем и источником черновика — '
+                                       'попробуйте «↻ Другая» или «🔍 Выбрать».')
                 _place(draft, v, found[0], at)
             elif action in ('put', 'add') and v >= 0 and task_id:
                 with using(draft['subject']):
@@ -301,11 +303,22 @@ def classify_task(request, pk):
 MAX_SIMILAR = 10
 
 
-def similar_sets(variant, count):
+def _filtered(tasks, level='', source=''):
+    """Bank tasks of one level and exam source when they are asked for."""
+    if level in LEVELS:
+        tasks = tasks.filter(difficulty=level)
+    return by_source(tasks, source) if source in SOURCE_CHOICES else tasks
+
+
+def similar_sets(variant, count, level='', source='', group=None):
     """(sets of task ids, numbers left without a task, tasks picked at random): each task of the variant swapped for
-    the closest one by meaning of the same number; no task is repeated, and 20–21 follow the 19 chosen in the same set."""
+    the closest one by meaning of the same number, of the asked level and source, not solved yet by the group's pupils;
+    no task is repeated, and 20–21 follow the 19 chosen in the same set."""
+    from .models import Practice
     items = list(variant.items.select_related('task__topic').order_by('position'))
     used = {item.task_id for item in items}
+    if group:
+        used |= set(Practice.objects.filter(user__in=group.students.all(), correct=True).values_list('task_id', flat=True))
     rng = random.SystemRandom()
     sets, missing, guessed = [], set(), 0
     with using(variant.subject):
@@ -318,10 +331,10 @@ def similar_sets(variant, count):
                     partners = Task.objects.filter(published=True, in_catalog=True, topic__number=item.number,
                                                    source_system=first.source_system, external_id=first.external_id)
                     found = list(partners.exclude(answer='').exclude(pk__in=used).values_list('pk', flat=True)[:1])
-                found = found or by_vector(item.task, pool().exclude(pk__in=used), [item.number], 1)
+                found = found or by_vector(item.task, _filtered(pool(), level, source).exclude(pk__in=used), [item.number], 1)
                 if not found:
-                    try:  # no vector for this task: a random task of the same number
-                        found = from_bank(item.number, 1, 1, [], rng, exclude=used)
+                    try:  # no words to compare (a picture the server cannot read): a random task of the same number
+                        found = from_bank(item.number, 1, 1, [], rng, level if level in LEVELS else None, exclude=used, source=source)
                         guessed += 1
                     except ComposeError:
                         missing.add(item.number)
@@ -342,24 +355,28 @@ def similar_variant(request, pk):
     from .services import create_variant
     from .views import visible_variants
     variant = get_object_or_404(visible_variants(request.user), pk=pk)
+    from .assignments import own_groups
     count = _int(request.POST.get('count'), 1, 1, MAX_SIMILAR)
-    sets, missing, guessed = similar_sets(variant, count)
+    level, source = request.POST.get('level', ''), request.POST.get('source', '')
+    group = own_groups(request.user).filter(pk=request.POST.get('group')).first() if request.POST.get('group', '').isdigit() else None
+    sets, missing, guessed = similar_sets(variant, count, level, source, group)
     if not all(sets):
-        messages.error(request, 'Не нашлось похожих задач для этого варианта.')
-        return redirect('variant', pk=pk)
-    lacking = f' Для № {", ".join(map(str, missing))} похожих задач не хватило — добавьте их в черновике.' if missing else ''
-    if guessed:  # pictures-only conditions without words have no vector
+        messages.error(request, 'Не нашлось похожих задач с этими условиями — ослабьте уровень или источник.')
+        return redirect(f'{reverse("variant", args=[pk])}#similar')
+    lacking = f' Для № {", ".join(map(str, missing))} похожих задач с этими условиями не хватило — добавьте их в черновике.' if missing else ''
+    if guessed:  # a picture the server could not read has no words to compare
         lacking += f' Задач без текста условия, подобранных случайно по номеру: {guessed}.'
     title = f'Похожий на «{variant.title}»'[:160]
     if request.POST.get('to') == 'kr':
-        request.session[DRAFT] = {'subject': variant.subject, 'title': title, 'group': '', 'duration': min(variant.duration, 300),
-                                  'level': '', 'source': '', 'variants': sets}
+        request.session[DRAFT] = {'subject': variant.subject, 'title': title, 'group': group.title if group else '',
+                                  'duration': min(variant.duration, 300), 'level': level if level in LEVELS else '',
+                                  'source': source if source in SOURCE_CHOICES else '', 'variants': sets}
         messages.success(request, f'Черновик КР: {count} вар., в каждом задачи, похожие на «{variant.title}».{lacking}')
         return redirect('teacher_kr_draft')
     publish = request.POST.get('publish') == '1'
     with using(variant.subject):
         made = [create_variant(creator=request.user, title=f'{title} · {k}' if count > 1 else title, topics=[], kind=variant.kind,
-                               task_ids=' '.join(map(str, ids)), duration=variant.duration, group=variant.group, published=publish)
+                               task_ids=' '.join(map(str, ids)), duration=variant.duration, group=group or variant.group, published=publish)
                 for k, ids in enumerate(sets, 1)]
     for new in made:
         new.scoring, new.hide_answers = variant.scoring, variant.hide_answers

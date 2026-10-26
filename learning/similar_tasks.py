@@ -7,6 +7,7 @@ difficulty.
 """
 import gzip
 import json
+import subprocess
 from pathlib import Path
 from django.db import transaction
 from . import embeddings, game_groups
@@ -38,9 +39,49 @@ def sync(path=DATA):
     return len({r.task_id for r in rows}), len(rows)
 
 
+def own_vector(task):
+    """The task's vector; a task without one (a picture-only KIM task, a new one) gets it now from its words or picture."""
+    row = TaskVector.objects.filter(task=task).first()
+    if row and row.vector is not None:
+        return bytes(row.vector)
+    if not embeddings.available():
+        return None
+    text = embeddings.task_text(task, row.source_text if row else '')
+    if not text:
+        from . import ocr
+        block = task.content_blocks.filter(purpose='statement', kind='image').exclude(image='').order_by('position', 'id').first()
+        if block and ocr.available():
+            try:
+                with block.image.open('rb') as picture:
+                    words = embeddings.plain(ocr.read(picture.read(), timeout=15))
+            except (OSError, ocr.Unreadable, ValueError, subprocess.SubprocessError):
+                words = ''
+            if words:
+                TaskVector.objects.update_or_create(task=task, defaults={'source_text': words})
+                text = embeddings.task_text(task, words)
+    if not text:
+        return None
+    vector = embeddings.to_bytes(embeddings.embed([text])[0])
+    TaskVector.objects.update_or_create(task=task, defaults={'digest': embeddings.digest(text), 'vector': vector})
+    return vector
+
+
+def _features(pks):
+    """{task id: (has a data file, answer parts, subtopic, own level)} — what a similar task should share."""
+    from .models import TaskBlock
+    with_files = set(TaskBlock.objects.filter(task_id__in=pks, purpose='statement', kind='file').values_list('task_id', flat=True))
+    rows = Task.all_objects.filter(pk__in=pks).values_list('pk', 'attachment', 'answer', 'subtopic', 'difficulty', 'original_difficulty')
+    return {pk: (bool(file) or pk in with_files, min(len(answer.split()), 3), subtopic.strip().lower(), original or level)
+            for pk, file, answer, subtopic, level, original in rows}
+
+
 def by_vector(task, visible, numbers, count):
-    """The closest tasks by meaning of the condition (vectors made on this server by learning/embeddings.py)."""
-    own = TaskVector.objects.filter(task=task, vector__isnull=False).values_list('vector', flat=True).first()
+    """The closest tasks by meaning of the condition (vectors made on this server by learning/embeddings.py).
+
+    The model's closeness comes first; then a similar task has to be of the same kind: with a data file when the task
+    has one (and without when it has none), the same shape of answer (one number, two…). The same subtopic and level
+    lift a task a little; the chosen ones are not near-copies of each other, nor of the task itself."""
+    own = own_vector(task)
     if own is None:
         return []
     rows = list(TaskVector.objects.filter(task__in=visible.filter(topic__number__in=numbers).exclude(pk=task.pk), vector__isnull=False)
@@ -48,14 +89,29 @@ def by_vector(task, visible, numbers, count):
     if not rows:
         return []
     import numpy
-    scores = embeddings.matrix([bytes(v) for _, v in rows]) @ embeddings.matrix([bytes(own)])[0]
-    best = [rows[i][0] for i in numpy.argsort(-scores)[:count + 10]]
+    vectors = embeddings.matrix([bytes(v) for _, v in rows])
+    scores = vectors @ embeddings.matrix([own])[0]
+    top = [int(i) for i in numpy.argsort(-scores)[:count * 4 + 30]]
+    ids = [rows[i][0] for i in top]
     # The same task copied into another bank is not «похожая»: an almost equal text with the same answer is skipped.
-    copies = {i for i, s in zip((r[0] for r in rows), scores) if s > COPY}
-    if copies:
-        answer = ' '.join(task.answer.split())
-        copies = {pk for pk, a in Task.all_objects.filter(pk__in=copies & set(best)).values_list('pk', 'answer') if ' '.join(a.split()) == answer}
-    return [pk for pk in best if pk not in copies][:count]
+    answer = ' '.join(task.answer.split())
+    copies = {pk for pk, a in Task.all_objects.filter(pk__in=[rows[i][0] for i in top if scores[i] > COPY]).values_list('pk', 'answer')
+              if ' '.join(a.split()) == answer}
+    features = _features(ids + [task.pk])
+    mine = features.get(task.pk)
+    if mine is None:
+        return []
+    kind = [i for i in top if rows[i][0] not in copies and features.get(rows[i][0], (None, None))[:2] == mine[:2]]
+    candidates = kind if len(kind) >= count else kind + [i for i in top if i not in kind and rows[i][0] not in copies]
+    bonus = lambda i: (0.02 if mine[2] and features[rows[i][0]][2] == mine[2] else 0) + (0.01 if features[rows[i][0]][3] == mine[3] else 0)  # noqa: E731
+    candidates.sort(key=lambda i: -(scores[i] + bonus(i)))
+    chosen = []
+    for i in candidates:
+        if all(float(vectors[i] @ vectors[j]) <= COPY for j in chosen):
+            chosen.append(i)
+        if len(chosen) == count:
+            break
+    return [rows[i][0] for i in chosen]
 
 
 def similar_to(task, user, count=SHOWN):

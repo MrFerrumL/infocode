@@ -59,9 +59,15 @@ class EmbeddingTests(TestCase):
         ids, how = similar_to(self.a, user, count=2)
         self.assertEqual((how, ids[0]), ('model', self.b.pk))  # the other executor task comes first
         self.assertNotIn(self.a.pk, ids)
-        # Without a vector the old way still works: tasks of the same number.
+        # A task without a vector gets it on the spot from its words.
         TaskVector.objects.filter(task=self.c).delete()
         ids, how = similar_to(self.c, user, count=2)
+        self.assertEqual(how, 'model')
+        self.assertTrue(TaskVector.objects.filter(task=self.c).exclude(vector=None).exists())
+        # Without the model the old way still works: tasks of the same number.
+        TaskVector.objects.filter(task=self.c).delete()
+        with patch.object(embeddings, 'available', return_value=False):
+            ids, how = similar_to(self.c, user, count=2)
         self.assertEqual(how, 'number')
         self.assertTrue(set(ids) <= {self.a.pk, self.b.pk, self.picture.pk})
 
@@ -95,3 +101,38 @@ class CopiesTests(TestCase):
         self.assertEqual(how, 'model')
         self.assertNotIn(copy.pk, ids)
         self.assertIn(other.pk, ids)
+
+
+@patch.object(embeddings, 'available', return_value=True)
+@patch.object(embeddings, 'embed', side_effect=fake_embed)
+class RankingTests(TestCase):
+    """A similar task is the closest by meaning among tasks of the same kind: a data file, the shape of the answer."""
+
+    def setUp(self):
+        self.topic = Topic.objects.create(number=24, title='Файлы')
+
+    def make(self, text, answer, **kw):
+        return Task.objects.create(topic=self.topic, title='t', statement=text, answer=answer, published=True, in_catalog=True, **kw)
+
+    def similar(self, task, count):
+        from .similar_tasks import by_vector
+        call_command('embed_tasks', stdout=StringIO())
+        return by_vector(task, Task.objects.all(), [24], count)
+
+    def test_a_task_with_a_file_gets_tasks_with_files(self, *_):
+        task = self.make('Исполнитель читает файл и считает', '5', attachment='tasks/a.txt')
+        self.make('Исполнитель читает файл и считает строки', '6')  # closer, but without a file
+        with_file = self.make('Определите по данным в файл количество простых', '7', attachment='tasks/b.txt')
+        self.assertEqual(self.similar(task, 1), [with_file.pk])
+
+    def test_the_same_shape_of_answer_and_no_near_copies(self, *_):
+        task = self.make('Исполнитель: найдите два числа', '1 2')
+        one = self.make('Исполнитель: найдите число', '9')  # as close, but one number in the answer
+        two = self.make('Исполнитель — найдите два значения', '3 4')
+        twin = self.make('Исполнитель, найдите два значения!', '5 6')  # the same text as «two» for the model
+        other = self.make('Определите количество простых чисел', '7 8')
+        picked = self.similar(task, 2)
+        self.assertEqual(len(picked), 2)
+        self.assertIn(picked[0], {two.pk, twin.pk})
+        self.assertEqual(picked[1], other.pk)  # not the near-copy of the first, not the one-number answer
+        self.assertNotIn(one.pk, picked)

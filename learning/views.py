@@ -305,7 +305,12 @@ def variants(request):
 def variant_detail(request, pk):
     expire_attempts(request.user)
     variant = get_object_or_404(visible_variants(request.user), pk=pk)
-    return render(request, 'variant.html', {'variant': variant, 'attempts': ExamAttempt.objects.filter(user=request.user, variant=variant), 'start_token': form_token(request.user, f'start-exam:{pk}'), 'nav': 'variants'})
+    similar = {}
+    if request.user.is_staff:  # filters of «≈ Похожие варианты»
+        from .assignments import own_groups
+        from .kr_views import SOURCE_CHOICES
+        similar = {'levels': Task.LEVELS, 'source_choices': SOURCE_CHOICES.items(), 'groups': own_groups(request.user)}
+    return render(request, 'variant.html', {'variant': variant, 'attempts': ExamAttempt.objects.filter(user=request.user, variant=variant), 'start_token': form_token(request.user, f'start-exam:{pk}'), 'nav': 'variants', **similar})
 
 
 @login_required

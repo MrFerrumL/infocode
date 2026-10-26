@@ -209,3 +209,23 @@ class SimilarVariantTests(TestCase):
         self.assertEqual((made.title, made.published), ('Похожий на «Вариант 5»', False))
         self.assertEqual(list(made.items.order_by('position').values_list('task_id', flat=True)),
                          [self.close.pk] + [t.pk for t in self.other_game])
+
+    def test_filters_level_source_and_solved_by_the_group(self):
+        from .models import Practice, StudyGroup
+        Task.objects.filter(pk=self.close.pk).update(difficulty='hard')
+        Task.objects.filter(pk=self.far.pk).update(difficulty='medium', exam_source='main')
+        self.client.force_login(self.teacher)
+        url = f'/variants/{self.variant.pk}/similar/'
+        self.client.post(url, {'to': 'kr', 'level': 'medium'})
+        self.assertEqual(self.client.session['kr_draft']['variants'][0][0], self.far.pk)
+        self.assertEqual(self.client.session['kr_draft']['level'], 'medium')
+        self.client.post(url, {'to': 'kr', 'source': 'official'})
+        self.assertEqual(self.client.session['kr_draft']['variants'][0][0], self.far.pk)
+        group = StudyGroup.objects.create(title='Пара 03', teacher=self.teacher)
+        group.students.add(self.pupil)
+        Practice.objects.create(user=self.pupil, task=self.close, answer='2', correct=True)
+        self.client.post(url, {'to': 'kr', 'group': str(group.pk)})
+        draft = self.client.session['kr_draft']
+        self.assertEqual((draft['variants'][0][0], draft['group']), (self.far.pk, 'Пара 03'))
+        page = self.client.post(url, {'to': 'kr', 'level': 'grave'}, follow=True)
+        self.assertContains(page, 'ослабьте уровень или источник')
