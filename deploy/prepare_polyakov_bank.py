@@ -6,6 +6,9 @@ typeset, answers come from answers.xls, data files from the number's archive, an
 KOMPEGE bank are skipped. Extra documents of one number keep Polyakov's numbering: "7-2.15" is stored
 as task 2015 of number 7, "7-v.3" as 3003 (see learning/sources.py, polyakov_ref).
 
+Numbers are Polyakov's, which follow the current exam (ЕГЭ-2027: IP masks are 10, counting programs 13, graphs 23)
+as KOMPEGE's do; a document whose first page names another number is refused.
+
 Numbers 19–21 come as game groups: Polyakov writes the questions once per section ("Вопросы 19-21 к
 следующим задачам"), so every task gets the condition plus the section's question 19, 20 or 21.
 
@@ -30,7 +33,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import io  # noqa: E402
 from PIL import Image  # noqa: E402
 from deploy.prepare_polyakov_doc import BOTTOM, TOP, WIDTH, normal_answer, normal_text  # noqa: E402
-from learning.sources import POLYAKOV_PARTS, classify  # noqa: E402
+from learning.sources import POLYAKOV_PARTS, classify, polyakov_header_number  # noqa: E402
 
 FORMAT = 'infocode-polyakov-doc-v1'
 GAMES_FORMAT = 'infocode-polyakov-games-v1'
@@ -239,6 +242,9 @@ def add_document(bundle, key, conv, table, src, kompege_dir):
     number, offset, column = parse_key(key)
     pdf_path = Path(conv) / f'ege{key}.pdf'
     pdf = pymupdf.open(pdf_path)
+    header = polyakov_header_number(pdf[0].get_text())
+    if header is not None and header != number:
+        raise ValueError(f'{key}: the document is headed ЕГЭ №{header}, not {number}')
     tasks, sections = training_tasks(pdf)
     if sorted(tasks) != list(range(1, len(tasks) + 1)) or not tasks:
         raise ValueError(f'{key}: training tasks are not numbered 1..N')

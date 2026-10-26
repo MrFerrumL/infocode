@@ -22,6 +22,14 @@ def polyakov_ref(number, ident):
     return f'{number}-{POLYAKOV_PARTS[part]}.{n}' if part in POLYAKOV_PARTS else f'{number}.{ident}'
 
 
+def polyakov_header_number(text):
+    """The exam number a Polyakov document gives on its first page, '13 (повышенный уровень, …' → 13, or None.
+
+    His numbers follow the current exam (ЕГЭ-2027 since 22.09.2026), like KOMPEGE's, so the bundle keeps them."""
+    match = re.search(r'\b(\d{1,2})(?:-\w+)?\s*\((?:баз|повыш|высок)', text or '')
+    return int(match.group(1)) if match else None
+
+
 KINDS = [('demo', 'Демоверсия'), ('exam', 'Реальный ЕГЭ'), ('probe', 'Пробники и ЕГКР'), ('author', 'Авторские')]
 
 EXAM = ('основная волна', 'резерв', 'пересдача', 'досрочн', 'егэ-20', 'егэ 20')
