@@ -19,12 +19,14 @@
 </section>
 
 <section class="kr-list">
-  <div class="section-heading"><h2>Мои КР</h2>{% if tests %}<span class="pill">{{ tests|length }}</span>{% endif %}</div>
+  <div class="section-heading"><h2>Мои КР</h2>{% if tests %}<span class="pill">{{ tests|length }}</span>{% endif %}
+    {% if tests %}<a class="button secondary small kr-pupils-link" href="{% url 'teacher_kr_open' %}?to=pupils" target="_blank" rel="noopener">Ученики КР ↗</a>{% endif %}</div>
   {% for test in tests %}
   <article class="panel kr-test{% for s in test.sessions %}{% if s.code == new_code %} is-new{% endif %}{% endfor %}">
     <div class="kr-test-head">
       <div><h3>{{ test.title }}</h3><p class="muted">{% if test.group %}{{ test.group }} · {% endif %}{{ test.subject_title }} · {{ test.variants }} вар. по {{ test.tasks }} задач · {{ test.duration }} мин · собрана {{ test.created|date:'d.m H:i' }}</p></div>
-      <a class="button secondary" href="{% url 'teacher_kr_open' %}?to=test:{{ test.id }}" target="_blank" rel="noopener">Варианты и ответы ↗</a>
+      <div class="kr-test-actions"><a class="button secondary" href="{% url 'teacher_kr_open' %}?to=test:{{ test.id }}" target="_blank" rel="noopener">Варианты и ответы ↗</a>
+        <form method="post" action="{% url 'teacher_kr_again' %}">{% csrf_token %}<input type="hidden" name="test" value="{{ test.id }}"><button class="button secondary">Провести ещё раз</button></form></div>
     </div>
     {% for s in test.sessions %}
     <div class="kr-session{% if s.closed %} is-closed{% endif %}">
@@ -32,6 +34,7 @@
       <div class="kr-counts"><span><b>{{ s.waiting }}</b> ждут</span><span><b>{{ s.writing }}</b> пишут</span><span><b>{{ s.finished }}</b> сдали</span>{% if s.closed %}<span class="pill">закрыта</span>{% endif %}</div>
       <div class="kr-actions">
         <button type="button" class="button secondary small" data-copy="{{ s.link }}">Скопировать ссылку</button>
+        <a class="button secondary small" href="{% url 'teacher_kr_open' %}?to=results:{{ s.code }}" target="_blank" rel="noopener">Разбор ↗</a>
         <a class="button small" href="{% url 'teacher_kr_open' %}?to=session:{{ s.code }}" target="_blank" rel="noopener">Ход КР ↗</a>
       </div>
     </div>

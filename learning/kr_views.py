@@ -7,6 +7,7 @@ from django.core.paginator import Paginator
 from django.db.models import Case, IntegerField, Q, Value, When
 from django.shortcuts import redirect, render
 from django.urls import reverse
+from django.views.decorators.http import require_POST
 from django.utils.dateparse import parse_datetime
 from . import kr_client, ocr, semantic_search
 from .kr_api import LEVELS, MAX_PER_NUMBER, MAX_VARIANTS, MAX_PICKED, SOURCES, ComposeError, available, from_bank, pool
@@ -40,9 +41,11 @@ def teacher_kr(request):
     subject = request.POST.get('subject') or request.GET.get('subject') or current_subject()
     subject = subject if subject in NUMBERS else 'inf'
     counts = available(subject)
-    form = {'title': request.POST.get('title', 'Контрольная работа'), 'group': request.POST.get('group', ''),
-            'variants': _int(request.POST.get('variants'), 4, 1, MAX_VARIANTS), 'duration': _int(request.POST.get('duration'), 45, 5, 300),
-            'level': request.POST.get('level') if request.POST.get('level') in LEVELS else ''}
+    # A link from the test platform («Собрать КР по слабым номерам») fills the form through the address.
+    data = request.POST if request.method == 'POST' else request.GET
+    form = {'title': data.get('title', 'Контрольная работа')[:160], 'group': data.get('group', '')[:120],
+            'variants': _int(data.get('variants'), 4, 1, MAX_VARIANTS), 'duration': _int(data.get('duration'), 45, 5, 300),
+            'level': data.get('level') if data.get('level') in LEVELS else ''}
     generators = set(REGISTRY) if subject == 'inf' else set()
     picked = [int(i) for i in request.POST.get('picked', '').split(',') if i.isdigit()][:MAX_PICKED]
     with using(subject):
@@ -51,7 +54,7 @@ def teacher_kr(request):
     for n in range(1, NUMBERS[subject] + 1):
         source = request.POST.get(f'src{n}', 'bank')
         source = source if source in ('bank', 'pick') or (source == 'generate' and n in generators) else 'bank'
-        rows.append({'number': n, 'available': counts.get(n, 0), 'count': _int(request.POST.get(f'n{n}'), 0, 0, MAX_PER_NUMBER),
+        rows.append({'number': n, 'available': counts.get(n, 0), 'count': _int(data.get(f'n{n}'), 0, 0, MAX_PER_NUMBER),
                      'source': source, 'generator': n in generators, 'ids': [i for i in picked if picked_numbers.get(i) == n]})
     error = ''
     if request.method == 'POST' and kr_client.enabled():
@@ -94,7 +97,7 @@ def teacher_kr(request):
 def open_kr(request):
     """Sign the teacher in on the test platform and open the asked page there."""
     to = request.GET.get('to', '')
-    if not re.fullmatch(r'(session:[A-Z0-9]{4,8}|test:\d{1,9})?', to):
+    if not re.fullmatch(r'(session:[A-Z0-9]{4,8}|results:[A-Z0-9]{4,8}|test:\d{1,9}|pupils)?', to):
         to = ''
     return redirect(kr_client.link(request.user, to))
 
@@ -224,3 +227,17 @@ def teacher_kr_draft(request):
         'level_title': LEVELS.get(draft.get('level'), 'любой'), 'nav': 'teacher', 'workspace_section': 'works',
         'meaning_on': semantic_search.available(), 'photo_on': ocr.available(),
         'current_route': 'teacher_kr', 'picker_url': f'{reverse("teacher_kr_tasks")}?subject={draft["subject"]}'})
+
+
+@staff_required
+@require_POST
+def again_kr(request):
+    """The same КР once more with a new code (another group, another day)."""
+    test_id = _int(request.POST.get('test'), 0, 0, 2_000_000_000)
+    try:
+        made = kr_client.open_again(request.user, test_id)
+    except kr_client.KrError as exc:
+        messages.error(request, str(exc))
+        return redirect('teacher_kr')
+    messages.success(request, f'КР «{made["test"]["title"]}» открыта ещё раз. Новый код для учеников: {made["code"]}.')
+    return redirect(f'{reverse("teacher_kr")}?new={made["code"]}')

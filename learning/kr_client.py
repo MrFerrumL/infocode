@@ -54,8 +54,14 @@ def create(user, title, group, subject, plan, variants, duration, level=None, ex
                                 'variants': variants, 'duration': duration, 'level': level, 'exact': exact or []}, timeout=180)
 
 
+def open_again(user, test_id):
+    """A new code for one of the teacher's tests; returns {'test': ..., 'code': ...}."""
+    return _call(f'api/tests/{int(test_id)}/session/', {'teacher': user.username})
+
+
 def link(user, to=''):
-    """A two-minute link that signs the teacher in on the test platform and opens `to` (session:<code>, test:<id>)."""
+    """A two-minute link that signs the teacher in on the test platform and opens `to`
+    (session:<code>, results:<code>, test:<id> or pupils)."""
     token = signing.dumps({'u': user.username, 'n': teacher(user)['name'], 'to': to}, key=settings.KR_API_TOKEN, salt=SALT)
     return f'{settings.KR_PUBLIC_URL.rstrip("/")}/sso/?t={token}'
 

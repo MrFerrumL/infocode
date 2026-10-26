@@ -100,3 +100,31 @@ class TeacherKrTests(TestCase):
         self.assertEqual(data, {'u': 'olga', 'n': 'Ольга', 'to': 'session:AB12CD'})
         odd = urlparse(self.client.get('/teacher/kr/open/?to=../../admin').get('Location'))
         self.assertEqual(signing.loads(parse_qs(odd.query)['t'][0], key='secret', salt='kr-sso')['to'], '')
+
+
+@override_settings(KR_API_TOKEN='secret', KR_PUBLIC_URL='/kr')
+class TeacherKrFollowUpTests(TestCase):
+    """The next КР from weak numbers arrives prefilled; a КР runs again with a new code; links reach results and pupils."""
+
+    def setUp(self):
+        self.teacher = get_user_model().objects.create_user('olga', password='x', is_staff=True)
+        self.client.force_login(self.teacher)
+
+    @patch.object(kr_client, 'tests_of', return_value=[])
+    def test_builder_prefilled_from_the_address(self, _):
+        page = self.client.get('/teacher/kr/', {'subject': 'inf', 'title': 'КР № 3 · повторение', 'group': 'Пара 02', 'n2': '1', 'n8': '2'})
+        rows = {r['number']: r['count'] for r in page.context['rows']}
+        self.assertEqual((rows[2], rows[8], rows[1]), (1, 2, 0))
+        self.assertEqual(page.context['form']['title'], 'КР № 3 · повторение')
+
+    @patch.object(kr_client, 'open_again', return_value={'test': LISTED[0], 'code': 'ZZ99XX'})
+    def test_run_again(self, again):
+        reply = self.client.post('/teacher/kr/again/', {'test': '7'})
+        self.assertRedirects(reply, '/teacher/kr/?new=ZZ99XX', fetch_redirect_response=False)
+        self.assertEqual(again.call_args.args[1], 7)
+
+    def test_links_to_results_and_pupils(self):
+        for to in ('results:AB12CD', 'pupils'):
+            target = urlparse(self.client.get(f'/teacher/kr/open/?to={to}')['Location'])
+            data = signing.loads(parse_qs(target.query)['t'][0], key='secret', salt='kr-sso')
+            self.assertEqual(data['to'], to)

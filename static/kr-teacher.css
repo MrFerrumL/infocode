@@ -84,3 +84,6 @@
 .kr-picker-filters .photo-search { display: inline-flex; align-items: center; gap: 8px; }
 .kr-picker-filters .photo-status { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
 .kr-picker-filters .photo-status.error { color: #c04455; }
+.kr-test-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.kr-test-actions form { margin: 0; }
+.kr-pupils-link { margin-left: auto; }
