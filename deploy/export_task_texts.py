@@ -1,8 +1,10 @@
 """Words of the pictures-only conditions (KOMPEGE, K. Polyakov) for the site's own sentence vectors.
 
-    python deploy/export_task_texts.py WORK_DIR learning/data/task_texts.json.gz
+    python deploy/export_task_texts.py WORK_DIR OUT/task_texts.json.gz
 
-Uses the same sources as deploy/build_similar_tasks.py; `manage.py embed_tasks --texts …` loads the file on the server.
+Uses the same sources as deploy/build_similar_tasks.py. The texts belong to third-party banks, so the file stays
+out of git (the repository is public): deploy/install_kompege_pilot.py --embed --texts OUT/task_texts.json.gz sends it
+to the server for one run of `manage.py embed_tasks`.
 Needs pymupdf (not used by the site itself).
 """
 import gzip

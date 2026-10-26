@@ -9,7 +9,7 @@ from learning.models import Task, TaskBlock, TaskVector
 
 class Command(BaseCommand):
     help = ('Give every catalogue task a sentence vector for «Похожие» (learning/embeddings.py). Only new or changed texts '
-            'are embedded. --texts loads the words of pictures-only conditions (deploy/export_task_texts.py).')
+            'are embedded. --texts loads the words of pictures-only conditions (deploy/export_task_texts.py, kept out of git).')
 
     def add_arguments(self, parser):
         parser.add_argument('--texts', type=Path, help='task_texts.json.gz: {"source:number:external_id": text}')

@@ -28,3 +28,5 @@ credentials*.txt
 
 # Sentence-embedding model for «Похожие» (deploy/export_embedding_model.py), shipped with --model
 /models/
+# Words of pictures-only conditions from third-party banks: kept locally, sent with install_kompege_pilot.py --texts
+learning/data/task_texts.json.gz
