@@ -6,15 +6,36 @@
     const rows = [...builder.querySelectorAll('[data-row]')];
     const row = number => builder.querySelector(`[data-row="${number}"]`);
     const summary = builder.querySelector('[data-summary]');
+    const bankData = document.getElementById('kr-bank');
+    const bank = bankData ? JSON.parse(bankData.textContent) : null;
+    // Tasks of a number in the bank for the chosen level and exam source.
+    const inBank = number => {
+      const level = builder.querySelector('[name=level]').value;
+      const source = builder.querySelector('[name=source]').value;
+      return bank.rows.reduce((sum, [n, l, s, k]) => sum + (n === number && (!level || l === level)
+        && (!source || s === source || (source === 'official' && bank.official.includes(s))) ? k : 0), 0);
+    };
     const update = () => {
       let total = 0;
+      const short = [];
+      const variants = +builder.querySelector('[name=variants]').value || 1;
       rows.forEach(r => {
         const count = +r.querySelector('input').value || 0;
         total += count;
         r.classList.toggle('has-tasks', count > 0);
+        if (!bank) return;
+        const number = +r.dataset.row;
+        const have = inBank(number);
+        r.querySelector('[data-bank-count]').textContent = `в банке ${have}`;
+        const fromBank = r.querySelector('select').value === 'bank';
+        const lacking = fromBank && count * variants > have;
+        r.classList.toggle('is-short', lacking);
+        if (lacking) short.push(`№ ${number} (есть ${have}, нужно ${count * variants})`);
       });
-      const variants = +builder.querySelector('[name=variants]').value || 1;
-      summary.textContent = total ? `В каждом варианте ${total} задач, всего вариантов: ${variants}.` : 'Укажите число задач хотя бы для одного номера.';
+      summary.textContent = !total ? 'Укажите число задач хотя бы для одного номера.'
+        : short.length ? `Не хватает задач с этим уровнем и источником: ${short.join(', ')}. Уменьшите число, выберите «Любой» или «Генератор».`
+        : `В каждом варианте ${total} задач, всего вариантов: ${variants}.`;
+      summary.classList.toggle('is-short', short.length > 0);
     };
     builder.addEventListener('input', update);
     builder.addEventListener('change', update);
@@ -61,7 +82,9 @@
     const load = async (page = 1) => {
       const params = new URLSearchParams({number: picker.querySelector('[data-filter-number]').value,
                                           q: picker.querySelector('[data-filter-q]').value, page,
-                                          mode: (picker.querySelector('[data-photo-mode]') || {}).value || ''});
+                                          mode: (picker.querySelector('[data-photo-mode]') || {}).value || '',
+                                          level: picker.querySelector('[data-filter-level]').value,
+                                          source: picker.querySelector('[data-filter-source]').value});
       list.innerHTML = '<p class="muted">Загружаем задачи…</p>';
       try {
         const response = await fetch(`${picker.dataset.url}&${params}`, {headers: {'X-Requested-With': 'XMLHttpRequest'}});
@@ -69,7 +92,7 @@
       } catch { list.innerHTML = '<p class="muted">Нет связи с сервером.</p>'; }
       render();
     };
-    picker.querySelector('[data-filter-number]').addEventListener('change', () => load());
+    picker.querySelectorAll('[data-filter-number], [data-filter-level], [data-filter-source]').forEach(el => el.addEventListener('change', () => load()));
     picker.querySelector('[data-filter-go]').addEventListener('click', () => load());
     picker.querySelector('[data-filter-q]').addEventListener('keydown', event => {
       if (event.key === 'Enter') { event.preventDefault(); load(); }
@@ -98,6 +121,7 @@
     });
     render();
     update();
+    load();  // all numbers at once; filters narrow the list
   }
   document.querySelectorAll('[data-copy]').forEach(button => button.addEventListener('click', async () => {
     try {

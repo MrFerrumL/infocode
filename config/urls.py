@@ -73,6 +73,7 @@ urlpatterns = [
     path('teacher/kr/', kr_views.teacher_kr, name='teacher_kr'),
     path('teacher/kr/open/', kr_views.open_kr, name='teacher_kr_open'),
     path('teacher/kr/again/', kr_views.again_kr, name='teacher_kr_again'),
+    path('teacher/tasks/<int:pk>/classify/', kr_views.classify_task, name='task_classify'),
     path('teacher/kr/tasks/', kr_views.kr_tasks, name='teacher_kr_tasks'),
     path('teacher/kr/draft/', kr_views.teacher_kr_draft, name='teacher_kr_draft'),
     path('api/kr/numbers/', kr_api.numbers, name='kr_api_numbers'),

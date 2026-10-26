@@ -128,15 +128,23 @@ class ComposeError(Exception):
     pass
 
 
-def from_bank(number, count, variants, ids, rng, level=None, exclude=()):
-    """Random tasks of the bank (of one difficulty if asked), none repeated anywhere."""
-    found = pool().filter(topic__number=number).exclude(pk__in=exclude)
+def by_source(tasks, source):
+    """Tasks of one exam source («approbation», «main»…), or of any official one («official»)."""
+    from .exam_sources import OFFICIAL
+    if source == 'official':
+        return tasks.filter(exam_source__in=OFFICIAL)
+    return tasks.filter(exam_source=source) if source else tasks
+
+
+def from_bank(number, count, variants, ids, rng, level=None, exclude=(), source=''):
+    """Random tasks of the bank (of one difficulty and exam source if asked), none repeated anywhere."""
+    found = by_source(pool().filter(topic__number=number).exclude(pk__in=exclude), source)
     if level:
         found = found.filter(difficulty=level)
     found = list(found.values_list('pk', flat=True))
     need = count * variants
     if len(found) < need:
-        what = f' уровня «{LEVELS[level]}»' if level else ''
+        what = (f' уровня «{LEVELS[level]}»' if level else '') + (' из выбранного источника' if source else '')
         raise ComposeError(f'Для № {number} в банке {len(found)} задач{what} с ответом, а нужно {need} (без повторов).')
     return rng.sample(found, need)
 

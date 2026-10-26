@@ -132,3 +132,7 @@ html[data-theme="dark"] { --condition-filter: invert(1) hue-rotate(180deg) brigh
 .photo-status { font-size: 12px; color: var(--muted); max-width: 260px; }
 .photo-status.error { color: #c04455; }
 .photo-status:empty { display: none; }
+/* Teacher's in-place level and exam source of a task. */
+.task-classify { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; }
+.task-classify select { width: auto; min-width: 0; padding: 4px 8px; font-size: 12px; height: auto; }
+.classify-state { font-size: 12px; color: var(--muted); }

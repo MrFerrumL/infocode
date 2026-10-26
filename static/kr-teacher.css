@@ -42,21 +42,21 @@
 .kr-picker-filters { display: grid; grid-template-columns: 180px 1fr auto; gap: 10px; }
 .kr-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .kr-chips:empty { display: none; }
-.kr-chip { border: 1px solid var(--purple); background: #f1eeff; color: var(--purple); border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 600; }
+.kr-chip { border: 1px solid var(--purple); background: var(--soft, #f1eeff); color: var(--purple); border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 600; }
 .kr-pick-list { display: grid; gap: 10px; }
-.kr-pick-card { border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; background: #fff; }
+.kr-pick-card { border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; background: var(--paper, #fff); }
 .kr-pick-card header { display: flex; align-items: center; gap: 12px; }
 .kr-pick-card header > div { flex: 1; display: grid; }
 .kr-pick-card header small { color: var(--muted); }
-.kr-pick-num { width: 38px; height: 38px; border-radius: 10px; background: #f1eeff; color: var(--purple); display: grid; place-items: center; font-weight: 700; flex: none; }
+.kr-pick-num { width: 38px; height: 38px; border-radius: 10px; background: var(--soft, #f1eeff); color: var(--purple); display: grid; place-items: center; font-weight: 700; flex: none; }
 .kr-pick-body { max-height: 220px; overflow: hidden; position: relative; margin-top: 8px; }
-.kr-pick-body::after { content: ''; position: absolute; inset: auto 0 0; height: 60px; background: linear-gradient(transparent, #fff); }
+.kr-pick-body::after { content: ''; position: absolute; inset: auto 0 0; height: 60px; background: linear-gradient(transparent, var(--paper, #fff)); }
 .kr-pick-card.is-open .kr-pick-body { max-height: none; }
 .kr-pick-card.is-open .kr-pick-body::after { display: none; }
 .kr-pick-body .statement { margin: 8px 0; font-size: 14px; line-height: 1.6; }
 .kr-pick-body img { max-width: 100%; height: auto; }
 .kr-pick-more { margin-top: 6px; }
-.kr-pick-card .is-picked { background: var(--purple); color: #fff; border-color: var(--purple); }
+.kr-pick-card .is-picked { background: var(--purple); color: var(--on-purple, #fff); border-color: var(--purple); }
 .kr-pick-pages { display: flex; justify-content: center; align-items: center; gap: 14px; }
 .link { background: none; border: 0; padding: 0; color: var(--purple); font-weight: 600; font-size: 14px; cursor: pointer; }
 @media (max-width: 760px) { .kr-picker-filters { grid-template-columns: 1fr; } }
@@ -87,3 +87,6 @@
 .kr-test-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .kr-test-actions form { margin: 0; }
 .kr-pupils-link { margin-left: auto; }
+.kr-number.is-short { border-color: #c33c47; }
+.kr-number.is-short [data-bank-count] { color: #c33c47; font-weight: 600; }
+[data-summary].is-short { color: #c33c47; }

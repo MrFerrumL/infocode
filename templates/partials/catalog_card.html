@@ -6,6 +6,7 @@
 <div class="task-meta">{% if task.source_label %}<span class="source-note kind-{{ task.source_kind|default:'own' }}" title="{{ task.get_source_kind_display }}">{{ task.source_label }}</span>{% endif %}<span class="pill {{ task.difficulty }}">{{ task.get_difficulty_display }}</span><span>ID {{ task.id }}</span>{% if task.solved %}<span class="success-text" data-catalog-solved>✓ Решено</span>{% endif %}{% if task.saved %}<span>★ В избранном</span>{% endif %}</div>
       <h3 id="task-title-{{ task.pk }}">{% if task.follow_ups %}{{ task.title|cut:" · задание 19" }} · задания 19–21{% else %}{{ task.title }}{% endif %}</h3>
       <span class="muted">{{ task.topic.title }}</span>
+      {% include 'partials/task_classify.html' %}
     </div>
   </header>
   <div class="catalog-condition-body">

@@ -165,6 +165,10 @@ def catalog(request):
     kind = request.GET.get('kind', '')
     if kind in dict(KINDS):
         qs = qs.filter(source_kind=kind)
+    exam = request.GET.get('exam', '')
+    if exam:
+        from .kr_api import by_source
+        qs = by_source(qs, exam if exam == 'official' or exam in dict(Task.EXAM_SOURCES) else '')
     site = request.GET.get('site', '')
     if site in SITES and site:
         qs = qs.filter(source_system=site)
@@ -220,7 +224,7 @@ def catalog(request):
         topic.folded = topic.number in game_groups.FOLLOW_UPS and game_groups.active()
     params = request.GET.copy()
     params.pop('page', None)
-    return render(request, 'catalog.html', {'levels': Task.LEVELS, 'topics': topics, 'page': page, 'number': number, 'difficulty': difficulty, 'query': query, 'mode': mode, 'meaning_on': semantic_search.available(), 'photo_on': ocr.available(), 'state': state, 'sort': sort, 'sorts': CATALOG_SORTS, 'kind': kind, 'kinds': KINDS, 'site': site,
+    return render(request, 'catalog.html', {'levels': Task.LEVELS, 'topics': topics, 'page': page, 'number': number, 'difficulty': difficulty, 'query': query, 'mode': mode, 'meaning_on': semantic_search.available(), 'photo_on': ocr.available(), 'state': state, 'sort': sort, 'sorts': CATALOG_SORTS, 'kind': kind, 'kinds': KINDS, 'exam': exam, 'exam_sources': Task.EXAM_SOURCES, 'site': site,
         'sites': [(key or 'own', name) for key, name in SITES.items() if Task.objects.filter(published=True, in_catalog=True, source_system=key).exists()], 'params': params.urlencode(), 'nav': 'catalog'})
 
 

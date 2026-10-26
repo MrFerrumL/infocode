@@ -4,20 +4,22 @@ import re
 from urllib.parse import urljoin
 from django.contrib import messages
 from django.core.paginator import Paginator
-from django.db.models import Case, IntegerField, Q, Value, When
+from django.db.models import Case, Count, IntegerField, Q, Value, When
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 from django.utils.dateparse import parse_datetime
 from . import kr_client, ocr, semantic_search
-from .kr_api import LEVELS, MAX_PER_NUMBER, MAX_VARIANTS, MAX_PICKED, SOURCES, ComposeError, available, from_bank, pool
+from .kr_api import LEVELS, MAX_PER_NUMBER, MAX_VARIANTS, MAX_PICKED, SOURCES, ComposeError, available, by_source, from_bank, pool
 from .models import Task
+from .exam_sources import OFFICIAL, apply as apply_source
 from .similar_tasks import by_vector
 from .subjects import SUBJECTS, current as current_subject, using
 from .task_generators import REGISTRY
 from .views import staff_required
 
 NUMBERS = {'inf': 27, 'phys': 26}
+SOURCE_CHOICES = {'official': 'Все официальные (ЕГЭ)', **dict(Task.EXAM_SOURCES)}
 
 
 def _int(value, default, low, high):
@@ -46,11 +48,15 @@ def teacher_kr(request):
     data = request.POST if request.method == 'POST' else request.GET
     form = {'title': data.get('title', 'Контрольная работа')[:160], 'group': data.get('group', '')[:120],
             'variants': _int(data.get('variants'), 4, 1, MAX_VARIANTS), 'duration': _int(data.get('duration'), 45, 5, 300),
-            'level': data.get('level') if data.get('level') in LEVELS else ''}
+            'level': data.get('level') if data.get('level') in LEVELS else '',
+            'source': data.get('source') if data.get('source') in SOURCE_CHOICES else ''}
     generators = set(REGISTRY) if subject == 'inf' else set()
     picked = [int(i) for i in request.POST.get('picked', '').split(',') if i.isdigit()][:MAX_PICKED]
     with using(subject):
         picked_numbers = dict(pool().filter(pk__in=picked).values_list('pk', 'topic__number'))
+        # The bank by number, level and exam source: the page recounts «в банке N» when the level or source changes.
+        bank = [list(row) for row in pool().order_by().values('topic__number', 'difficulty', 'exam_source')
+                .annotate(k=Count('pk')).values_list('topic__number', 'difficulty', 'exam_source', 'k')]
     rows = []
     for n in range(1, NUMBERS[subject] + 1):
         source = request.POST.get(f'src{n}', 'bank')
@@ -64,12 +70,12 @@ def teacher_kr(request):
             error = 'Укажите, сколько задач взять хотя бы по одному номеру.'
         else:
             try:
-                variants = compose_draft(subject, plan, form['variants'], form['level'])
+                variants = compose_draft(subject, plan, form['variants'], form['level'], form['source'])
             except ComposeError as exc:
                 error = str(exc)
             else:
-                request.session[DRAFT] = {'subject': subject, 'title': form['title'], 'group': form['group'],
-                                          'duration': form['duration'], 'level': form['level'], 'variants': variants}
+                request.session[DRAFT] = {'subject': subject, 'title': form['title'], 'group': form['group'], 'duration': form['duration'],
+                                          'level': form['level'], 'source': form['source'], 'variants': variants}
                 return redirect('teacher_kr_draft')
     tests, unavailable = [], ''
     if kr_client.enabled():
@@ -88,7 +94,8 @@ def teacher_kr(request):
         'form': form, 'rows': rows, 'error': error, 'tests': tests, 'unavailable': unavailable,
         'enabled': kr_client.enabled(), 'pupils_url': absolute(request, kr_client.pupils_url()), 'new_code': request.GET.get('new', ''),
         'max_per_number': MAX_PER_NUMBER, 'max_variants': MAX_VARIANTS, 'picked': ','.join(map(str, picked)),
-        'levels': LEVELS.items(), 'has_draft': bool(request.session.get(DRAFT)),
+        'bank': {'rows': bank, 'official': sorted(OFFICIAL)},
+        'levels': LEVELS.items(), 'has_draft': bool(request.session.get(DRAFT)), 'source_choices': SOURCE_CHOICES.items(),
         'meaning_on': semantic_search.available(), 'photo_on': ocr.available(),
         'nav': 'teacher', 'workspace_section': 'works',
         'current_route': 'teacher_kr'})
@@ -108,11 +115,16 @@ def kr_tasks(request):
     """Catalogue tasks for the КР picker: by number, ID or words of the condition."""
     subject = request.GET.get('subject') if request.GET.get('subject') in NUMBERS else 'inf'
     number, query = request.GET.get('number', ''), request.GET.get('q', '').strip()[:1500]
+    level, source = request.GET.get('level', ''), request.GET.get('source', '')
     meaning = request.GET.get('mode') == 'meaning' and semantic_search.available()
     with using(subject):
         tasks = pool().select_related('topic').order_by('-pk')
         if number.isdigit():
             tasks = tasks.filter(topic__number=int(number))
+        if level in LEVELS:
+            tasks = tasks.filter(difficulty=level)
+        if source in SOURCE_CHOICES:
+            tasks = by_source(tasks, source)
         ranked = semantic_search.rank(query, tasks, limit=40) if query and meaning and not query.isdigit() else None
         if ranked is not None:
             # By meaning (words or a photo's text): the closest tasks first.
@@ -130,13 +142,16 @@ def kr_tasks(request):
 DRAFT = 'kr_draft'
 
 
-def compose_draft(subject, plan, variants, level):
+def compose_draft(subject, plan, variants, level, source=''):
     """Variants as lists of task ids, ordered by ЕГЭ number; the same sources as the КР API."""
     rng = random.SystemRandom()
     result = [[] for _ in range(variants)]
     with using(subject):
         for row in plan:
-            chosen = SOURCES[row['source']](row['number'], row['count'], variants, row['ids'], rng, level or None)
+            if row['source'] == 'bank':
+                chosen = from_bank(row['number'], row['count'], variants, row['ids'], rng, level or None, source=source)
+            else:
+                chosen = SOURCES[row['source']](row['number'], row['count'], variants, row['ids'], rng, level or None)
             for v in range(variants):
                 result[v].extend(chosen[v * row['count']:(v + 1) * row['count']])
         numbers = dict(Task.all_objects.filter(pk__in={i for ids in result for i in ids}).values_list('pk', 'topic__number'))
@@ -147,11 +162,12 @@ def _other(draft, number, exclude_level=False):
     """One more random task of the number that is not in the draft yet."""
     used = {i for ids in draft['variants'] for i in ids}
     level = None if exclude_level else draft.get('level') or None
+    source = draft.get('source', '')
     with using(draft['subject']):
         try:
-            return from_bank(number, 1, 1, [], random.SystemRandom(), level, exclude=used)[0]
+            return from_bank(number, 1, 1, [], random.SystemRandom(), level, exclude=used, source=source)[0]
         except ComposeError:
-            if level:
+            if level or source:
                 return from_bank(number, 1, 1, [], random.SystemRandom(), None, exclude=used)[0]
             raise
 
@@ -235,6 +251,7 @@ def teacher_kr_draft(request):
     return render(request, 'teacher/kr_draft.html', {
         'draft': draft, 'variants': variants, 'numbers': numbers, 'all_numbers': range(1, NUMBERS[draft['subject']] + 1),
         'level_title': LEVELS.get(draft.get('level'), 'любой'), 'nav': 'teacher', 'workspace_section': 'works',
+        'levels': LEVELS.items(), 'source_choices': SOURCE_CHOICES.items(),
         'meaning_on': semantic_search.available(), 'photo_on': ocr.available(),
         'current_route': 'teacher_kr', 'picker_url': f'{reverse("teacher_kr_tasks")}?subject={draft["subject"]}'})
 
@@ -251,3 +268,31 @@ def again_kr(request):
         return redirect('teacher_kr')
     messages.success(request, f'КР «{made["test"]["title"]}» открыта ещё раз. Новый код для учеников: {made["code"]}.')
     return redirect(f'{reverse("teacher_kr")}?new={made["code"]}')
+
+
+@staff_required
+@require_POST
+def classify_task(request, pk):
+    """The teacher moves a task to another level or exam source at once; the automatic sorting leaves it alone after."""
+    from django.http import JsonResponse
+    task = Task.all_objects.filter(pk=pk).first()
+    if not task:
+        return JsonResponse({'error': 'Нет такой задачи.'}, status=404)
+    sources = dict(Task._meta.get_field('exam_source').choices)
+    fields = ['exam_source_manual', 'exam_source', 'difficulty', 'original_difficulty']
+    if 'exam_source' in request.POST:
+        code = request.POST['exam_source']
+        if code and code not in sources:
+            return JsonResponse({'error': 'Неизвестный источник.'}, status=400)
+        if 'difficulty' in request.POST:
+            task.exam_source = code
+        else:
+            apply_source(task, code)  # an official source brings the «ЕГЭ» level, another one gives the own level back
+    if 'difficulty' in request.POST:
+        if request.POST['difficulty'] not in LEVELS:
+            return JsonResponse({'error': 'Неизвестный уровень.'}, status=400)
+        task.difficulty = request.POST['difficulty']
+    task.exam_source_manual = True
+    task.save(update_fields=fields)
+    return JsonResponse({'difficulty': task.difficulty, 'difficulty_label': task.get_difficulty_display(),
+                         'exam_source': task.exam_source, 'exam_source_label': task.get_exam_source_display()})

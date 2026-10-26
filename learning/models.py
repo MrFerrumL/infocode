@@ -73,6 +73,13 @@ class Task(models.Model):
     source_label = models.CharField('Пометка источника', max_length=120, blank=True, default='')
     source_kind = models.CharField('Тип задания', max_length=10, blank=True, default='',
         choices=[('demo', 'Демоверсия'), ('exam', 'Реальный ЕГЭ'), ('probe', 'Пробники и ЕГКР'), ('author', 'Авторские')])
+    # Where an exam task comes from (learning/exam_sources.py); the official ones form the «ЕГЭ» level.
+    EXAM_SOURCES = [('demo', 'Демоверсия'), ('approbation', 'Апробация'), ('early', 'Досрочная волна'), ('main', 'Основная волна'),
+                    ('exam', 'Реальный ЕГЭ'), ('reserve', 'Резерв'), ('retake', 'Пересдача'), ('egkr', 'ЕГКР'),
+                    ('open', 'Открытый вариант'), ('fipi', 'Открытый банк ФИПИ'), ('statgrad', 'Статград')]
+    exam_source = models.CharField('Источник ЕГЭ', max_length=12, blank=True, default='', db_index=True, choices=EXAM_SOURCES)
+    exam_source_manual = models.BooleanField('Тип выбран преподавателем', default=False)
+    original_difficulty = models.CharField('Сложность до уровня «ЕГЭ»', max_length=10, blank=True, default='')
     attachment = models.FileField('Данные к задаче', upload_to='tasks/', blank=True, validators=[file_size, FileExtensionValidator(['txt', 'csv', 'xlsx', 'pdf', 'zip'])])
     published = models.BooleanField('Опубликовано', default=True)
     # Tasks of imported KOMPEGE variants that the source keeps out of its public bank.

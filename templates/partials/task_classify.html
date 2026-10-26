@@ -1,0 +1,4 @@
+{% if user.is_staff %}{# Not a form: the КР picker lists cards inside the builder's form, and forms cannot nest. #}<div class="task-classify" data-classify="{% url 'task_classify' task.pk %}" data-csrf="{{ csrf_token }}" title="Переместить задачу в другой уровень или тип">
+  <select data-field="difficulty" aria-label="Уровень">{% for value, label in task.LEVELS %}<option value="{{ value }}" {% if task.difficulty == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+  <select data-field="exam_source" aria-label="Источник ЕГЭ"><option value="">Без источника</option>{% for value, label in task.EXAM_SOURCES %}<option value="{{ value }}" {% if task.exam_source == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>
+  <small class="classify-state" data-classify-state></small></div>{% endif %}

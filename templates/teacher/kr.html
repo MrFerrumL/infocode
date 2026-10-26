@@ -1,6 +1,6 @@
 {% extends 'base.html' %}{% load static %}
 {% block title %}КР без регистрации · Инфокод{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{% static 'kr-teacher.css' %}"><script defer src="{% static 'kr-teacher.js' %}"></script><script defer src="{% static 'photo-search.js' %}"></script>{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'kr-teacher.css' %}"><script defer src="{% static 'kr-teacher.js' %}"></script><script defer src="{% static 'photo-search.js' %}"></script><script defer src="{% static 'task-classify.js' %}"></script>{% endblock %}
 {% block content %}
 {% include 'layout/work_tabs.html' %}
 <div class="page-heading"><div><div class="eyebrow">КОНТРОЛЬНЫЕ · ОТДЕЛЬНАЯ ПЛАТФОРМА</div><h1>КР без регистрации<span class="accent">.</span></h1>
@@ -46,6 +46,7 @@
 </section>
 
 {% if enabled %}
+{{ bank|json_script:'kr-bank' }}
 <form method="post" class="panel kr-builder" data-kr-builder>{% csrf_token %}
   <div class="section-heading"><h2>Собрать новую КР</h2>
     <div class="kr-subject">{% for code, title in subject_choices %}<a href="?subject={{ code }}" class="{% if code == subject_code %}active{% endif %}">{{ title }}</a>{% endfor %}</div></div>
@@ -56,6 +57,7 @@
     <label>Группа<input name="group" value="{{ form.group }}" maxlength="120" placeholder="Например, Пара 03"></label>
     <label>Вариантов<input type="number" name="variants" value="{{ form.variants }}" min="1" max="{{ max_variants }}" required></label>
     <label>Время, мин<input type="number" name="duration" value="{{ form.duration }}" min="5" max="300" required></label>
+    <label>Источник (для «Банк»)<select name="source"><option value="">Любой</option>{% for code, title in source_choices %}<option value="{{ code }}" {% if form.source == code %}selected{% endif %}>{{ title }}</option>{% endfor %}</select></label>
     <label>Уровень задач<select name="level"><option value="">Любой</option>{% for code, title in levels %}<option value="{{ code }}" {% if form.level == code %}selected{% endif %}>{{ title }}</option>{% endfor %}</select></label>
   </div>
   {% if has_draft %}<div class="notice">Есть несобранный черновик КР. <a href="{% url 'teacher_kr_draft' %}">Продолжить редактирование →</a></div>{% endif %}
@@ -72,7 +74,7 @@
         {% if row.generator %}<option value="generate" {% if row.source == 'generate' %}selected{% endif %}>Генератор</option>{% endif %}
         <option value="pick" {% if row.source == 'pick' %}selected{% endif %}>Выбранные</option>
       </select>
-      <small>в банке {{ row.available }}{% if row.generator %} · ⚙{% endif %}</small>
+      <small><span data-bank-count>в банке {{ row.available }}</span>{% if row.generator %} · ⚙{% endif %}</small>
       <small class="kr-picked-count" data-picked-count></small>
     </div>
     {% endfor %}
@@ -86,12 +88,14 @@
       <select data-filter-number aria-label="Номер">
         <option value="">Все номера</option>{% for row in rows %}<option value="{{ row.number }}">№ {{ row.number }}</option>{% endfor %}
       </select>
+      <select data-filter-level aria-label="Уровень"><option value="">Все уровни</option>{% for code, title in levels %}<option value="{{ code }}">{{ title }}</option>{% endfor %}</select>
+      <select data-filter-source aria-label="Источник"><option value="">Все источники</option>{% for code, title in source_choices %}<option value="{{ code }}">{{ title }}</option>{% endfor %}</select>
       <input type="search" data-filter-q data-photo-target placeholder="ID, слова, условие целиком или фото (Ctrl+V)" aria-label="Поиск задачи">
       {% if meaning_on %}<select data-photo-mode aria-label="Как искать"><option value="">По словам</option><option value="meaning">По смыслу</option></select>{% endif %}
       <button type="button" class="button secondary" data-filter-go>Найти</button>
       {% if photo_on %}<span class="photo-search" data-photo-search data-url="{% url 'search_photo' %}"><button type="button" class="button secondary" data-photo-pick title="Найти похожие задачи по фото условия">📷 По фото</button><input type="file" accept="image/*" data-photo-file hidden><small class="photo-status" data-photo-status role="status"></small></span>{% endif %}
     </div>
-    <div class="kr-pick-list" data-pick-list><p class="muted">Выберите номер или найдите задачу по ID — условия появятся здесь.</p></div>
+    <div class="kr-pick-list" data-pick-list><p class="muted">Загружаем задачи…</p></div>
   </section>
 
   <div class="kr-submit"><span class="muted" data-summary></span><button class="button">Собрать черновик →</button></div>
