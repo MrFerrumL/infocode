@@ -23,7 +23,7 @@ FIPI_DOWN = 'Сайт ФИПИ сейчас не отвечает — ответ
 from .models import Topic, Task, Practice, Bookmark, Variant, ExamAttempt, ExamAnswer, Section, Lesson, LessonProgress, LessonFile, VariantItem, TaskBlock, Course, Step, StudentAssignment
 from .security import form_token, claim_submission
 from .services import check_answer, create_variant, finish_attempt, expire_attempts, check_task_answer
-from . import game_groups, answer_cells
+from . import game_groups, answer_cells, ocr, semantic_search
 from .sources import KINDS, SITES
 
 staff_required = user_passes_test(lambda u: u.is_active and u.is_staff)
@@ -171,8 +171,11 @@ def catalog(request):
     elif site == 'own':
         qs = qs.filter(source_system='')
     query = request.GET.get('q', '').strip()
-    if query:
-        qs = qs.filter(Q(title__icontains=query) | Q(tags__icontains=query) | Q(subtopic__icontains=query) | Q(statement__icontains=query) | Q(content_blocks__text__icontains=query, content_blocks__purpose='statement') | ((Q(id=int(query)) | Q(external_id=int(query))) if query.isdigit() else Q(pk__isnull=True))).distinct()
+    mode = 'meaning' if request.GET.get('mode') == 'meaning' and semantic_search.available() else ''
+    def by_words(qs):
+        return qs.filter(Q(title__icontains=query) | Q(tags__icontains=query) | Q(subtopic__icontains=query) | Q(statement__icontains=query) | Q(content_blocks__text__icontains=query, content_blocks__purpose='statement') | ((Q(id=int(query)) | Q(external_id=int(query))) if query.isdigit() else Q(pk__isnull=True))).distinct()
+    if query and not mode:
+        qs = by_words(qs)
     state = request.GET.get('state', '')
     saved = set(Bookmark.objects.filter(user=request.user).values_list('task_id', flat=True))
     if state == 'saved':
@@ -185,6 +188,12 @@ def catalog(request):
         qs = qs.filter(id__in=[pk for pk, correct in latest.items() if not correct])
     elif state == 'new':
         qs = qs.exclude(id__in=solved)
+    # Search by meaning (words or a photo's text): the closest tasks among those the filters allow, best first.
+    meaning = semantic_search.rank(query, qs) if query and mode else None
+    if meaning is not None:
+        qs = qs.filter(pk__in=meaning)
+    elif query and mode:
+        qs = by_words(qs)  # a word or two: no meaning to compare, an ordinary search does better
     # A 19–21 group is one card: grouped 20/21 tasks are answered inside their 19 card.
     # By default each bank keeps its own order: KOMPEGE newest first (demo, retake, main wave…),
     # K. Polyakov from his first task (17.1, 17.2…), own tasks last. 'asc'/'desc' sort by source number.
@@ -197,7 +206,11 @@ def catalog(request):
              'easy': [rank, bank, polyakov_first, F('external_id').desc(nulls_last=True), '-id'],
              'hard': [rank.desc(), bank, polyakov_first, F('external_id').desc(nulls_last=True), '-id']}.get(
         sort, [bank, polyakov_first, F('external_id').desc(nulls_last=True), '-id'])
-    qs = Task.objects.filter(id__in=game_groups.fold_follow_ups(qs)).order_by('topic__number', *order).select_related('topic').prefetch_related(
+    if meaning:
+        order_by = [Case(*[When(pk=pk, then=Value(i)) for i, pk in enumerate(meaning)], default=Value(len(meaning)), output_field=IntegerField())]
+    else:
+        order_by = ['topic__number', *order]
+    qs = Task.objects.filter(id__in=game_groups.fold_follow_ups(qs)).order_by(*order_by).select_related('topic').prefetch_related(
         Prefetch('content_blocks', queryset=TaskBlock.objects.all(), to_attr='catalog_blocks'),
         Prefetch('practice_set', queryset=Practice.objects.filter(user=request.user).order_by('-created_at', '-pk')[:5], to_attr='catalog_history'))
     page = Paginator(qs, 12).get_page(request.GET.get('page'))
@@ -207,7 +220,7 @@ def catalog(request):
         topic.folded = topic.number in game_groups.FOLLOW_UPS and game_groups.active()
     params = request.GET.copy()
     params.pop('page', None)
-    return render(request, 'catalog.html', {'levels': Task.LEVELS, 'topics': topics, 'page': page, 'number': number, 'difficulty': difficulty, 'query': query, 'state': state, 'sort': sort, 'sorts': CATALOG_SORTS, 'kind': kind, 'kinds': KINDS, 'site': site,
+    return render(request, 'catalog.html', {'levels': Task.LEVELS, 'topics': topics, 'page': page, 'number': number, 'difficulty': difficulty, 'query': query, 'mode': mode, 'meaning_on': semantic_search.available(), 'photo_on': ocr.available(), 'state': state, 'sort': sort, 'sorts': CATALOG_SORTS, 'kind': kind, 'kinds': KINDS, 'site': site,
         'sites': [(key or 'own', name) for key, name in SITES.items() if Task.objects.filter(published=True, in_catalog=True, source_system=key).exists()], 'params': params.urlencode(), 'nav': 'catalog'})
 
 

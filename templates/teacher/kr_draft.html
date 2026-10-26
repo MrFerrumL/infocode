@@ -1,6 +1,6 @@
 {% extends 'base.html' %}{% load static content_blocks %}
 {% block title %}Черновик КР · Инфокод{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{% static 'kr-teacher.css' %}"><script defer src="{% static 'kr-draft.js' %}"></script>{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'kr-teacher.css' %}"><script defer src="{% static 'kr-draft.js' %}"></script><script defer src="{% static 'photo-search.js' %}"></script>{% endblock %}
 {% block content %}
 {% include 'layout/work_tabs.html' %}
 <a class="back-link" href="{% url 'teacher_kr' %}">← КР без регистрации</a>
@@ -55,8 +55,10 @@
   <div class="section-heading"><h3 data-picker-title>Выбрать задачу</h3><button type="button" class="link" data-close>Закрыть ✕</button></div>
   <div class="kr-picker-filters">
     <select data-filter-number aria-label="Номер"><option value="">Все номера</option>{% for n in all_numbers %}<option value="{{ n }}">№ {{ n }}</option>{% endfor %}</select>
-    <input type="search" data-filter-q placeholder="ID задачи или слова из условия" aria-label="Поиск задачи">
+    <input type="search" data-filter-q data-photo-target placeholder="ID, слова, условие целиком или фото (Ctrl+V)" aria-label="Поиск задачи">
+      {% if meaning_on %}<select data-photo-mode aria-label="Как искать"><option value="">По словам</option><option value="meaning">По смыслу</option></select>{% endif %}
     <button type="button" class="button secondary" data-filter-go>Найти</button>
+      {% if photo_on %}<span class="photo-search" data-photo-search data-url="{% url 'search_photo' %}"><button type="button" class="button secondary" data-photo-pick title="Найти похожие задачи по фото условия">📷 По фото</button><input type="file" accept="image/*" data-photo-file hidden><small class="photo-status" data-photo-status role="status"></small></span>{% endif %}
   </div>
   <div class="kr-pick-list" data-pick-list></div>
   <form method="post" data-pick-form hidden>{% csrf_token %}<input name="action"><input name="v"><input name="i"><input name="task"></form>

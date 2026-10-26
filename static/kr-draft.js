@@ -10,7 +10,7 @@
   let target = {};
 
   const load = async (page = 1) => {
-    const params = new URLSearchParams({number: number.value, q: query.value, page});
+    const params = new URLSearchParams({number: number.value, q: query.value, page, mode: (dialog.querySelector('[data-photo-mode]') || {}).value || ''});
     list.innerHTML = '<p class="muted">Загружаем задачи…</p>';
     try {
       const response = await fetch(`${dialog.dataset.url}&${params}`, {headers: {'X-Requested-With': 'XMLHttpRequest'}});

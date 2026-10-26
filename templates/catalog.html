@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% load content_blocks static %}
 {% block title %}Каталог заданий · Инфокод{% endblock %}
-{% block extra_head %}<script defer src="{% static 'catalog-answers.js' %}"></script><script defer src="{% static 'similar-tasks.js' %}"></script>{% endblock %}
+{% block extra_head %}<script defer src="{% static 'photo-search.js' %}"></script><script defer src="{% static 'catalog-answers.js' %}"></script><script defer src="{% static 'similar-tasks.js' %}"></script>{% endblock %}
 {% block content %}
 <div class="page-heading">
   <div><div class="eyebrow">ПРАКТИКА</div><h1>Каталог заданий<span class="accent">.</span></h1><p>Выберите номер — условия задач сразу появятся в списке.</p></div>
@@ -13,7 +13,9 @@
 </div>
 <form class="filters" method="get">
   <input type="hidden" name="number" value="{{ number }}">
-  <label class="search-label"><span class="sr-only">Поиск</span><input name="q" value="{{ query }}" placeholder="Название, текст или ID задания"></label>
+  <label class="search-label"><span class="sr-only">Поиск</span><input name="q" value="{{ query }}" placeholder="{% if meaning_on %}Слова, условие целиком или ID — или вставьте фото (Ctrl+V){% else %}Название, текст или ID задания{% endif %}" data-photo-target></label>
+  {% if meaning_on %}<label><span class="sr-only">Как искать</span><select name="mode" data-photo-mode><option value="">По словам</option><option value="meaning" {% if mode == 'meaning' %}selected{% endif %}>По смыслу</option></select></label>{% endif %}
+  {% if photo_on %}<span class="photo-search" data-photo-search data-url="{% url 'search_photo' %}"><button type="button" class="button secondary" data-photo-pick title="Найти похожие задачи по фото условия">📷 По фото</button><input type="file" accept="image/*" data-photo-file hidden><small class="photo-status" data-photo-status role="status"></small></span>{% endif %}
   <label><span class="sr-only">Сложность</span><select name="difficulty"><option value="">Все уровни</option>{% for value,label in levels %}<option value="{{ value }}" {% if difficulty == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
   <label><span class="sr-only">Статус</span><select name="state"><option value="">Все задания</option><option value="new" {% if state == 'new' %}selected{% endif %}>Ещё не решены</option><option value="saved" {% if state == 'saved' %}selected{% endif %}>Избранное</option><option value="mistakes" {% if state == 'mistakes' %}selected{% endif %}>Мои ошибки</option></select></label>
   <label><span class="sr-only">Тип</span><select name="kind"><option value="">Все типы</option>{% for value,label in kinds %}<option value="{{ value }}" {% if kind == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
@@ -21,6 +23,7 @@
   <label><span class="sr-only">Сортировка</span><select name="sort">{% for value,label in sorts %}<option value="{{ value }}" {% if sort == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></label>
   <button class="button">Найти</button>
 </form>
+{% if photo_on %}<div hidden>{% csrf_token %}</div>{% endif %}
 <div class="section-heading"><h2>{% if number == '19' %}Задания № 19–21{% elif number %}Задания № {{ number }}{% else %}Все задания{% endif %}</h2><span class="muted">Найдено: {{ page.paginator.count }}</span></div>
 <div class="task-list catalog-conditions">
   {% for task in page %}

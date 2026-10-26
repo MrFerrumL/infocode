@@ -4,11 +4,11 @@ import re
 from urllib.parse import urljoin
 from django.contrib import messages
 from django.core.paginator import Paginator
-from django.db.models import Q
+from django.db.models import Case, IntegerField, Q, Value, When
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils.dateparse import parse_datetime
-from . import kr_client
+from . import kr_client, ocr, semantic_search
 from .kr_api import LEVELS, MAX_PER_NUMBER, MAX_VARIANTS, MAX_PICKED, SOURCES, ComposeError, available, from_bank, pool
 from .models import Task
 from .subjects import SUBJECTS, current as current_subject, using
@@ -85,6 +85,7 @@ def teacher_kr(request):
         'enabled': kr_client.enabled(), 'pupils_url': absolute(request, kr_client.pupils_url()), 'new_code': request.GET.get('new', ''),
         'max_per_number': MAX_PER_NUMBER, 'max_variants': MAX_VARIANTS, 'picked': ','.join(map(str, picked)),
         'levels': LEVELS.items(), 'has_draft': bool(request.session.get(DRAFT)),
+        'meaning_on': semantic_search.available(), 'photo_on': ocr.available(),
         'nav': 'teacher', 'workspace_section': 'works',
         'current_route': 'teacher_kr'})
 
@@ -102,15 +103,21 @@ def open_kr(request):
 def kr_tasks(request):
     """Catalogue tasks for the КР picker: by number, ID or words of the condition."""
     subject = request.GET.get('subject') if request.GET.get('subject') in NUMBERS else 'inf'
-    number, query = request.GET.get('number', ''), request.GET.get('q', '').strip()[:100]
+    number, query = request.GET.get('number', ''), request.GET.get('q', '').strip()[:1500]
+    meaning = request.GET.get('mode') == 'meaning' and semantic_search.available()
     with using(subject):
         tasks = pool().select_related('topic').order_by('-pk')
         if number.isdigit():
             tasks = tasks.filter(topic__number=int(number))
-        if query.isdigit():
+        ranked = semantic_search.rank(query, tasks, limit=40) if query and meaning and not query.isdigit() else None
+        if ranked is not None:
+            # By meaning (words or a photo's text): the closest tasks first.
+            order = Case(*[When(pk=pk, then=Value(i)) for i, pk in enumerate(ranked)], default=Value(len(ranked)), output_field=IntegerField())
+            tasks = tasks.filter(pk__in=ranked).order_by(order)
+        elif query.isdigit():
             tasks = tasks.filter(Q(pk=int(query)) | Q(external_id=int(query)))
         elif query:
-            tasks = tasks.filter(Q(statement__icontains=query) | Q(title__icontains=query) | Q(subtopic__icontains=query))
+            tasks = tasks.filter(Q(statement__icontains=query[:100]) | Q(title__icontains=query[:100]) | Q(subtopic__icontains=query[:100]))
         page = Paginator(tasks, 8).get_page(request.GET.get('page'))
         cards = list(page.object_list.prefetch_related('content_blocks'))
     return render(request, 'teacher/kr_tasks.html', {'page': page, 'cards': cards})
@@ -215,4 +222,5 @@ def teacher_kr_draft(request):
     return render(request, 'teacher/kr_draft.html', {
         'draft': draft, 'variants': variants, 'numbers': numbers, 'all_numbers': range(1, NUMBERS[draft['subject']] + 1),
         'level_title': LEVELS.get(draft.get('level'), 'любой'), 'nav': 'teacher', 'workspace_section': 'works',
+        'meaning_on': semantic_search.available(), 'photo_on': ocr.available(),
         'current_route': 'teacher_kr', 'picker_url': f'{reverse("teacher_kr_tasks")}?subject={draft["subject"]}'})

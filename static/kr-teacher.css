@@ -80,3 +80,7 @@
 .kr-picker-dialog::backdrop { background: rgba(20, 18, 40, .45); }
 .kr-picker-dialog .kr-pick-list { margin-top: 12px; }
 @media (max-width: 900px) { .kr-fields { grid-template-columns: 1fr 1fr; } }
+.kr-picker-filters { grid-template-columns: 170px 1fr auto auto auto; align-items: center; }
+.kr-picker-filters .photo-search { display: inline-flex; align-items: center; gap: 8px; }
+.kr-picker-filters .photo-status { grid-column: 1 / -1; font-size: 12px; color: var(--muted); }
+.kr-picker-filters .photo-status.error { color: #c04455; }

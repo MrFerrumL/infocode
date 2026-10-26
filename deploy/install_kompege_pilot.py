@@ -115,7 +115,7 @@ def remote_script(user, images=False, number1=False, categories=False, numbers=(
         # The words of pictures-only conditions (third-party banks) never go into git: --texts uploads them for this run.
         source = f'-v {home}/task-texts.json.gz:/tmp/task-texts.json.gz:ro ' if texts else ''
         load = ' --texts /tmp/task-texts.json.gz' if texts else ''
-        bank += f'docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps -e EMBED_THREADS=5 {source}web python manage.py embed_tasks{load} < /dev/null\n'
+        bank += f'docker compose --env-file .env.production -f compose.production.yaml run --rm --no-deps -e EMBED_THREADS=5 {source}web python manage.py embed_tasks{load} --ocr < /dev/null\n'
         if texts:
             bank += f'rm -f {home}/task-texts.json.gz\n'
     return f'''set -Eeuo pipefail

@@ -127,3 +127,8 @@ html[data-theme="dark"] { --condition-filter: invert(1) hue-rotate(180deg) brigh
 .answer-cells-row { display: flex; align-items: center; gap: 8px; }
 .answer-cells-row span { width: 70px; font-size: 13px; color: var(--muted); }
 .catalog-answer-form .answer-cells-row input { width: 160px; max-width: 160px; }
+/* Search by photo next to the catalogue search. */
+.photo-search { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.photo-status { font-size: 12px; color: var(--muted); max-width: 260px; }
+.photo-status.error { color: #c04455; }
+.photo-status:empty { display: none; }

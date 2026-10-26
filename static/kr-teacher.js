@@ -60,7 +60,8 @@
     };
     const load = async (page = 1) => {
       const params = new URLSearchParams({number: picker.querySelector('[data-filter-number]').value,
-                                          q: picker.querySelector('[data-filter-q]').value, page});
+                                          q: picker.querySelector('[data-filter-q]').value, page,
+                                          mode: (picker.querySelector('[data-photo-mode]') || {}).value || ''});
       list.innerHTML = '<p class="muted">Загружаем задачи…</p>';
       try {
         const response = await fetch(`${picker.dataset.url}&${params}`, {headers: {'X-Requested-With': 'XMLHttpRequest'}});

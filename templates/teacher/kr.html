@@ -1,6 +1,6 @@
 {% extends 'base.html' %}{% load static %}
 {% block title %}КР без регистрации · Инфокод{% endblock %}
-{% block extra_head %}<link rel="stylesheet" href="{% static 'kr-teacher.css' %}"><script defer src="{% static 'kr-teacher.js' %}"></script>{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'kr-teacher.css' %}"><script defer src="{% static 'kr-teacher.js' %}"></script><script defer src="{% static 'photo-search.js' %}"></script>{% endblock %}
 {% block content %}
 {% include 'layout/work_tabs.html' %}
 <div class="page-heading"><div><div class="eyebrow">КОНТРОЛЬНЫЕ · ОТДЕЛЬНАЯ ПЛАТФОРМА</div><h1>КР без регистрации<span class="accent">.</span></h1>
@@ -83,8 +83,10 @@
       <select data-filter-number aria-label="Номер">
         <option value="">Все номера</option>{% for row in rows %}<option value="{{ row.number }}">№ {{ row.number }}</option>{% endfor %}
       </select>
-      <input type="search" data-filter-q placeholder="ID задачи или слова из условия" aria-label="Поиск задачи">
+      <input type="search" data-filter-q data-photo-target placeholder="ID, слова, условие целиком или фото (Ctrl+V)" aria-label="Поиск задачи">
+      {% if meaning_on %}<select data-photo-mode aria-label="Как искать"><option value="">По словам</option><option value="meaning">По смыслу</option></select>{% endif %}
       <button type="button" class="button secondary" data-filter-go>Найти</button>
+      {% if photo_on %}<span class="photo-search" data-photo-search data-url="{% url 'search_photo' %}"><button type="button" class="button secondary" data-photo-pick title="Найти похожие задачи по фото условия">📷 По фото</button><input type="file" accept="image/*" data-photo-file hidden><small class="photo-status" data-photo-status role="status"></small></span>{% endif %}
     </div>
     <div class="kr-pick-list" data-pick-list><p class="muted">Выберите номер или найдите задачу по ID — условия появятся здесь.</p></div>
   </section>

@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 from django.core.management.base import BaseCommand, CommandError
 from django.db.models import Prefetch
-from learning import embeddings
+from learning import embeddings, ocr
 from learning.models import Task, TaskBlock, TaskVector
 
 
@@ -14,6 +14,7 @@ class Command(BaseCommand):
     def add_arguments(self, parser):
         parser.add_argument('--texts', type=Path, help='task_texts.json.gz: {"source:number:external_id": text}')
         parser.add_argument('--limit', type=int, default=0)
+        parser.add_argument('--ocr', action='store_true', help='Read the words of pictures-only conditions without a source text (Tesseract)')
 
     def handle(self, *args, **opts):
         if opts['texts']:
@@ -23,10 +24,15 @@ class Command(BaseCommand):
         tasks = (Task.all_objects.filter(published=True, in_catalog=True, archived_at__isnull=True).select_related('topic', 'text_vector')
                  .prefetch_related(Prefetch('content_blocks', queryset=TaskBlock.all_objects.filter(kind__in=['text', 'html', 'heading'])))
                  .order_by('pk'))
-        todo, skipped = [], 0
+        todo, skipped, read = [], 0, 0
         for task in tasks.iterator(chunk_size=500):
             row = getattr(task, 'text_vector', None)
             text = embeddings.task_text(task, row.source_text if row else '')
+            if not text and opts['ocr'] and ocr.available():
+                words = self.read_picture(task)
+                if words:
+                    row, _ = TaskVector.objects.update_or_create(task_id=task.pk, defaults={'source_text': words})
+                    text, read = embeddings.task_text(task, words), read + 1
             if not text:
                 skipped += 1
                 continue
@@ -41,7 +47,20 @@ class Command(BaseCommand):
             for (pk, _, digest), vector in zip(part, vectors):
                 TaskVector.objects.update_or_create(task_id=pk, defaults={'digest': digest, 'vector': embeddings.to_bytes(vector)})
             self.stdout.write(f'  embedded {min(start + 256, len(todo))} of {len(todo)}', ending='\r')
-        self.stdout.write(f'\nNew or changed vectors: {len(todo)}; tasks without words (pictures only, no source text): {skipped}.')
+        self.stdout.write(f'\nNew or changed vectors: {len(todo)}; conditions read from pictures: {read}; '
+                          f'tasks without words (pictures only, no source text): {skipped}.')
+
+    def read_picture(self, task):
+        """Words of the task's first condition picture ('' when it cannot be read)."""
+        block = (TaskBlock.all_objects.filter(task=task, purpose='statement', kind='image').exclude(image='')
+                 .order_by('position', 'id').first())
+        if not block:
+            return ''
+        try:
+            with block.image.open('rb') as picture:
+                return embeddings.plain(ocr.read(picture.read()))
+        except (OSError, ocr.Unreadable, ValueError):
+            return ''
 
     def load_texts(self, path):
         data = json.loads(gzip.decompress(path.read_bytes()))
