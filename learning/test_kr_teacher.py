@@ -39,15 +39,52 @@ class TeacherKrTests(TestCase):
 
     @patch.object(kr_client, 'tests_of', return_value=[])
     @patch.object(kr_client, 'create', return_value={'test': LISTED[0], 'code': 'AB12CD'})
-    def test_build_sends_the_plan(self, create, _):
+    def test_draft_edit_and_send(self, create, _):
+        topic = Topic.objects.get(number=1)
+        extra = [Task.objects.create(topic=topic, title=f'Задача {k}', statement=f'Условие {k}', answer=str(k), difficulty='hard',
+                                     published=True, in_catalog=True) for k in range(2, 8)]
         self.client.force_login(self.teacher)
-        reply = self.client.post('/teacher/kr/', {'subject': 'inf', 'title': 'КР № 1', 'group': 'Пара 02', 'variants': '3',
-                                                  'duration': '45', 'n1': '2', 'n2': '0'})
-        self.assertRedirects(reply, '/teacher/kr/?subject=inf&new=AB12CD', fetch_redirect_response=False)
-        args = create.call_args.args
-        self.assertEqual((args[1], args[2], args[3], args[4], args[5], args[6]), ('КР № 1', 'Пара 02', 'inf', [{'number': 1, 'count': 2}], 3, 45))
         self.assertContains(self.client.post('/teacher/kr/', {'subject': 'inf', 'title': 'x', 'variants': '1', 'duration': '45'}),
                             'Укажите, сколько задач')
+        reply = self.client.post('/teacher/kr/', {'subject': 'inf', 'title': 'КР № 1', 'group': 'Пара 02', 'variants': '2',
+                                                  'duration': '45', 'level': 'hard', 'n1': '2', 'src1': 'bank'})
+        self.assertRedirects(reply, '/teacher/kr/draft/', fetch_redirect_response=False)
+        draft = self.client.session['kr_draft']
+        hard = {t.pk for t in extra}
+        self.assertEqual([len(ids) for ids in draft['variants']], [2, 2])
+        self.assertTrue({i for ids in draft['variants'] for i in ids} <= hard)  # only the asked difficulty
+        page = self.client.get('/teacher/kr/draft/')
+        self.assertContains(page, 'Вариант 2')
+        self.assertContains(page, 'ответ: <b>')
+        first = draft['variants'][0][0]
+        self.client.post('/teacher/kr/draft/', {'action': 'swap', 'v': '0', 'i': '0'})
+        swapped = self.client.session['kr_draft']['variants'][0]
+        self.assertNotIn(first, swapped)
+        self.assertEqual(len({i for ids in self.client.session['kr_draft']['variants'] for i in ids}), 4)  # still no repeats
+        self.client.post('/teacher/kr/draft/', {'action': 'remove', 'v': '1', 'i': '1'})
+        self.assertEqual(len(self.client.session['kr_draft']['variants'][1]), 1)
+        own = Task.objects.get(title='Задача')
+        self.client.post('/teacher/kr/draft/', {'action': 'add', 'v': '1', 'task': str(own.pk)})
+        self.assertIn(own.pk, self.client.session['kr_draft']['variants'][1])
+        self.client.post('/teacher/kr/draft/', {'action': 'add', 'v': '1', 'task': str(own.pk)})  # no doubles
+        self.assertEqual(self.client.session['kr_draft']['variants'][1].count(own.pk), 1)
+        exact = self.client.session['kr_draft']['variants']
+        reply = self.client.post('/teacher/kr/draft/', {'action': 'send'})
+        self.assertRedirects(reply, '/teacher/kr/?subject=inf&new=AB12CD', fetch_redirect_response=False)
+        self.assertEqual(create.call_args.kwargs['exact'], exact)
+        self.assertNotIn('kr_draft', self.client.session)
+
+    @patch.object(kr_client, 'tests_of', return_value=[])
+    def test_picked_tasks_and_picker(self, _):
+        self.client.force_login(self.teacher)
+        own = Task.objects.get(title='Задача')
+        found = self.client.get(f'/teacher/kr/tasks/?subject=inf&q={own.pk}')
+        self.assertContains(found, f'data-pick="{own.pk}"')
+        self.assertContains(self.client.get('/teacher/kr/tasks/?subject=inf&number=1&q=Услов'), 'Условие')
+        self.assertContains(self.client.get('/teacher/kr/tasks/?subject=inf&number=2'), 'Ничего не нашлось')
+        self.client.post('/teacher/kr/', {'subject': 'inf', 'title': 'КР', 'variants': '1', 'duration': '45',
+                                          'n1': '1', 'src1': 'pick', 'picked': str(own.pk)})
+        self.assertEqual(self.client.session['kr_draft']['variants'], [[own.pk]])
 
     @patch.object(kr_client, 'tests_of', side_effect=kr_client.KrError('Платформа КР сейчас недоступна. Попробуйте через минуту.'))
     def test_platform_down_is_explained(self, _):

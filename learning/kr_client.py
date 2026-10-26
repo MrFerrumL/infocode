@@ -47,10 +47,11 @@ def tests_of(user):
     return _call('api/tests/?' + urllib.parse.urlencode({'teacher': user.username}))['tests']
 
 
-def create(user, title, group, subject, plan, variants, duration):
-    """Build a КР on the test platform and open it; returns {'test': ..., 'code': ...}."""
-    return _call('api/tests/', {'teacher': teacher(user), 'title': title, 'group': group, 'subject': subject,
-                                'plan': plan, 'variants': variants, 'duration': duration}, timeout=180)
+def create(user, title, group, subject, plan, variants, duration, level=None, exact=None):
+    """Build a КР on the test platform and open it; returns {'test': ..., 'code': ...}.
+    `exact` = [[task ids], …] sends variants already put together here (then `plan` is not used)."""
+    return _call('api/tests/', {'teacher': teacher(user), 'title': title, 'group': group, 'subject': subject, 'plan': plan,
+                                'variants': variants, 'duration': duration, 'level': level, 'exact': exact or []}, timeout=180)
 
 
 def link(user, to=''):

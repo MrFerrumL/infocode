@@ -109,4 +109,23 @@ def normal(text):
     return ' '.join(text.lower().split())
 
 
+def taken_in(topic):
+    """Wordings and generator ids already in the bank for this number: new tasks must differ from all of them."""
+    from learning.models import Task
+    bank = Task.all_objects.filter(topic=topic)
+    taken = {normal(text) for text in bank.exclude(statement='').values_list('statement', flat=True)}
+    return taken | set(bank.filter(source_system=SYSTEM).values_list('external_id', flat=True))
+
+
+def save(tasks, topic, published=True, in_catalog=True):
+    """Store generated tasks in the bank; returns the saved Task objects in the same order."""
+    from learning.models import Task
+    rows = [Task(topic=topic, title=f'Инфокод · № {topic.number} · {task.title}', statement=task.statement, answer=task.answer,
+                 solution=task.solution, difficulty=task.difficulty, source=SOURCE, source_system=SYSTEM,
+                 external_id=task.external_id, source_label=LABEL, source_kind='author', subtopic=task.subtopic,
+                 tags='генератор', published=published, in_catalog=in_catalog) for task in tasks]
+    Task.all_objects.bulk_create(rows)
+    return list(Task.all_objects.filter(topic=topic, source_system=SYSTEM, external_id__in=[t.external_id for t in tasks]))
+
+
 from . import n23  # noqa: E402,F401  (generators register themselves)

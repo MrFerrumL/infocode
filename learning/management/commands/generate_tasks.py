@@ -3,7 +3,7 @@ from django.db import transaction
 from django.db.models import Count, Q
 from learning.models import Task, Topic
 from learning.subjects import using
-from learning.task_generators import LABEL, REGISTRY, SOURCE, SYSTEM, generate, normal
+from learning.task_generators import REGISTRY, generate, save, taken_in
 
 
 class Command(BaseCommand):
@@ -34,9 +34,7 @@ class Command(BaseCommand):
     def fill(self, number, opts):
         topic = Topic.objects.get(number=number)
         bank = Task.all_objects.filter(topic=topic)
-        taken = {normal(text) for text in bank.exclude(statement='').values_list('statement', flat=True)}
-        taken |= set(bank.filter(source_system=SYSTEM).values_list('external_id', flat=True))
-        tasks = generate(number, opts['count'], seed=opts['seed'], taken=taken)
+        tasks = generate(number, opts['count'], seed=opts['seed'], taken=taken_in(topic))
         levels = {}
         for task in tasks:
             levels[task.difficulty] = levels.get(task.difficulty, 0) + 1
@@ -47,10 +45,6 @@ class Command(BaseCommand):
                 self.stdout.write(f'--- {task.kind}, {task.difficulty}, answer {task.answer}\n{task.statement}\n')
             return
         with transaction.atomic():
-            Task.all_objects.bulk_create([Task(
-                topic=topic, title=f'Инфокод · № {number} · {task.title}', statement=task.statement, answer=task.answer,
-                solution=task.solution, difficulty=task.difficulty, source=SOURCE, source_system=SYSTEM,
-                external_id=task.external_id, source_label=LABEL, source_kind='author', subtopic=task.subtopic,
-                tags='генератор', published=opts['publish'], in_catalog=True) for task in tasks])
+            save(tasks, topic, published=opts['publish'])
         state = 'published' if opts['publish'] else 'saved as drafts (publish them in the bank editor or rerun with --publish)'
         self.stdout.write(self.style.SUCCESS(f'№ {number}: {len(tasks)} tasks {state}.'))

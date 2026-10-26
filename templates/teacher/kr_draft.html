@@ -1,0 +1,64 @@
+{% extends 'base.html' %}{% load static content_blocks %}
+{% block title %}Черновик КР · Инфокод{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'kr-teacher.css' %}"><script defer src="{% static 'kr-draft.js' %}"></script>{% endblock %}
+{% block content %}
+{% include 'layout/work_tabs.html' %}
+<a class="back-link" href="{% url 'teacher_kr' %}">← КР без регистрации</a>
+<div class="page-heading"><div><div class="eyebrow">ЧЕРНОВИК КР · {{ draft.subject|upper }}</div><h1>{{ draft.title }}<span class="accent">.</span></h1>
+<p>{% if draft.group %}{{ draft.group }} · {% endif %}{{ variants|length }} вар. · {{ draft.duration }} мин · уровень: {{ level_title }}. Проверьте задачи: уберите лишние, замените или добавьте свои — и отправьте КР ученикам.</p></div>
+  <form method="post" class="kr-draft-send">{% csrf_token %}
+    <button class="button secondary" name="action" value="discard" onclick="return confirm('Удалить черновик?')">Удалить черновик</button>
+    <button class="button" name="action" value="send">Отправить в КР и открыть →</button>
+  </form>
+</div>
+
+<section class="panel kr-draft-tools">
+  <form method="post" class="kr-inline">{% csrf_token %}
+    <label>Номер во всех вариантах
+      <select name="number">{% for n in all_numbers %}<option value="{{ n }}">№ {{ n }}</option>{% endfor %}</select></label>
+    <button class="button secondary small" name="action" value="add_number">+ Добавить по задаче</button>
+    <button class="button secondary small" name="action" value="remove_number" onclick="return confirm('Убрать этот номер из всех вариантов?')">✕ Убрать номер</button>
+  </form>
+  <nav class="kr-variant-tabs">{% for v in variants %}<a href="#v{{ v.number }}">Вариант {{ v.number }} <small>{{ v.tasks|length }}</small></a>{% endfor %}</nav>
+</section>
+
+{% for v in variants %}
+<section class="kr-variant" id="v{{ v.number }}">
+  <div class="section-heading"><h2>Вариант {{ v.number }}</h2><span class="pill">{{ v.tasks|length }} задач</span></div>
+  {% for task in v.tasks %}
+  <article class="kr-pick-card kr-draft-task">
+    <header>
+      <span class="kr-pick-num">{{ task.topic.number }}</span>
+      <div><strong>{{ forloop.counter }}. {{ task.title }}</strong>
+        <small>ID {{ task.pk }}{% if task.source_label %} · {{ task.source_label }}{% endif %} · {{ task.get_difficulty_display }} · ответ: <b>{{ task.answer }}</b></small></div>
+      <form method="post" class="kr-task-actions">{% csrf_token %}<input type="hidden" name="v" value="{{ v.index }}"><input type="hidden" name="i" value="{{ forloop.counter0 }}">
+        <button class="button secondary small" name="action" value="swap" title="Другая случайная задача этого номера">↻ Другая</button>
+        <button type="button" class="button secondary small" data-open-picker data-mode="put" data-v="{{ v.index }}" data-i="{{ forloop.counter0 }}" data-number="{{ task.topic.number }}">🔍 Выбрать</button>
+        <button class="button secondary small danger" name="action" value="remove" title="Убрать из варианта">✕</button>
+      </form>
+    </header>
+    <div class="kr-pick-body">{% if task.statement %}<div class="statement">{{ task.statement }}</div>{% endif %}{% task_blocks task %}</div>
+    <button type="button" class="link kr-pick-more" data-more>Показать условие целиком</button>
+  </article>
+  {% empty %}<p class="muted">В варианте нет задач.</p>
+  {% endfor %}
+  <form method="post" class="kr-inline kr-variant-add">{% csrf_token %}<input type="hidden" name="v" value="{{ v.index }}">
+    <label>Добавить в вариант {{ v.number }}
+      <select name="number">{% for n in all_numbers %}<option value="{{ n }}">№ {{ n }}</option>{% endfor %}</select></label>
+    <button class="button secondary small" name="action" value="add_random">+ Случайную</button>
+    <button type="button" class="button secondary small" data-open-picker data-mode="add" data-v="{{ v.index }}">🔍 Из каталога</button>
+  </form>
+</section>
+{% endfor %}
+
+<dialog class="kr-picker-dialog" data-picker-dialog data-url="{{ picker_url }}">
+  <div class="section-heading"><h3 data-picker-title>Выбрать задачу</h3><button type="button" class="link" data-close>Закрыть ✕</button></div>
+  <div class="kr-picker-filters">
+    <select data-filter-number aria-label="Номер"><option value="">Все номера</option>{% for n in all_numbers %}<option value="{{ n }}">№ {{ n }}</option>{% endfor %}</select>
+    <input type="search" data-filter-q placeholder="ID задачи или слова из условия" aria-label="Поиск задачи">
+    <button type="button" class="button secondary" data-filter-go>Найти</button>
+  </div>
+  <div class="kr-pick-list" data-pick-list></div>
+  <form method="post" data-pick-form hidden>{% csrf_token %}<input name="action"><input name="v"><input name="i"><input name="task"></form>
+</dialog>
+{% endblock %}

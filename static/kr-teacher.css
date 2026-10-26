@@ -35,3 +35,48 @@
 .kr-actions .button.small { min-height: 38px; padding: 8px 14px; }
 .kr-builder .link { background: none; border: 0; padding: 0; color: var(--purple); font-weight: 600; font-size: 14px; }
 .kr-builder .link + .link { margin-left: 14px; }
+.kr-legend { margin: -6px 0 0; }
+.kr-number select { width: 100%; padding: 4px 6px; font-size: 12px; min-height: 0; }
+.kr-picked-count { color: var(--purple) !important; font-weight: 700; min-height: 14px; }
+.kr-picker { display: grid; gap: 12px; border-top: 1px solid var(--line); padding-top: 18px; }
+.kr-picker-filters { display: grid; grid-template-columns: 180px 1fr auto; gap: 10px; }
+.kr-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.kr-chips:empty { display: none; }
+.kr-chip { border: 1px solid var(--purple); background: #f1eeff; color: var(--purple); border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 600; }
+.kr-pick-list { display: grid; gap: 10px; }
+.kr-pick-card { border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; background: #fff; }
+.kr-pick-card header { display: flex; align-items: center; gap: 12px; }
+.kr-pick-card header > div { flex: 1; display: grid; }
+.kr-pick-card header small { color: var(--muted); }
+.kr-pick-num { width: 38px; height: 38px; border-radius: 10px; background: #f1eeff; color: var(--purple); display: grid; place-items: center; font-weight: 700; flex: none; }
+.kr-pick-body { max-height: 220px; overflow: hidden; position: relative; margin-top: 8px; }
+.kr-pick-body::after { content: ''; position: absolute; inset: auto 0 0; height: 60px; background: linear-gradient(transparent, #fff); }
+.kr-pick-card.is-open .kr-pick-body { max-height: none; }
+.kr-pick-card.is-open .kr-pick-body::after { display: none; }
+.kr-pick-body .statement { margin: 8px 0; font-size: 14px; line-height: 1.6; }
+.kr-pick-body img { max-width: 100%; height: auto; }
+.kr-pick-more { margin-top: 6px; }
+.kr-pick-card .is-picked { background: var(--purple); color: #fff; border-color: var(--purple); }
+.kr-pick-pages { display: flex; justify-content: center; align-items: center; gap: 14px; }
+.link { background: none; border: 0; padding: 0; color: var(--purple); font-weight: 600; font-size: 14px; cursor: pointer; }
+@media (max-width: 760px) { .kr-picker-filters { grid-template-columns: 1fr; } }
+.kr-fields { grid-template-columns: 2fr 1.4fr 1fr 1fr 1.2fr; }
+.kr-fields select { height: 46px; }
+.kr-draft-send { display: flex; gap: 10px; flex-wrap: wrap; }
+.kr-draft-tools { display: grid; gap: 14px; margin-bottom: 22px; }
+.kr-inline { display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap; }
+.kr-inline label { display: grid; gap: 6px; font-weight: 600; font-size: 14px; }
+.kr-inline select { min-width: 120px; }
+.kr-variant-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.kr-variant-tabs a { padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; color: inherit; font-size: 13px; }
+.kr-variant-tabs small { color: var(--muted); margin-left: 4px; }
+.kr-variant { margin: 0 0 30px; display: grid; gap: 10px; scroll-margin-top: 20px; }
+.kr-variant .section-heading { margin-bottom: 4px; }
+.kr-task-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.button.small { min-height: 36px; padding: 7px 12px; font-size: 13px; }
+.button.danger { color: #c04455; }
+.kr-variant-add { padding: 12px 14px; border: 1px dashed var(--line); border-radius: 14px; }
+.kr-picker-dialog { width: min(980px, 94vw); max-height: 86vh; border: 0; border-radius: 18px; padding: 22px; }
+.kr-picker-dialog::backdrop { background: rgba(20, 18, 40, .45); }
+.kr-picker-dialog .kr-pick-list { margin-top: 12px; }
+@media (max-width: 900px) { .kr-fields { grid-template-columns: 1fr 1fr; } }

@@ -11,7 +11,8 @@
 
 <section class="panel kr-steps">
   <ol>
-    <li><strong>Соберите КР</strong> ниже: номера ЕГЭ, сколько задач по каждому, число вариантов и время. Задачи не повторяются ни внутри варианта, ни между вариантами.</li>
+    <li><strong>Соберите КР</strong> ниже: номера ЕГЭ, сколько задач по каждому, откуда их брать (банк, генератор или выбранные в каталоге), уровень, число вариантов и время. Задачи не повторяются ни внутри варианта, ни между вариантами.</li>
+    <li><strong>Проверьте черновик</strong>: уберите лишние задачи, замените на другие или добавьте свои — и нажмите «Отправить в КР».</li>
     <li><strong>Назовите ученикам код</strong> или дайте ссылку. Код появится в списке «Мои КР».</li>
     <li><strong>Откройте «Ход КР»</strong>: там видно, кто вошёл, — нажмите «Открыть всем ждущим». Соседи получат разные варианты; результаты и подозрительные действия видите только вы.</li>
   </ol>
@@ -52,17 +53,43 @@
     <label>Группа<input name="group" value="{{ form.group }}" maxlength="120" placeholder="Например, Пара 03"></label>
     <label>Вариантов<input type="number" name="variants" value="{{ form.variants }}" min="1" max="{{ max_variants }}" required></label>
     <label>Время, мин<input type="number" name="duration" value="{{ form.duration }}" min="5" max="300" required></label>
+    <label>Уровень задач<select name="level"><option value="">Любой</option>{% for code, title in levels %}<option value="{{ code }}" {% if form.level == code %}selected{% endif %}>{{ title }}</option>{% endfor %}</select></label>
   </div>
-  <div class="section-heading kr-numbers-head"><h3>Сколько задач каждого номера в варианте</h3>
+  {% if has_draft %}<div class="notice">Есть несобранный черновик КР. <a href="{% url 'teacher_kr_draft' %}">Продолжить редактирование →</a></div>{% endif %}
+  <div class="section-heading kr-numbers-head"><h3>Сколько задач каждого номера в варианте и откуда их брать</h3>
     <div><button type="button" class="link" data-fill="1">По 1 на все номера</button> <button type="button" class="link" data-fill="0">Очистить</button></div></div>
+  <p class="muted kr-legend"><b>Банк</b> — случайные задачи без повторов · <b>Генератор</b> — новые задачи, которых нет в банке (там, где он есть) · <b>Выбранные</b> — задачи, отмеченные ниже в каталоге.</p>
   <div class="kr-numbers">
     {% for row in rows %}
-    <label class="kr-number{% if not row.available %} is-empty{% endif %}"><b>{{ row.number }}</b>
-      <input type="number" name="n{{ row.number }}" value="{{ row.count }}" min="0" max="{{ max_per_number }}" {% if not row.available %}disabled{% endif %} aria-label="Задач № {{ row.number }}">
-      <small>в банке {{ row.available }}</small></label>
+    <div class="kr-number{% if not row.available and not row.generator %} is-empty{% endif %}" data-row="{{ row.number }}">
+      <b>{{ row.number }}</b>
+      <input type="number" name="n{{ row.number }}" value="{{ row.count }}" min="0" max="{{ max_per_number }}" {% if not row.available and not row.generator %}disabled{% endif %} aria-label="Задач № {{ row.number }}">
+      <select name="src{{ row.number }}" aria-label="Откуда брать задачи № {{ row.number }}" {% if not row.available and not row.generator %}disabled{% endif %}>
+        <option value="bank" {% if row.source == 'bank' %}selected{% endif %}>Банк</option>
+        {% if row.generator %}<option value="generate" {% if row.source == 'generate' %}selected{% endif %}>Генератор</option>{% endif %}
+        <option value="pick" {% if row.source == 'pick' %}selected{% endif %}>Выбранные</option>
+      </select>
+      <small>в банке {{ row.available }}{% if row.generator %} · ⚙{% endif %}</small>
+      <small class="kr-picked-count" data-picked-count></small>
+    </div>
     {% endfor %}
   </div>
-  <div class="kr-submit"><span class="muted" data-summary></span><button class="button">Собрать и открыть КР →</button></div>
+
+  <section class="kr-picker" data-picker data-url="{% url 'teacher_kr_tasks' %}?subject={{ subject_code }}">
+    <div class="section-heading"><h3>Задачи из каталога</h3><span class="muted" data-picked-total></span></div>
+    <input type="hidden" name="picked" value="{{ picked }}" data-picked>
+    <div class="kr-chips" data-chips></div>
+    <div class="kr-picker-filters">
+      <select data-filter-number aria-label="Номер">
+        <option value="">Все номера</option>{% for row in rows %}<option value="{{ row.number }}">№ {{ row.number }}</option>{% endfor %}
+      </select>
+      <input type="search" data-filter-q placeholder="ID задачи или слова из условия" aria-label="Поиск задачи">
+      <button type="button" class="button secondary" data-filter-go>Найти</button>
+    </div>
+    <div class="kr-pick-list" data-pick-list><p class="muted">Выберите номер или найдите задачу по ID — условия появятся здесь.</p></div>
+  </section>
+
+  <div class="kr-submit"><span class="muted" data-summary></span><button class="button">Собрать черновик →</button></div>
 </form>
 {% endif %}
 {% endblock %}

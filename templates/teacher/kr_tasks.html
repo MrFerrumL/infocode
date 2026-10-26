@@ -1,0 +1,22 @@
+{% load content_blocks %}
+{% for task in cards %}
+<article class="kr-pick-card" data-task="{{ task.pk }}" data-number="{{ task.topic.number }}">
+  <header>
+    <span class="kr-pick-num">{{ task.topic.number }}</span>
+    <div><strong>{{ task.title }}</strong>
+      <small>ID {{ task.pk }}{% if task.source_label %} · {{ task.source_label }}{% endif %} · {{ task.get_difficulty_display }}{% if task.subtopic %} · {{ task.subtopic }}{% endif %}</small></div>
+    <button type="button" class="button secondary small" data-pick="{{ task.pk }}" data-number="{{ task.topic.number }}" data-label="№ {{ task.topic.number }} · ID {{ task.pk }}">+ В КР</button>
+  </header>
+  <div class="kr-pick-body">{% if task.statement %}<div class="statement">{{ task.statement }}</div>{% endif %}{% task_blocks task %}</div>
+  <button type="button" class="link kr-pick-more" data-more>Показать условие целиком</button>
+</article>
+{% empty %}
+<p class="muted">Ничего не нашлось. Попробуйте другой номер, ID или слова из условия.</p>
+{% endfor %}
+{% if page.has_other_pages %}
+<nav class="kr-pick-pages">
+  {% if page.has_previous %}<button type="button" class="button secondary small" data-page="{{ page.previous_page_number }}">← Назад</button>{% endif %}
+  <span class="muted">Страница {{ page.number }} из {{ page.paginator.num_pages }} · задач {{ page.paginator.count }}</span>
+  {% if page.has_next %}<button type="button" class="button secondary small" data-page="{{ page.next_page_number }}">Дальше →</button>{% endif %}
+</nav>
+{% endif %}
