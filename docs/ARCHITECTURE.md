@@ -14,7 +14,7 @@ flowchart TB
       Migrate["migrate · схема БД"] --> DB[("PostgreSQL 16")]
       Web --> DB
       Web --> Media[("media · вложения")]
-      Worker["maintenance"] --> DB
+      Worker["maintenance · обслуживание"] --> DB
       Worker --> Media
       Worker --> Backups[("backups · архивы с манифестом")]
     end
@@ -45,19 +45,19 @@ flowchart TB
 
 ```mermaid
 erDiagram
-    TOPIC ||--o{ TASK : contains
-    TASK ||--o{ TASK_BLOCK : has
-    USER ||--o{ PRACTICE : submits
-    TASK ||--o{ PRACTICE : receives
-    COURSE ||--o{ SECTION : contains
-    SECTION ||--o{ LESSON : contains
-    LESSON ||--o{ STEP : contains
-    USER ||--o{ ENROLLMENT : joins
-    COURSE ||--o{ ENROLLMENT : has
-    STEP ||--o{ STEP_PROGRESS : tracks
-    USER ||--o{ STEP_PROGRESS : completes
-    VARIANT ||--o{ VARIANT_ITEM : snapshots
-    VARIANT ||--o{ EXAM_ATTEMPT : starts
+    "Тема" ||--o{ "Задача" : содержит
+    "Задача" ||--o{ "Блок условия" : содержит
+    "Пользователь" ||--o{ "Решение задачи" : отправляет
+    "Задача" ||--o{ "Решение задачи" : получает
+    "Курс" ||--o{ "Раздел" : содержит
+    "Раздел" ||--o{ "Урок" : содержит
+    "Урок" ||--o{ "Шаг" : содержит
+    "Пользователь" ||--o{ "Запись на курс" : оформляет
+    "Курс" ||--o{ "Запись на курс" : объединяет
+    "Шаг" ||--o{ "Прогресс шага" : учитывает
+    "Пользователь" ||--o{ "Прогресс шага" : сохраняет
+    "Вариант" ||--o{ "Снимок задания" : сохраняет
+    "Вариант" ||--o{ "Попытка экзамена" : объединяет
 ```
 
 Это обзор связей, а не полная схема: назначения, группы, конспекты, расписание и служебные модели описаны в соответствующих Python-модулях и миграциях.
@@ -119,7 +119,7 @@ flowchart LR
 
 ## Эксплуатация
 
-- `/health/` и Compose health checks проверяют работоспособность приложения.
+- `/health/` и проверки Docker Compose контролируют работоспособность приложения.
 - `check_content --strict` диагностирует текущие данные и ссылки на медиа без изменения базы.
 - `backup_platform` сохраняет данные и вложения с манифестом, проверяет архив перед публикацией результата.
 - `run_maintenance` завершает просроченные попытки, отправляет напоминания и обслуживает ежедневные копии.

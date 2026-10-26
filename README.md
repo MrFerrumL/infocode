@@ -86,7 +86,7 @@ flowchart LR
     Caddy --> Web["Django + Waitress"]
     Web --> DB[("PostgreSQL")]
     Web --> Media[("Защищённые медиа")]
-    Maintenance["Maintenance · сроки, напоминания, копии"] --> DB
+    Maintenance["Обслуживание · сроки, напоминания, копии"] --> DB
     Maintenance --> Backup[("Архивы + SHA-256")]
     Web -. "проверка ответа" .-> FIPI["Сервис ФИПИ"]
     Caddy -. "/kr/" .-> KR["Отдельная платформа КР"]
@@ -101,9 +101,9 @@ flowchart LR
 
 | Слой | Стек |
 |---|---|
-| Backend | Python, Django 5.2, Waitress, WhiteNoise |
+| Серверная часть | Python, Django 5.2, Waitress, WhiteNoise |
 | Данные | PostgreSQL 16 на сервере, SQLite для локального запуска |
-| Frontend | Шаблоны Django, HTML, CSS, JavaScript без SPA-фреймворка |
+| Интерфейс | Шаблоны Django, HTML, CSS, JavaScript без SPA-фреймворка |
 | Инфраструктура | Docker Compose, Caddy, Ubuntu VPS, GitHub Actions |
 | Интеграции | ФИПИ, API платформы КР, Colab/Jupyter, CSV и календарь `.ics` |
 | Данные и рекомендации | Пакетный импорт, обработка документов, multilingual-e5-small / ONNX Runtime, сохранённые эмбеддинги |
@@ -144,7 +144,7 @@ python manage.py test learning --noinput
 
 Команды выполняются в окружении с установленными зависимостями. В [GitHub Actions](.github/workflows/checks.yml) настроены проверки с SQLite и PostgreSQL, сборка контейнера и запуск производственной конфигурации. Текущий статус — в значке CI наверху.
 
-Состояние последнего проверенного прогона и известные проблемы описаны в [заметке о качестве](docs/QUALITY.md). Настроенный workflow не означает, что все его проверки уже проходят.
+Состояние последнего проверенного прогона и известные проблемы описаны в [заметке о качестве](docs/QUALITY.md). Наличие сценария автоматической проверки не означает, что все его проверки уже проходят.
 
 На сервере `check_content --strict` проверяет миграции и ссылки на материалы, `/health/` используется для проверки работоспособности, `maintenance` обслуживает сроки, напоминания и ежедневные копии.
 
