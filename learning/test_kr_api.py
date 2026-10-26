@@ -54,8 +54,8 @@ class KrApiTests(TestCase):
         self.assertEqual(self.post({'subject': 'inf', 'exact': [[999999]]}).status_code, 400)
 
     def test_generated_tasks_stay_out_of_the_catalogue(self):
-        Topic.objects.create(number=23, title='Исполнители')
-        reply = self.post({'variants': 2, 'numbers': [{'number': 23, 'count': 3, 'source': 'generate'}]}).json()
+        Topic.objects.create(number=13, title='Динамическое программирование')
+        reply = self.post({'variants': 2, 'numbers': [{'number': 13, 'count': 3, 'source': 'generate'}]}).json()
         ids = [t['id'] for v in reply['variants'] for t in v]
         self.assertEqual(len(set(ids)), 6)
         made = Task.all_objects.filter(pk__in=ids)

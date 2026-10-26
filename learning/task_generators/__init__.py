@@ -17,7 +17,7 @@ LABEL = 'Авторская · Инфокод'
 @dataclass
 class Generated:
     number: int
-    kind: str           # generator slug, e.g. "23.paths"
+    kind: str           # generator slug, e.g. "13.paths"
     params: dict
     title: str
     statement: str
@@ -128,4 +128,4 @@ def save(tasks, topic, published=True, in_catalog=True):
     return list(Task.all_objects.filter(topic=topic, source_system=SYSTEM, external_id__in=[t.external_id for t in tasks]))
 
 
-from . import n23  # noqa: E402,F401  (generators register themselves)
+from . import n13  # noqa: E402,F401  (generators register themselves)

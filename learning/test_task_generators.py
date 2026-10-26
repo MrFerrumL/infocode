@@ -5,7 +5,7 @@ from django.core.management.base import CommandError
 from django.test import SimpleTestCase, TestCase
 from .models import Task, Topic
 from .task_generators import REGISTRY, SYSTEM, Rejected, generate
-from .task_generators.n23 import Paths, Results
+from .task_generators.n13 import Paths, Results
 
 
 class GeneratorTests(SimpleTestCase):
@@ -35,11 +35,11 @@ class GeneratorTests(SimpleTestCase):
         self.assertEqual(Results().solve(q), Results().check(q))
 
     def test_generate_is_varied_and_respects_the_bank(self):
-        tasks = generate(23, 30, seed=7)
+        tasks = generate(13, 30, seed=7)
         self.assertEqual(len(tasks), 30)
         self.assertEqual(len({t.statement for t in tasks}), 30)
-        self.assertEqual({t.kind for t in tasks}, {'23.paths', '23.results'})
-        again = generate(23, 30, seed=7, taken={t.key for t in tasks})
+        self.assertEqual({t.kind for t in tasks}, {'13.paths', '13.results'})
+        again = generate(13, 30, seed=7, taken={t.key for t in tasks})
         self.assertFalse({t.key for t in again} & {t.key for t in tasks})
         for task in tasks:
             self.assertIn('Ответ: ' + task.answer, task.solution)
@@ -48,7 +48,7 @@ class GeneratorTests(SimpleTestCase):
 
 class CommandTests(TestCase):
     def setUp(self):
-        Topic.objects.create(number=23, title='Анализ результатов исполнителя')
+        Topic.objects.create(number=13, title='Динамическое программирование')
 
     def run_command(self, *args):
         out = StringIO()
@@ -56,15 +56,15 @@ class CommandTests(TestCase):
         return out.getvalue()
 
     def test_drafts_without_repeats(self):
-        self.assertIn('№ 23: 5 new tasks', self.run_command('--numbers', '23', '--count', '5', '--seed', '1', '--dry-run'))
+        self.assertIn('№ 13: 5 new tasks', self.run_command('--numbers', '13', '--count', '5', '--seed', '1', '--dry-run'))
         self.assertEqual(Task.all_objects.count(), 0)
         self.run_command('--thinnest', '1', '--count', '12', '--seed', '1')
         made = Task.all_objects.filter(source_system=SYSTEM)
         self.assertEqual((made.count(), made.filter(published=True).count()), (12, 0))
         task = made.first()
-        self.assertEqual((task.source_label, task.source_kind, task.topic.number), ('Авторская · Инфокод', 'author', 23))
+        self.assertEqual((task.source_label, task.source_kind, task.topic.number), ('Авторская · Инфокод', 'author', 13))
         # The same seed again gives only tasks that are not in the bank yet.
-        self.run_command('--numbers', '23', '--count', '12', '--seed', '1', '--publish')
+        self.run_command('--numbers', '13', '--count', '12', '--seed', '1', '--publish')
         self.assertEqual(made.count(), 24)
         self.assertEqual(made.values('external_id').distinct().count(), 24)
         self.assertEqual(made.filter(published=True).count(), 12)

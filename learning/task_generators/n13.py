@@ -1,4 +1,5 @@
-"""№ 23: an executor turns one number into another; count programs or reachable results."""
+"""№ 13 (ЕГЭ-2027, dynamic programming; № 23 before 2027): an executor turns one number into another —
+count programs or reachable results."""
 from functools import lru_cache
 from itertools import product
 from . import Generator, Rejected, register
@@ -30,7 +31,7 @@ def pick_commands(rng, count):
 @register
 class Paths(Generator):
     """How many programs turn A into B (optionally through C and/or avoiding D)."""
-    number, slug, title, subtopic = 23, '23.paths', 'Сколько программ', 'Исполнитель: число программ'
+    number, slug, title, subtopic = 13, '13.paths', 'Сколько программ', 'Исполнитель: число программ'
 
     def params(self, rng):
         count = rng.choice([2, 2, 3])
@@ -108,7 +109,7 @@ class Paths(Generator):
 @register
 class Results(Generator):
     """How many different numbers programs of exactly N commands can give from A."""
-    number, slug, title, subtopic = 23, '23.results', 'Сколько разных результатов', 'Исполнитель: множество результатов'
+    number, slug, title, subtopic = 13, '13.results', 'Сколько разных результатов', 'Исполнитель: множество результатов'
 
     def params(self, rng):
         commands = pick_commands(rng, rng.choice([2, 3]))
