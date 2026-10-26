@@ -23,7 +23,7 @@ FIPI_DOWN = 'Сайт ФИПИ сейчас не отвечает — ответ
 from .models import Topic, Task, Practice, Bookmark, Variant, ExamAttempt, ExamAnswer, Section, Lesson, LessonProgress, LessonFile, VariantItem, TaskBlock, Course, Step, StudentAssignment
 from .security import form_token, claim_submission
 from .services import check_answer, create_variant, finish_attempt, expire_attempts, check_task_answer
-from . import game_groups
+from . import game_groups, answer_cells
 from .sources import KINDS, SITES
 
 staff_required = user_passes_test(lambda u: u.is_active and u.is_staff)
@@ -94,7 +94,7 @@ def practice_answer(request):
         raise PermissionDenied('Обновите страницу перед отправкой ответа.')
     result = None
     submitted = get_object_or_404(Task.objects.select_related('topic'), pk=request.POST.get('task_id') if request.POST.get('task_id', '').isdigit() else 0, published=True, in_catalog=True)
-    answer_form = AnswerForm(request.POST, mode=submitted.code_mode, prefix=f'task-{submitted.pk}')
+    answer_form = AnswerForm(answer_cells.join(request.POST, submitted, f'task-{submitted.pk}'), mode=submitted.code_mode, prefix=f'task-{submitted.pk}')
     if answer_form.is_valid():
         # FIPI tasks may be checked by FIPI itself: ask before saving, so an outage records nothing.
         try:
@@ -135,6 +135,7 @@ def prepare_cards(cards, user, solved, saved=(), submitted=None, answer_form=Non
             initial={'python_code': task.catalog_history[0].python_code if task.catalog_history else ''})
         task.submit_token = form_token(user, f'task:{task.pk}')
         task.can_reveal = user.is_staff or bool(task.catalog_history)
+        task.answer_grid = answer_cells.grid(task, f'task-{task.pk}')
 
 
 def card_queryset(user):

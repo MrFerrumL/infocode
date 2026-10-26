@@ -121,3 +121,9 @@ html[data-theme="dark"] { --condition-filter: invert(1) hue-rotate(180deg) brigh
 .rich-statement table { border-collapse: collapse; margin: 12px 0; max-width: 100%; display: block; overflow-x: auto; }
 .rich-statement td, .rich-statement th { border: 1px solid var(--line); padding: 4px 9px; text-align: center; }
 .rich-statement p { margin: 0 0 10px; }
+/* Answers of several numbers (№ 17, 26, 27): one cell per number, as on the exam. */
+.catalog-answer-form .answer-cells { border: 0; padding: 0; margin: 0 0 12px; display: grid; gap: 8px; }
+.catalog-answer-form .answer-cells legend { font-weight: 600; font-size: 14px; margin-bottom: 8px; }
+.answer-cells-row { display: flex; align-items: center; gap: 8px; }
+.answer-cells-row span { width: 70px; font-size: 13px; color: var(--muted); }
+.catalog-answer-form .answer-cells-row input { width: 160px; max-width: 160px; }

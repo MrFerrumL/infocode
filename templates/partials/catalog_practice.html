@@ -1,7 +1,12 @@
 <section class="catalog-practice" aria-label="Ответ на задание {{ task.id }}">
   <form method="post" action="{{ request.get_full_path }}#task-{{ task.pk }}" class="answer-form catalog-answer-form" data-catalog-answer>
     {% csrf_token %}<input type="hidden" name="task_id" value="{{ task.pk }}"><input type="hidden" name="submit_token" value="{{ task.submit_token }}">
-    {{ task.answer_form.answer.as_field_group }}
+    {% if task.answer_grid %}
+    <fieldset class="answer-cells"><legend>Ваш ответ</legend>
+      {% for row in task.answer_grid %}<div class="answer-cells-row">{% if row.label %}<span>{{ row.label }}</span>{% endif %}{% for name in row.cells %}<input name="{{ name }}" autocomplete="off" spellcheck="false" inputmode="numeric" aria-label="{% if row.label %}{{ row.label }}, {% endif %}число {{ forloop.counter }}">{% endfor %}</div>{% endfor %}
+      {{ task.answer_form.answer.errors }}
+    </fieldset>
+    {% else %}{{ task.answer_form.answer.as_field_group }}{% endif %}
     {% include 'partials/python_answer_form.html' with code_form=task.answer_form code_mode=task.code_mode %}
     <p class="catalog-form-status" role="status" aria-live="polite"></p>
     <button class="button" type="submit">Проверить ответ</button>
