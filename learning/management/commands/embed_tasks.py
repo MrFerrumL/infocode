@@ -2,14 +2,15 @@ import gzip
 import json
 from pathlib import Path
 from django.core.management.base import BaseCommand, CommandError
-from django.db.models import Prefetch
+from django.db.models import Prefetch, Q
 from learning import embeddings, ocr
 from learning.models import Task, TaskBlock, TaskVector
 
 
 class Command(BaseCommand):
-    help = ('Give every catalogue task a sentence vector for «Похожие» (learning/embeddings.py). Only new or changed texts '
-            'are embedded. --texts loads the words of pictures-only conditions (deploy/export_task_texts.py, kept out of git).')
+    help = ('Give every catalogue task and every task of a variant a sentence vector for «Похожие» (learning/embeddings.py). '
+            'Only new or changed texts are embedded. --texts loads the words of pictures-only conditions '
+            '(deploy/export_task_texts.py, kept out of git).')
 
     def add_arguments(self, parser):
         parser.add_argument('--texts', type=Path, help='task_texts.json.gz: {"source:number:external_id": text}')
@@ -21,7 +22,10 @@ class Command(BaseCommand):
             self.load_texts(opts['texts'])
         if not embeddings.available():
             raise CommandError(f'No model in {embeddings.settings.EMBED_MODEL_DIR} (model.onnx, tokenizer.json) or onnxruntime is missing.')
-        tasks = (Task.all_objects.filter(published=True, in_catalog=True, archived_at__isnull=True).select_related('topic', 'text_vector')
+        # Tasks of variants count too (KOMPEGE variants keep their own tasks outside the catalogue): «≈ Похожие варианты».
+        in_variants = Task.all_objects.filter(variantitem__isnull=False).values('pk')
+        tasks = (Task.all_objects.filter(Q(published=True, in_catalog=True) | Q(pk__in=in_variants), archived_at__isnull=True)
+                 .select_related('topic', 'text_vector')
                  .prefetch_related(Prefetch('content_blocks', queryset=TaskBlock.all_objects.filter(kind__in=['text', 'html', 'heading'])))
                  .order_by('pk'))
         todo, skipped, read = [], 0, 0

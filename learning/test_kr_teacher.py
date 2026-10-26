@@ -154,3 +154,58 @@ class DraftSimilarTests(TestCase):
         self.client.post('/teacher/kr/draft/', {'action': 'like', 'v': '0', 'i': '0'})
         self.assertEqual(self.client.session['kr_draft']['variants'], [[close.pk]])
         self.assertContains(self.client.get('/teacher/kr/draft/'), '≈ Похожая')
+
+
+class SimilarVariantTests(TestCase):
+    """«≈ Похожие варианты»: every task of a variant swapped for the closest by meaning, into the КР draft or for practice."""
+
+    def setUp(self):
+        from . import embeddings
+        from .services import create_variant
+        from .test_embeddings import fake_embed
+        from django.core.management import call_command
+        from io import StringIO
+        users = get_user_model()
+        self.teacher = users.objects.create_user('olga', password='x', is_staff=True)
+        self.pupil = users.objects.create_user('pupil', password='x')
+        topics = {n: Topic.objects.create(number=n, title=str(n)) for n in (13, 19, 20, 21)}
+
+        def make(number, text, answer, **kw):
+            return Task.objects.create(topic=topics[number], title='t', statement=text, answer=answer, published=True, in_catalog=True, **kw)
+        self.task = make(13, 'Исполнитель превращает число 3 в число 20. Сколько программ?', '1')
+        self.close = make(13, 'Исполнитель Альфа: сколько программ переводят 2 в 30?', '2')
+        self.far = make(13, 'Определите количество простых чисел в диапазоне от 2 до 20000.', '3')
+        game = [make(n, f'Игра: две кучи камней, вопрос {n}', str(n), source_system='kompege', external_id=100) for n in (19, 20, 21)]
+        self.other_game = [make(n, f'Игра: одна куча камней, ход {n}', str(n + 1), source_system='kompege', external_id=200)
+                           for n in (19, 20, 21)]
+        with patch.object(embeddings, 'available', return_value=True), patch.object(embeddings, 'embed', side_effect=fake_embed):
+            call_command('embed_tasks', stdout=StringIO())
+        self.variant = create_variant(creator=self.teacher, title='Вариант 5', topics=[],
+                                      task_ids=' '.join(str(t.pk) for t in [self.task] + game), published=True)
+
+    def test_only_teachers(self):
+        self.client.force_login(self.pupil)
+        self.assertEqual(self.client.post(f'/variants/{self.variant.pk}/similar/', {'to': 'kr'}).status_code, 302)
+        self.assertNotIn('kr_draft', self.client.session)
+        self.assertNotContains(self.client.get(f'/variants/{self.variant.pk}/'), '≈ Похожие варианты')
+
+    def test_into_the_kr_draft(self):
+        self.client.force_login(self.teacher)
+        self.assertContains(self.client.get(f'/variants/{self.variant.pk}/'), '≈ Похожие варианты')
+        reply = self.client.post(f'/variants/{self.variant.pk}/similar/', {'to': 'kr', 'count': '2'})
+        self.assertRedirects(reply, '/teacher/kr/draft/', fetch_redirect_response=False)
+        draft = self.client.session['kr_draft']
+        self.assertEqual(draft['title'], 'Похожий на «Вариант 5»')
+        self.assertEqual(draft['variants'][0], [self.close.pk] + [t.pk for t in self.other_game])  # 20–21 follow their 19
+        self.assertEqual(draft['variants'][1], [self.far.pk])  # nothing repeats; no other 19 group is left
+        self.assertContains(self.client.get('/teacher/kr/draft/'), 'Вариант 2')
+
+    def test_variants_for_practice(self):
+        from .models import Variant
+        self.client.force_login(self.teacher)
+        reply = self.client.post(f'/variants/{self.variant.pk}/similar/', {'to': 'practice', 'count': '1'})
+        made = Variant.objects.exclude(pk=self.variant.pk).get()
+        self.assertRedirects(reply, f'/variants/{made.pk}/', fetch_redirect_response=False)
+        self.assertEqual((made.title, made.published), ('Похожий на «Вариант 5»', False))
+        self.assertEqual(list(made.items.order_by('position').values_list('task_id', flat=True)),
+                         [self.close.pk] + [t.pk for t in self.other_game])

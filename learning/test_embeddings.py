@@ -68,6 +68,18 @@ class EmbeddingTests(TestCase):
     def test_tasks_without_words_are_skipped(self, embed, _):
         self.assertIn('pictures only, no source text): 1', self.run_embed())
 
+    def test_tasks_of_variants_outside_the_catalogue(self, embed, _):
+        from .models import Variant, VariantItem
+        hidden = Task.objects.create(topic=self.topic, title='kim', statement='Исполнитель из варианта КИМ', answer='5',
+                                     published=False, in_catalog=False)
+        loose = Task.objects.create(topic=self.topic, title='loose', statement='Исполнитель вне вариантов', answer='6', in_catalog=False)
+        teacher = get_user_model().objects.create_user('olga', is_staff=True)
+        variant = Variant.objects.create(title='КИМ', creator=teacher)
+        VariantItem.objects.create(variant=variant, task=hidden, position=1, number=23, statement=hidden.statement, answer='5')
+        self.run_embed()
+        self.assertTrue(TaskVector.objects.filter(task=hidden).exclude(vector=None).exists())
+        self.assertFalse(TaskVector.objects.filter(task=loose).exists())
+
 
 @patch.object(embeddings, 'available', return_value=True)
 @patch.object(embeddings, 'embed', side_effect=fake_embed)

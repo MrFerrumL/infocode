@@ -90,6 +90,7 @@ urlpatterns = [
     path('tests/', v.variants, name='tests'),
     path('variants/<int:pk>/', v.variant_detail, name='variant'),
     path('variants/<int:pk>/start/', v.start_exam, name='start_exam'),
+    path('variants/<int:pk>/similar/', kr_views.similar_variant, name='similar_variant'),
     path('exam/<int:pk>/', v.exam, name='exam'),
     path('exam/<int:pk>/save/', v.exam_save, name='exam_save'),
     path('results/<int:pk>/', v.result, name='result'),

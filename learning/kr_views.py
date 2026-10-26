@@ -296,3 +296,74 @@ def classify_task(request, pk):
     task.save(update_fields=fields)
     return JsonResponse({'difficulty': task.difficulty, 'difficulty_label': task.get_difficulty_display(),
                          'exam_source': task.exam_source, 'exam_source_label': task.get_exam_source_display()})
+
+
+MAX_SIMILAR = 10
+
+
+def similar_sets(variant, count):
+    """(sets of task ids, numbers left without a task, tasks picked at random): each task of the variant swapped for
+    the closest one by meaning of the same number; no task is repeated, and 20–21 follow the 19 chosen in the same set."""
+    items = list(variant.items.select_related('task__topic').order_by('position'))
+    used = {item.task_id for item in items}
+    rng = random.SystemRandom()
+    sets, missing, guessed = [], set(), 0
+    with using(variant.subject):
+        for _ in range(count):
+            ids, first = [], None
+            for item in items:
+                found = []
+                if item.number in (20, 21) and first and first.external_id and first.source_system:
+                    # The bank keeps grouped 20/21 out (alone they lack the condition); next to their own 19 they read well.
+                    partners = Task.objects.filter(published=True, in_catalog=True, topic__number=item.number,
+                                                   source_system=first.source_system, external_id=first.external_id)
+                    found = list(partners.exclude(answer='').exclude(pk__in=used).values_list('pk', flat=True)[:1])
+                found = found or by_vector(item.task, pool().exclude(pk__in=used), [item.number], 1)
+                if not found:
+                    try:  # no vector for this task: a random task of the same number
+                        found = from_bank(item.number, 1, 1, [], rng, exclude=used)
+                        guessed += 1
+                    except ComposeError:
+                        missing.add(item.number)
+                        continue
+                used.add(found[0])
+                ids.append(found[0])
+                if item.number == 19:
+                    first = Task.all_objects.get(pk=found[0])
+            sets.append(ids)
+    return sets, sorted(missing), guessed
+
+
+@staff_required
+@require_POST
+def similar_variant(request, pk):
+    """Variants like the chosen one: into the КР draft, or as variants for practice on the platform."""
+    from django.shortcuts import get_object_or_404
+    from .services import create_variant
+    from .views import visible_variants
+    variant = get_object_or_404(visible_variants(request.user), pk=pk)
+    count = _int(request.POST.get('count'), 1, 1, MAX_SIMILAR)
+    sets, missing, guessed = similar_sets(variant, count)
+    if not all(sets):
+        messages.error(request, 'Не нашлось похожих задач для этого варианта.')
+        return redirect('variant', pk=pk)
+    lacking = f' Для № {", ".join(map(str, missing))} похожих задач не хватило — добавьте их в черновике.' if missing else ''
+    if guessed:  # pictures-only conditions without words have no vector
+        lacking += f' Задач без текста условия, подобранных случайно по номеру: {guessed}.'
+    title = f'Похожий на «{variant.title}»'[:160]
+    if request.POST.get('to') == 'kr':
+        request.session[DRAFT] = {'subject': variant.subject, 'title': title, 'group': '', 'duration': min(variant.duration, 300),
+                                  'level': '', 'source': '', 'variants': sets}
+        messages.success(request, f'Черновик КР: {count} вар., в каждом задачи, похожие на «{variant.title}».{lacking}')
+        return redirect('teacher_kr_draft')
+    publish = request.POST.get('publish') == '1'
+    with using(variant.subject):
+        made = [create_variant(creator=request.user, title=f'{title} · {k}' if count > 1 else title, topics=[], kind=variant.kind,
+                               task_ids=' '.join(map(str, ids)), duration=variant.duration, group=variant.group, published=publish)
+                for k, ids in enumerate(sets, 1)]
+    for new in made:
+        new.scoring, new.hide_answers = variant.scoring, variant.hide_answers
+        new.save(update_fields=['scoring', 'hide_answers'])
+    shown = 'открыты ученикам' if publish else 'пока скрыты от учеников (опубликовать — в кабинете преподавателя)'
+    messages.success(request, f'Создано похожих вариантов: {len(made)}, они {shown}.{lacking}')
+    return redirect('variant', pk=made[0].pk)
