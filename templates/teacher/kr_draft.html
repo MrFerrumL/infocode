@@ -33,6 +33,7 @@
         <small>ID {{ task.pk }}{% if task.source_label %} · {{ task.source_label }}{% endif %} · {{ task.get_difficulty_display }} · ответ: <b>{{ task.answer }}</b></small></div>
       <form method="post" class="kr-task-actions">{% csrf_token %}<input type="hidden" name="v" value="{{ v.index }}"><input type="hidden" name="i" value="{{ forloop.counter0 }}">
         <button class="button secondary small" name="action" value="swap" title="Другая случайная задача этого номера">↻ Другая</button>
+        <button class="button secondary small" name="action" value="like" title="Похожая по смыслу задача этого номера">≈ Похожая</button>
         <button type="button" class="button secondary small" data-open-picker data-mode="put" data-v="{{ v.index }}" data-i="{{ forloop.counter0 }}" data-number="{{ task.topic.number }}">🔍 Выбрать</button>
         <button class="button secondary small danger" name="action" value="remove" title="Убрать из варианта">✕</button>
       </form>

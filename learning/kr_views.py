@@ -12,6 +12,7 @@ from django.utils.dateparse import parse_datetime
 from . import kr_client, ocr, semantic_search
 from .kr_api import LEVELS, MAX_PER_NUMBER, MAX_VARIANTS, MAX_PICKED, SOURCES, ComposeError, available, from_bank, pool
 from .models import Task
+from .similar_tasks import by_vector
 from .subjects import SUBJECTS, current as current_subject, using
 from .task_generators import REGISTRY
 from .views import staff_required
@@ -185,6 +186,15 @@ def teacher_kr_draft(request):
                 with using(draft['subject']):
                     current = Task.all_objects.filter(pk=draft['variants'][v][at]).values_list('topic__number', flat=True).first()
                 _place(draft, v, _other(draft, current), at)
+            elif action == 'like' and v >= 0 and 0 <= at < len(draft['variants'][v]):
+                # The closest task by meaning of the same number that is not in the draft yet.
+                used = {i for ids in draft['variants'] for i in ids}
+                with using(draft['subject']):
+                    current = Task.all_objects.select_related('topic').get(pk=draft['variants'][v][at])
+                    found = by_vector(current, pool().exclude(pk__in=used), [current.topic.number], 1)
+                if not found:
+                    raise ComposeError('Для этой задачи нет похожих по смыслу — попробуйте «↻ Другая» или «🔍 Выбрать».')
+                _place(draft, v, found[0], at)
             elif action in ('put', 'add') and v >= 0 and task_id:
                 with using(draft['subject']):
                     if not pool().filter(pk=task_id).exists():

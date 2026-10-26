@@ -128,3 +128,29 @@ class TeacherKrFollowUpTests(TestCase):
             target = urlparse(self.client.get(f'/teacher/kr/open/?to={to}')['Location'])
             data = signing.loads(parse_qs(target.query)['t'][0], key='secret', salt='kr-sso')
             self.assertEqual(data['to'], to)
+
+
+@override_settings(KR_API_TOKEN='secret', KR_PUBLIC_URL='/kr')
+class DraftSimilarTests(TestCase):
+    """«≈ Похожая» puts the closest task by meaning in place of a draft task."""
+
+    def test_swap_for_a_similar_task(self):
+        from . import embeddings
+        from .test_embeddings import fake_embed
+        from django.core.management import call_command
+        from io import StringIO
+        teacher = get_user_model().objects.create_user('olga', password='x', is_staff=True)
+        topic = Topic.objects.create(number=13, title='13')
+        make = lambda text, answer: Task.objects.create(topic=topic, title='t', statement=text, answer=answer, published=True, in_catalog=True)
+        task = make('Исполнитель превращает число 3 в число 20. Сколько программ?', '1')
+        close = make('Исполнитель Альфа: сколько программ переводят 2 в 30?', '2')
+        far = make('Определите количество простых чисел в диапазоне от 2 до 20000.', '3')
+        with patch.object(embeddings, 'available', return_value=True), patch.object(embeddings, 'embed', side_effect=fake_embed):
+            call_command('embed_tasks', stdout=StringIO())
+        self.client.force_login(teacher)
+        session = self.client.session
+        session['kr_draft'] = {'subject': 'inf', 'title': 'КР', 'group': '', 'duration': 45, 'level': '', 'variants': [[task.pk]]}
+        session.save()
+        self.client.post('/teacher/kr/draft/', {'action': 'like', 'v': '0', 'i': '0'})
+        self.assertEqual(self.client.session['kr_draft']['variants'], [[close.pk]])
+        self.assertContains(self.client.get('/teacher/kr/draft/'), '≈ Похожая')
