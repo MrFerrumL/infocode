@@ -73,11 +73,13 @@ class SeedCourseTests(TestCase):
         from django.core.management import call_command
         self.call = lambda: call_command('seed_course_inf', stdout=__import__('io').StringIO())
         User.objects.create_superuser('seed-admin', password='x')
-        for number in range(1, 16):
+        for number in range(1, 22):
             topic, _ = Topic.objects.get_or_create(number=number, defaults={'title': f'№ {number}'})
             for n, (level, kind) in enumerate([('easy', 'demo'), ('easy', 'exam'), ('medium', 'exam'), ('medium', 'author'), ('hard', 'author'), ('easy', '')]):
+                # 19, 20 and 21 with one source ID form a game: one condition, three questions.
                 Task.objects.create(topic=topic, title=f'{number}.{n}', statement='Условие', answer=str(n), difficulty=level,
-                                    source_kind=kind, published=True, external_id=100 + n)
+                                    source_kind=kind, published=True, external_id=100 + n,
+                                    source_system='kompege' if number >= 19 else '')
 
     def test_course_is_built_and_rebuilt_safely(self):
         from learning.management.commands.seed_course_inf import TITLE
@@ -86,8 +88,8 @@ class SeedCourseTests(TestCase):
         self.assertFalse(course.published)          # a draft until the teacher publishes it
         steps = Step.objects.filter(lesson__section__course=course)
         bank = steps.filter(kind='task')
-        self.assertEqual(bank.count(), 75)
-        self.assertEqual(bank.values('task').distinct().count(), 75)   # no task twice in the course
+        self.assertEqual(bank.count(), 99)
+        self.assertEqual(bank.values('task').distinct().count(), 99)   # no task twice in the course
         warmup = bank.get(lesson__section__order=1, title='Разминка')
         self.assertEqual((warmup.task.difficulty, warmup.task.source_kind), ('easy', 'demo'))
         theory = steps.get(lesson__section__order=2, kind='text')
@@ -96,8 +98,15 @@ class SeedCourseTests(TestCase):
         quiz = steps.get(lesson__section__order=4, kind='quiz')
         self.assertEqual(quiz.options[quiz.correct_choices[0]], '0, 10, 110, 111')
         self.assertEqual(steps.get(lesson__section__order=5, kind='answer').answer, '16')
-        self.assertEqual([steps.get(lesson__section__order=n, kind='answer').answer for n in range(6, 16)],
-                         ['55', '64', '320', '4', '4', '640', '48', '2048', '27', '15'])
+        self.assertEqual([steps.get(lesson__section__order=n, kind='answer').answer for n in range(6, 20)],
+                         ['55', '64', '320', '4', '4', '640', '48', '2048', '27', '15', '384', '6 82', '29 24', '4'])
+        # 19–21: each game is three slides in a row — questions 19, 20 and 21 of one source task.
+        games = list(bank.filter(lesson__section__order=19).order_by('position').select_related('task__topic'))
+        self.assertEqual(len(games), 9)
+        for first, second, third in zip(games[::3], games[1::3], games[2::3]):
+            self.assertEqual([s.task.topic.number for s in (first, second, third)], [19, 20, 21])
+            self.assertEqual(len({s.task.external_id for s in (first, second, third)}), 1)
+        self.assertEqual(games[1].title, 'Разминка · задание 20')
         # № 12 has two theory slides: the string editor and the Turing machine.
         self.assertEqual(steps.filter(lesson__section__order=12, kind='text').count(), 2)
         pupil = User.objects.create_user('seed-pupil')
