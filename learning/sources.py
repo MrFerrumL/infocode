@@ -6,7 +6,7 @@ KOMPEGE prints a short note above each task ("Демоверсия 2027", "Ос�
 import re
 
 # Task.source_system → site shown in the catalogue filter. New banks (K. Polyakov, Yandex) add a line here.
-SITES = {'kompege': 'КЕГЭ', 'polyakov': 'К. Поляков', 'fipi': 'ФИПИ', 'yandex': 'Яндекс', '': 'Свои задачи'}
+SITES = {'kompege': 'КЕГЭ', 'polyakov': 'К. Поляков', 'fipi': 'ФИПИ', 'yandex': 'Яндекс', 'infocode-gen': 'Инфокод · генератор', '': 'Свои задачи'}
 
 # K. Polyakov's extra documents of one number: task 2015 of number 7 is "7-2.15", 3003 is "7-v.3".
 POLYAKOV_PARTS = {2: '2', 3: 'v'}
