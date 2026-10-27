@@ -26,3 +26,8 @@
         }
     }
 }
+
+# www goes to the main name (it needs a DNS A record www → this server; until then Caddy only retries the certificate).
+www.{$APP_DOMAIN} {
+    redir https://{$APP_DOMAIN}{uri} 308
+}

@@ -75,9 +75,11 @@ if not DEBUG:
     CSRF_COOKIE_SECURE = True
     SECURE_SSL_REDIRECT = True
     SECURE_HSTS_SECONDS = 31536000
-    SECURE_HSTS_INCLUDE_SUBDOMAINS = True
+    # Only the site's own name: a subdomain served elsewhere (www parked at the registrar) must not be locked
+    # behind HSTS with a certificate that is not ours — browsers then refuse it without a way through.
+    SECURE_HSTS_INCLUDE_SUBDOMAINS = False
     # Preloading a new domain is a separate, deliberate deployment decision.
     # Keep all other deployment checks enabled; HTTPS/HSTS still apply normally.
     SECURE_HSTS_PRELOAD = False
-    SILENCED_SYSTEM_CHECKS = ['security.W021']
+    SILENCED_SYSTEM_CHECKS = ['security.W021', 'security.W005']
     SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
