@@ -11,7 +11,8 @@
 
   const load = async (page = 1) => {
     const params = new URLSearchParams({number: number.value, q: query.value, page, mode: (dialog.querySelector('[data-photo-mode]') || {}).value || '',
-                                        level: dialog.querySelector('[data-filter-level]').value, source: dialog.querySelector('[data-filter-source]').value});
+                                        level: dialog.querySelector('[data-filter-level]').value, source: dialog.querySelector('[data-filter-source]').value,
+                                        year: dialog.querySelector('[data-filter-year]').value});
     list.innerHTML = '<p class="muted">Загружаем задачи…</p>';
     try {
       const response = await fetch(`${dialog.dataset.url}&${params}`, {headers: {'X-Requested-With': 'XMLHttpRequest'}});
@@ -31,7 +32,7 @@
     load();
   }));
   dialog.querySelector('[data-close]').addEventListener('click', () => dialog.close());
-  dialog.querySelectorAll('[data-filter-number], [data-filter-level], [data-filter-source]').forEach(el => el.addEventListener('change', () => load()));
+  dialog.querySelectorAll('[data-filter-number], [data-filter-level], [data-filter-source], [data-filter-year]').forEach(el => el.addEventListener('change', () => load()));
   dialog.querySelector('[data-filter-go]').addEventListener('click', () => load());
   query.addEventListener('keydown', event => { if (event.key === 'Enter') { event.preventDefault(); load(); } });
   list.addEventListener('click', event => {

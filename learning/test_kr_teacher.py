@@ -228,4 +228,20 @@ class SimilarVariantTests(TestCase):
         draft = self.client.session['kr_draft']
         self.assertEqual((draft['variants'][0][0], draft['group']), (self.far.pk, 'Пара 03'))
         page = self.client.post(url, {'to': 'kr', 'level': 'grave'}, follow=True)
-        self.assertContains(page, 'ослабьте уровень или источник')
+        self.assertContains(page, 'ослабьте уровень, источник или год')
+
+    def test_draft_variants_like_a_hand_made_one(self):
+        self.client.force_login(self.teacher)
+        mine = [self.task.pk] + list(Task.objects.filter(external_id=100, topic__number=19).values_list('pk', flat=True))
+        session = self.client.session
+        session['kr_draft'] = {'subject': 'inf', 'title': 'КР', 'group': '', 'duration': 45, 'level': '', 'source': '',
+                               'variants': [[], mine]}
+        session.save()
+        self.client.post('/teacher/kr/draft/', {'action': 'like_variant', 'v': '1', 'count': '2'})
+        variants = self.client.session['kr_draft']['variants']
+        self.assertEqual(variants[0], mine)  # the hand-made variant comes first and stays as it is
+        self.assertEqual(variants[1], [self.close.pk, self.other_game[0].pk])  # in a КР 20–21 travel with their 19
+        self.assertEqual(variants[2], [self.far.pk])
+        page = self.client.get('/teacher/kr/draft/')
+        self.assertContains(page, 'Собрать по этому')
+        self.assertContains(page, 'Вариант 3')

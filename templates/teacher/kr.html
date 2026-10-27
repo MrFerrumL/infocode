@@ -58,6 +58,7 @@
     <label>Вариантов<input type="number" name="variants" value="{{ form.variants }}" min="1" max="{{ max_variants }}" required></label>
     <label>Время, мин<input type="number" name="duration" value="{{ form.duration }}" min="5" max="300" required></label>
     <label>Источник (для «Банк»)<select name="source"><option value="">Любой</option>{% for code, title in source_choices %}<option value="{{ code }}" {% if form.source == code %}selected{% endif %}>{{ title }}</option>{% endfor %}</select></label>
+    <label>Год выпуска (для «Банк»)<select name="year"><option value="">Любой</option>{% for code, title in year_choices %}<option value="{{ code }}"{% if form.year == code %} selected{% endif %}>{{ title }}</option>{% endfor %}</select></label>
     <label>Уровень задач<select name="level"><option value="">Любой</option>{% for code, title in levels %}<option value="{{ code }}" {% if form.level == code %}selected{% endif %}>{{ title }}</option>{% endfor %}</select></label>
   </div>
   {% if has_draft %}<div class="notice">Есть несобранный черновик КР. <a href="{% url 'teacher_kr_draft' %}">Продолжить редактирование →</a></div>{% endif %}
@@ -90,6 +91,7 @@
       </select>
       <select data-filter-level aria-label="Уровень"><option value="">Все уровни</option>{% for code, title in levels %}<option value="{{ code }}">{{ title }}</option>{% endfor %}</select>
       <select data-filter-source aria-label="Источник"><option value="">Все источники</option>{% for code, title in source_choices %}<option value="{{ code }}">{{ title }}</option>{% endfor %}</select>
+      <select data-filter-year aria-label="Год выпуска"><option value="">Все годы</option>{% for code, title in year_choices %}<option value="{{ code }}">{{ title }}</option>{% endfor %}</select>
       <input type="search" data-filter-q data-photo-target placeholder="ID, слова, условие целиком или фото (Ctrl+V)" aria-label="Поиск задачи">
       {% if meaning_on %}<select data-photo-mode aria-label="Как искать"><option value="">По словам</option><option value="meaning">По смыслу</option></select>{% endif %}
       <button type="button" class="button secondary" data-filter-go>Найти</button>

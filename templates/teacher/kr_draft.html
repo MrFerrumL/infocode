@@ -5,7 +5,7 @@
 {% include 'layout/work_tabs.html' %}
 <a class="back-link" href="{% url 'teacher_kr' %}">← КР без регистрации</a>
 <div class="page-heading"><div><div class="eyebrow">ЧЕРНОВИК КР · {{ draft.subject|upper }}</div><h1>{{ draft.title }}<span class="accent">.</span></h1>
-<p>{% if draft.group %}{{ draft.group }} · {% endif %}{{ variants|length }} вар. · {{ draft.duration }} мин · уровень: {{ level_title }}. Проверьте задачи: уберите лишние, замените или добавьте свои — и отправьте КР ученикам.</p></div>
+<p>{% if draft.group %}{{ draft.group }} · {% endif %}{{ variants|length }} вар. · {{ draft.duration }} мин · уровень: {{ level_title }}{% if year_title %} · год: {{ year_title }}{% endif %}. Проверьте задачи: уберите лишние, замените или добавьте свои — и отправьте КР ученикам.</p></div>
   <form method="post" class="kr-draft-send">{% csrf_token %}
     <button class="button secondary" name="action" value="discard" onclick="return confirm('Удалить черновик?')">Удалить черновик</button>
     <button class="button" name="action" value="send">Отправить в КР и открыть →</button>
@@ -24,7 +24,14 @@
 
 {% for v in variants %}
 <section class="kr-variant" id="v{{ v.number }}">
-  <div class="section-heading"><h2>Вариант {{ v.number }}</h2><span class="pill">{{ v.tasks|length }} задач</span></div>
+  <div class="section-heading"><h2>Вариант {{ v.number }}</h2>
+    <div class="kr-variant-head">
+      {% if v.tasks %}<form method="post" class="kr-like-variant" title="Остальные варианты заменятся похожими на этот: в каждом номере — ближайшая по смыслу задача того же номера">{% csrf_token %}
+        <input type="hidden" name="v" value="{{ v.index }}">
+        <label>≈ Похожих вариантов<input type="number" name="count" value="{% if variants|length > 1 %}{{ variants|length|add:'-1' }}{% else %}3{% endif %}" min="1" max="{{ max_variants|add:'-1' }}"></label>
+        <button class="button secondary small" name="action" value="like_variant"{% if variants|length > 1 %} onclick="return confirm('Остальные варианты заменятся похожими на вариант {{ v.number }}. Продолжить?')"{% endif %}>Собрать по этому</button>
+      </form>{% endif %}
+      <span class="pill">{{ v.tasks|length }} задач</span></div></div>
   {% for task in v.tasks %}
   <article class="kr-pick-card kr-draft-task">
     <header>
@@ -58,6 +65,7 @@
     <select data-filter-number aria-label="Номер"><option value="">Все номера</option>{% for n in all_numbers %}<option value="{{ n }}">№ {{ n }}</option>{% endfor %}</select>
     <select data-filter-level aria-label="Уровень"><option value="">Все уровни</option>{% for code, title in levels %}<option value="{{ code }}">{{ title }}</option>{% endfor %}</select>
       <select data-filter-source aria-label="Источник"><option value="">Все источники</option>{% for code, title in source_choices %}<option value="{{ code }}">{{ title }}</option>{% endfor %}</select>
+      <select data-filter-year aria-label="Год выпуска"><option value="">Все годы</option>{% for code, title in year_choices %}<option value="{{ code }}">{{ title }}</option>{% endfor %}</select>
       <input type="search" data-filter-q data-photo-target placeholder="ID, слова, условие целиком или фото (Ctrl+V)" aria-label="Поиск задачи">
       {% if meaning_on %}<select data-photo-mode aria-label="Как искать"><option value="">По словам</option><option value="meaning">По смыслу</option></select>{% endif %}
     <button type="button" class="button secondary" data-filter-go>Найти</button>

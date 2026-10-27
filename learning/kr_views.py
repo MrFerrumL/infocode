@@ -10,7 +10,7 @@ from django.urls import reverse
 from django.views.decorators.http import require_POST
 from django.utils.dateparse import parse_datetime
 from . import kr_client, ocr, semantic_search
-from .kr_api import LEVELS, MAX_PER_NUMBER, MAX_VARIANTS, MAX_PICKED, SOURCES, ComposeError, available, by_source, from_bank, pool
+from .kr_api import LEVELS, MAX_PER_NUMBER, MAX_VARIANTS, MAX_PICKED, SOURCES, ComposeError, available, by_source, by_year, from_bank, pool, year_choices, year_title
 from .models import Task
 from .exam_sources import OFFICIAL, apply as apply_source
 from .similar_tasks import by_vector
@@ -49,14 +49,15 @@ def teacher_kr(request):
     form = {'title': data.get('title', 'Контрольная работа')[:160], 'group': data.get('group', '')[:120],
             'variants': _int(data.get('variants'), 4, 1, MAX_VARIANTS), 'duration': _int(data.get('duration'), 45, 5, 300),
             'level': data.get('level') if data.get('level') in LEVELS else '',
-            'source': data.get('source') if data.get('source') in SOURCE_CHOICES else ''}
+            'source': data.get('source') if data.get('source') in SOURCE_CHOICES else '', 'year': _year(data.get('year'))}
     generators = set(REGISTRY) if subject == 'inf' else set()
     picked = [int(i) for i in request.POST.get('picked', '').split(',') if i.isdigit()][:MAX_PICKED]
     with using(subject):
         picked_numbers = dict(pool().filter(pk__in=picked).values_list('pk', 'topic__number'))
         # The bank by number, level and exam source: the page recounts «в банке N» when the level or source changes.
-        bank = [list(row) for row in pool().order_by().values('topic__number', 'difficulty', 'exam_source')
-                .annotate(k=Count('pk')).values_list('topic__number', 'difficulty', 'exam_source', 'k')]
+        bank = [list(row) for row in pool().order_by().values('topic__number', 'difficulty', 'exam_source', 'exam_year')
+                .annotate(k=Count('pk')).values_list('topic__number', 'difficulty', 'exam_source', 'exam_year', 'k')]
+        years = year_choices()
     rows = []
     for n in range(1, NUMBERS[subject] + 1):
         source = request.POST.get(f'src{n}', 'bank')
@@ -70,12 +71,12 @@ def teacher_kr(request):
             error = 'Укажите, сколько задач взять хотя бы по одному номеру.'
         else:
             try:
-                variants = compose_draft(subject, plan, form['variants'], form['level'], form['source'])
+                variants = compose_draft(subject, plan, form['variants'], form['level'], form['source'], form['year'])
             except ComposeError as exc:
                 error = str(exc)
             else:
                 request.session[DRAFT] = {'subject': subject, 'title': form['title'], 'group': form['group'], 'duration': form['duration'],
-                                          'level': form['level'], 'source': form['source'], 'variants': variants}
+                                          'level': form['level'], 'source': form['source'], 'year': form['year'], 'variants': variants}
                 return redirect('teacher_kr_draft')
     tests, unavailable = [], ''
     if kr_client.enabled():
@@ -95,7 +96,7 @@ def teacher_kr(request):
         'enabled': kr_client.enabled(), 'pupils_url': absolute(request, kr_client.pupils_url()), 'new_code': request.GET.get('new', ''),
         'max_per_number': MAX_PER_NUMBER, 'max_variants': MAX_VARIANTS, 'picked': ','.join(map(str, picked)),
         'bank': {'rows': bank, 'official': sorted(OFFICIAL)},
-        'levels': LEVELS.items(), 'has_draft': bool(request.session.get(DRAFT)), 'source_choices': SOURCE_CHOICES.items(),
+        'levels': LEVELS.items(), 'has_draft': bool(request.session.get(DRAFT)), 'source_choices': SOURCE_CHOICES.items(), 'year_choices': years,
         'meaning_on': semantic_search.available(), 'photo_on': ocr.available(),
         'nav': 'teacher', 'workspace_section': 'works',
         'current_route': 'teacher_kr'})
@@ -115,7 +116,7 @@ def kr_tasks(request):
     """Catalogue tasks for the КР picker: by number, ID or words of the condition."""
     subject = request.GET.get('subject') if request.GET.get('subject') in NUMBERS else 'inf'
     number, query = request.GET.get('number', ''), request.GET.get('q', '').strip()[:1500]
-    level, source = request.GET.get('level', ''), request.GET.get('source', '')
+    level, source, year = request.GET.get('level', ''), request.GET.get('source', ''), _year(request.GET.get('year'))
     meaning = request.GET.get('mode') == 'meaning' and semantic_search.available()
     with using(subject):
         tasks = pool().select_related('topic').order_by('-pk')
@@ -125,6 +126,7 @@ def kr_tasks(request):
             tasks = tasks.filter(difficulty=level)
         if source in SOURCE_CHOICES:
             tasks = by_source(tasks, source)
+        tasks = by_year(tasks, year)
         ranked = semantic_search.rank(query, tasks, limit=40) if query and meaning and not query.isdigit() else None
         if ranked is not None:
             # By meaning (words or a photo's text): the closest tasks first.
@@ -142,14 +144,14 @@ def kr_tasks(request):
 DRAFT = 'kr_draft'
 
 
-def compose_draft(subject, plan, variants, level, source=''):
+def compose_draft(subject, plan, variants, level, source='', year=''):
     """Variants as lists of task ids, ordered by ЕГЭ number; the same sources as the КР API."""
     rng = random.SystemRandom()
     result = [[] for _ in range(variants)]
     with using(subject):
         for row in plan:
             if row['source'] == 'bank':
-                chosen = from_bank(row['number'], row['count'], variants, row['ids'], rng, level or None, source=source)
+                chosen = from_bank(row['number'], row['count'], variants, row['ids'], rng, level or None, source=source, year=year)
             else:
                 chosen = SOURCES[row['source']](row['number'], row['count'], variants, row['ids'], rng, level or None)
             for v in range(variants):
@@ -162,12 +164,12 @@ def _other(draft, number, exclude_level=False):
     """One more random task of the number that is not in the draft yet."""
     used = {i for ids in draft['variants'] for i in ids}
     level = None if exclude_level else draft.get('level') or None
-    source = draft.get('source', '')
+    source, year = draft.get('source', ''), draft.get('year', '')
     with using(draft['subject']):
         try:
-            return from_bank(number, 1, 1, [], random.SystemRandom(), level, exclude=used, source=source)[0]
+            return from_bank(number, 1, 1, [], random.SystemRandom(), level, exclude=used, source=source, year=year)[0]
         except ComposeError:
-            if level or source:
+            if level or source or year:
                 return from_bank(number, 1, 1, [], random.SystemRandom(), None, exclude=used)[0]
             raise
 
@@ -202,12 +204,29 @@ def teacher_kr_draft(request):
                 with using(draft['subject']):
                     current = Task.all_objects.filter(pk=draft['variants'][v][at]).values_list('topic__number', flat=True).first()
                 _place(draft, v, _other(draft, current), at)
+            elif action == 'like_variant' and v >= 0 and draft['variants'][v]:
+                # The teacher made one variant by hand: the others become variants like it, task by task.
+                count = _int(request.POST.get('count'), 3, 1, MAX_VARIANTS - 1)
+                with using(draft['subject']):
+                    by_id = Task.all_objects.select_related('topic').in_bulk(draft['variants'][v])
+                    tasks = [(by_id[i], by_id[i].topic.number) for i in draft['variants'][v] if i in by_id]
+                    sets, missing, guessed = similar_to_tasks(tasks, count, draft.get('level'), draft.get('source'),
+                                                              year=draft.get('year', ''))
+                if not any(sets):
+                    raise ComposeError('Похожих задач не нашлось — ослабьте уровень, источник или год черновика.')
+                draft['variants'] = [draft['variants'][v]] + sets
+                note = f' Для № {", ".join(map(str, missing))} похожих не хватило — добавьте их вручную.' if missing else ''
+                note += f' Подобрано случайно по номеру (нет текста условия): {guessed}.' if guessed else ''
+                first = 'К варианту 1' if v == 0 else f'Вариант {v + 1} стал первым, к нему'
+                messages.success(request, f'{first} добавлено похожих вариантов: {len(sets)}.{note}')
+                v = 0
             elif action == 'like' and v >= 0 and 0 <= at < len(draft['variants'][v]):
                 # The closest task by meaning of the same number that is not in the draft yet.
                 used = {i for ids in draft['variants'] for i in ids}
                 with using(draft['subject']):
                     current = Task.all_objects.select_related('topic').get(pk=draft['variants'][v][at])
-                    found = by_vector(current, _filtered(pool(), draft.get('level'), draft.get('source')).exclude(pk__in=used),
+                    found = by_vector(current, _filtered(pool(), draft.get('level'), draft.get('source'), draft.get('year'))
+                                      .exclude(pk__in=used),
                                       [current.topic.number], 1)
                 if not found:
                     raise ComposeError('Для этой задачи нет похожих по смыслу с уровнем и источником черновика — '
@@ -251,9 +270,9 @@ def teacher_kr_draft(request):
     variants = [{'number': k + 1, 'index': k, 'tasks': [tasks[i] for i in ids if i in tasks]} for k, ids in enumerate(draft['variants'])]
     numbers = sorted({t.topic.number for t in tasks.values()})
     return render(request, 'teacher/kr_draft.html', {
-        'draft': draft, 'variants': variants, 'numbers': numbers, 'all_numbers': range(1, NUMBERS[draft['subject']] + 1),
-        'level_title': LEVELS.get(draft.get('level'), 'любой'), 'nav': 'teacher', 'workspace_section': 'works',
-        'levels': LEVELS.items(), 'source_choices': SOURCE_CHOICES.items(),
+        'draft': draft, 'variants': variants, 'max_variants': MAX_VARIANTS, 'numbers': numbers, 'all_numbers': range(1, NUMBERS[draft['subject']] + 1),
+        'level_title': LEVELS.get(draft.get('level'), 'любой'), 'year_title': year_title(draft.get('year', '')), 'nav': 'teacher', 'workspace_section': 'works',
+        'levels': LEVELS.items(), 'source_choices': SOURCE_CHOICES.items(), 'year_choices': year_choices_of(draft['subject']),
         'meaning_on': semantic_search.available(), 'photo_on': ocr.available(),
         'current_route': 'teacher_kr', 'picker_url': f'{reverse("teacher_kr_tasks")}?subject={draft["subject"]}'})
 
@@ -303,47 +322,66 @@ def classify_task(request, pk):
 MAX_SIMILAR = 10
 
 
-def _filtered(tasks, level='', source=''):
-    """Bank tasks of one level and exam source when they are asked for."""
+def _year(value):
+    """A year filter value: «2025», «2025+» or ''."""
+    value = (value or '').strip()
+    return value if value.rstrip('+').isdigit() and len(value.rstrip('+')) == 4 else ''
+
+
+def year_choices_of(subject):
+    with using(subject):
+        return year_choices()
+
+
+def _filtered(tasks, level='', source='', year=''):
+    """Bank tasks of one level, exam source and year when they are asked for."""
     if level in LEVELS:
         tasks = tasks.filter(difficulty=level)
-    return by_source(tasks, source) if source in SOURCE_CHOICES else tasks
+    if source in SOURCE_CHOICES:
+        tasks = by_source(tasks, source)
+    return by_year(tasks, _year(year))
 
 
-def similar_sets(variant, count, level='', source='', group=None):
-    """(sets of task ids, numbers left without a task, tasks picked at random): each task of the variant swapped for
-    the closest one by meaning of the same number, of the asked level and source, not solved yet by the group's pupils;
-    no task is repeated, and 20–21 follow the 19 chosen in the same set."""
-    from .models import Practice
+def similar_sets(variant, count, level='', source='', group=None, year=''):
+    """(sets of task ids, numbers left without a task, tasks picked at random) like the variant's tasks."""
     items = list(variant.items.select_related('task__topic').order_by('position'))
-    used = {item.task_id for item in items}
+    with using(variant.subject):
+        return similar_to_tasks([(item.task, item.number) for item in items], count, level, source, group, year)
+
+
+def similar_to_tasks(tasks, count, level='', source='', group=None, year='', used=()):
+    """(sets of task ids, numbers left without a task, tasks picked at random): each (task, number) swapped for the
+    closest one by meaning of the same number, of the asked level, source and year, not solved yet by the group's
+    pupils; no task is repeated (nor taken from `used`), and 20–21 follow the 19 chosen in the same set."""
+    from .models import Practice
+    used = {task.pk for task, _ in tasks} | set(used)
     if group:
         used |= set(Practice.objects.filter(user__in=group.students.all(), correct=True).values_list('task_id', flat=True))
     rng = random.SystemRandom()
     sets, missing, guessed = [], set(), 0
-    with using(variant.subject):
-        for _ in range(count):
-            ids, first = [], None
-            for item in items:
-                found = []
-                if item.number in (20, 21) and first and first.external_id and first.source_system:
-                    # The bank keeps grouped 20/21 out (alone they lack the condition); next to their own 19 they read well.
-                    partners = Task.objects.filter(published=True, in_catalog=True, topic__number=item.number,
-                                                   source_system=first.source_system, external_id=first.external_id)
-                    found = list(partners.exclude(answer='').exclude(pk__in=used).values_list('pk', flat=True)[:1])
-                found = found or by_vector(item.task, _filtered(pool(), level, source).exclude(pk__in=used), [item.number], 1)
-                if not found:
-                    try:  # no words to compare (a picture the server cannot read): a random task of the same number
-                        found = from_bank(item.number, 1, 1, [], rng, level if level in LEVELS else None, exclude=used, source=source)
-                        guessed += 1
-                    except ComposeError:
-                        missing.add(item.number)
-                        continue
-                used.add(found[0])
-                ids.append(found[0])
-                if item.number == 19:
-                    first = Task.all_objects.get(pk=found[0])
-            sets.append(ids)
+    for _ in range(count):
+        ids, first = [], None
+        for task, number in tasks:
+            found = []
+            if number in (20, 21) and first and first.external_id and first.source_system:
+                # The bank keeps grouped 20/21 out (alone they lack the condition); next to their own 19 they read well.
+                partners = Task.objects.filter(published=True, in_catalog=True, topic__number=number,
+                                               source_system=first.source_system, external_id=first.external_id)
+                found = list(partners.exclude(answer='').exclude(pk__in=used).values_list('pk', flat=True)[:1])
+            found = found or by_vector(task, _filtered(pool(), level, source, year).exclude(pk__in=used), [number], 1)
+            if not found:
+                try:  # no words to compare (a picture the server cannot read): a random task of the same number
+                    found = from_bank(number, 1, 1, [], rng, level if level in LEVELS else None, exclude=used,
+                                      source=source, year=_year(year))
+                    guessed += 1
+                except ComposeError:
+                    missing.add(number)
+                    continue
+            used.add(found[0])
+            ids.append(found[0])
+            if number == 19:
+                first = Task.all_objects.get(pk=found[0])
+        sets.append(ids)
     return sets, sorted(missing), guessed
 
 
@@ -357,11 +395,11 @@ def similar_variant(request, pk):
     variant = get_object_or_404(visible_variants(request.user), pk=pk)
     from .assignments import own_groups
     count = _int(request.POST.get('count'), 1, 1, MAX_SIMILAR)
-    level, source = request.POST.get('level', ''), request.POST.get('source', '')
+    level, source, year = request.POST.get('level', ''), request.POST.get('source', ''), _year(request.POST.get('year'))
     group = own_groups(request.user).filter(pk=request.POST.get('group')).first() if request.POST.get('group', '').isdigit() else None
-    sets, missing, guessed = similar_sets(variant, count, level, source, group)
+    sets, missing, guessed = similar_sets(variant, count, level, source, group, year)
     if not all(sets):
-        messages.error(request, 'Не нашлось похожих задач с этими условиями — ослабьте уровень или источник.')
+        messages.error(request, 'Не нашлось похожих задач с этими условиями — ослабьте уровень, источник или год.')
         return redirect(f'{reverse("variant", args=[pk])}#similar')
     lacking = f' Для № {", ".join(map(str, missing))} похожих задач с этими условиями не хватило — добавьте их в черновике.' if missing else ''
     if guessed:  # a picture the server could not read has no words to compare
@@ -370,7 +408,7 @@ def similar_variant(request, pk):
     if request.POST.get('to') == 'kr':
         request.session[DRAFT] = {'subject': variant.subject, 'title': title, 'group': group.title if group else '',
                                   'duration': min(variant.duration, 300), 'level': level if level in LEVELS else '',
-                                  'source': source if source in SOURCE_CHOICES else '', 'variants': sets}
+                                  'source': source if source in SOURCE_CHOICES else '', 'year': year, 'variants': sets}
         messages.success(request, f'Черновик КР: {count} вар., в каждом задачи, похожие на «{variant.title}».{lacking}')
         return redirect('teacher_kr_draft')
     publish = request.POST.get('publish') == '1'

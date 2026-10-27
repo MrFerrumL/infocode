@@ -169,6 +169,12 @@ def catalog(request):
     if exam:
         from .kr_api import by_source
         qs = by_source(qs, exam if exam == 'official' or exam in dict(Task.EXAM_SOURCES) else '')
+    from .kr_api import by_year
+    from .kr_views import _year
+    year = _year(request.GET.get('year'))
+    qs = by_year(qs, year)
+    years = sorted(set(Task.objects.filter(published=True, in_catalog=True).exclude(exam_year=None)
+                       .values_list('exam_year', flat=True)), reverse=True)
     site = request.GET.get('site', '')
     if site in SITES and site:
         qs = qs.filter(source_system=site)
@@ -224,7 +230,8 @@ def catalog(request):
         topic.folded = topic.number in game_groups.FOLLOW_UPS and game_groups.active()
     params = request.GET.copy()
     params.pop('page', None)
-    return render(request, 'catalog.html', {'levels': Task.LEVELS, 'topics': topics, 'page': page, 'number': number, 'difficulty': difficulty, 'query': query, 'mode': mode, 'meaning_on': semantic_search.available(), 'photo_on': ocr.available(), 'state': state, 'sort': sort, 'sorts': CATALOG_SORTS, 'kind': kind, 'kinds': KINDS, 'exam': exam, 'exam_sources': Task.EXAM_SOURCES, 'site': site,
+    return render(request, 'catalog.html', {'levels': Task.LEVELS, 'topics': topics, 'page': page, 'number': number, 'difficulty': difficulty, 'query': query, 'mode': mode, 'meaning_on': semantic_search.available(), 'photo_on': ocr.available(), 'state': state, 'sort': sort, 'sorts': CATALOG_SORTS, 'kind': kind, 'kinds': KINDS, 'exam': exam, 'exam_sources': Task.EXAM_SOURCES, 'year': year,
+        'year_choices': [(str(y), str(y)) for y in years] + [(f'{y}+', f'{y} и новее') for y in years[1:]], 'site': site,
         'sites': [(key or 'own', name) for key, name in SITES.items() if Task.objects.filter(published=True, in_catalog=True, source_system=key).exists()], 'params': params.urlencode(), 'nav': 'catalog'})
 
 
@@ -308,8 +315,9 @@ def variant_detail(request, pk):
     similar = {}
     if request.user.is_staff:  # filters of «≈ Похожие варианты»
         from .assignments import own_groups
-        from .kr_views import SOURCE_CHOICES
-        similar = {'levels': Task.LEVELS, 'source_choices': SOURCE_CHOICES.items(), 'groups': own_groups(request.user)}
+        from .kr_views import SOURCE_CHOICES, year_choices_of
+        similar = {'levels': Task.LEVELS, 'source_choices': SOURCE_CHOICES.items(), 'groups': own_groups(request.user),
+                   'year_choices': year_choices_of(variant.subject)}
     return render(request, 'variant.html', {'variant': variant, 'attempts': ExamAttempt.objects.filter(user=request.user, variant=variant), 'start_token': form_token(request.user, f'start-exam:{pk}'), 'nav': 'variants', **similar})
 
 

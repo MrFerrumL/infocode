@@ -8,12 +8,16 @@
     const summary = builder.querySelector('[data-summary]');
     const bankData = document.getElementById('kr-bank');
     const bank = bankData ? JSON.parse(bankData.textContent) : null;
-    // Tasks of a number in the bank for the chosen level and exam source.
+    // Tasks of a number in the bank for the chosen level, exam source and year («2025» or «2025+» — that year and newer).
     const inBank = number => {
       const level = builder.querySelector('[name=level]').value;
       const source = builder.querySelector('[name=source]').value;
-      return bank.rows.reduce((sum, [n, l, s, k]) => sum + (n === number && (!level || l === level)
-        && (!source || s === source || (source === 'official' && bank.official.includes(s))) ? k : 0), 0);
+      const year = builder.querySelector('[name=year]').value;
+      const newer = year.endsWith('+');
+      const fromYear = parseInt(year, 10);
+      return bank.rows.reduce((sum, [n, l, s, y, k]) => sum + (n === number && (!level || l === level)
+        && (!source || s === source || (source === 'official' && bank.official.includes(s)))
+        && (!year || (newer ? y >= fromYear : y === fromYear)) ? k : 0), 0);
     };
     const update = () => {
       let total = 0;
@@ -33,7 +37,7 @@
         if (lacking) short.push(`№ ${number} (есть ${have}, нужно ${count * variants})`);
       });
       summary.textContent = !total ? 'Укажите число задач хотя бы для одного номера.'
-        : short.length ? `Не хватает задач с этим уровнем и источником: ${short.join(', ')}. Уменьшите число, выберите «Любой» или «Генератор».`
+        : short.length ? `Не хватает задач с этим уровнем, источником и годом: ${short.join(', ')}. Уменьшите число, выберите «Любой» или «Генератор».`
         : `В каждом варианте ${total} задач, всего вариантов: ${variants}.`;
       summary.classList.toggle('is-short', short.length > 0);
     };
@@ -84,7 +88,8 @@
                                           q: picker.querySelector('[data-filter-q]').value, page,
                                           mode: (picker.querySelector('[data-photo-mode]') || {}).value || '',
                                           level: picker.querySelector('[data-filter-level]').value,
-                                          source: picker.querySelector('[data-filter-source]').value});
+                                          source: picker.querySelector('[data-filter-source]').value,
+                                          year: picker.querySelector('[data-filter-year]').value});
       list.innerHTML = '<p class="muted">Загружаем задачи…</p>';
       try {
         const response = await fetch(`${picker.dataset.url}&${params}`, {headers: {'X-Requested-With': 'XMLHttpRequest'}});
@@ -92,7 +97,7 @@
       } catch { list.innerHTML = '<p class="muted">Нет связи с сервером.</p>'; }
       render();
     };
-    picker.querySelectorAll('[data-filter-number], [data-filter-level], [data-filter-source]').forEach(el => el.addEventListener('change', () => load()));
+    picker.querySelectorAll('[data-filter-number], [data-filter-level], [data-filter-source], [data-filter-year]').forEach(el => el.addEventListener('change', () => load()));
     picker.querySelector('[data-filter-go]').addEventListener('click', () => load());
     picker.querySelector('[data-filter-q]').addEventListener('keydown', event => {
       if (event.key === 'Enter') { event.preventDefault(); load(); }

@@ -80,6 +80,8 @@ class Task(models.Model):
     exam_source = models.CharField('Источник ЕГЭ', max_length=12, blank=True, default='', db_index=True, choices=EXAM_SOURCES)
     exam_source_manual = models.BooleanField('Тип выбран преподавателем', default=False)
     original_difficulty = models.CharField('Сложность до уровня «ЕГЭ»', max_length=10, blank=True, default='')
+    exam_year = models.PositiveSmallIntegerField('Год выпуска', null=True, blank=True, db_index=True,
+        help_text='Год экзамена или сборника из пометки источника («ЕГЭ-2025», «Апробация 04.03.26»).')
     attachment = models.FileField('Данные к задаче', upload_to='tasks/', blank=True, validators=[file_size, FileExtensionValidator(['txt', 'csv', 'xlsx', 'pdf', 'zip'])])
     published = models.BooleanField('Опубликовано', default=True)
     # Tasks of imported KOMPEGE variants that the source keeps out of its public bank.

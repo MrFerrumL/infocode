@@ -24,6 +24,8 @@ COMPILED = [(code, re.compile(pattern, re.I)) for code, pattern in RULES]
 OFFICIAL = {'demo', 'approbation', 'early', 'main', 'exam', 'reserve', 'retake', 'egkr', 'open', 'fipi'}
 LEADING = re.compile(r'^\s*(?:\d{1,4}\)\s*)?\*?\s*\(([^()]{2,60})\)')
 COPY = 0.985
+YEAR = re.compile(r'(?<!\d)(20[1-3]\d)(?!\d)')
+SHORT_DATE = re.compile(r'(?<![\d.])\d{1,2}\.\d{1,2}\.(\d{2})(?![\d.])')  # «Апробация 04.03.26»
 
 
 def classify(label, text=''):
@@ -37,6 +39,20 @@ def classify(label, text=''):
             if pattern.search(found.group(1)):
                 return code
     return ''
+
+
+def year_of(label, text=''):
+    """The year of the exam or collection from the bank's note or the bracket opening the condition; None when neither says.
+    Numbers inside the condition itself are not years of anything."""
+    found = LEADING.match(text or '')
+    for part in (label or '', found.group(1) if found else ''):
+        full = YEAR.search(part)
+        if full:
+            return int(full.group(1))
+        short = SHORT_DATE.search(part)
+        if short:
+            return 2000 + int(short.group(1))
+    return None
 
 
 def apply(task, code):

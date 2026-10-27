@@ -136,15 +136,44 @@ def by_source(tasks, source):
     return tasks.filter(exam_source=source) if source else tasks
 
 
-def from_bank(number, count, variants, ids, rng, level=None, exclude=(), source=''):
-    """Random tasks of the bank (of one difficulty and exam source if asked), none repeated anywhere."""
-    found = by_source(pool().filter(topic__number=number).exclude(pk__in=exclude), source)
+def by_year(tasks, year):
+    """Tasks of one exam year («2025») or of a year and newer («2025+»); tasks without a known year drop out."""
+    value = (year or '').rstrip('+')
+    if not value.isdigit():
+        return tasks
+    return tasks.filter(exam_year__gte=int(value)) if year.endswith('+') else tasks.filter(exam_year=int(value))
+
+
+def year_choices():
+    """(value, title) for the year filters: every year of the bank, then «… и новее»."""
+    years = sorted(set(pool().exclude(exam_year=None).values_list('exam_year', flat=True)), reverse=True)
+    return [(str(y), str(y)) for y in years] + [(f'{y}+', f'{y} и новее') for y in years[1:]]
+
+
+def year_title(year):
+    """«2025» or «2025 и новее»."""
+    value = (year or '').rstrip('+')
+    return f'{value} и новее' if year.endswith('+') else value
+
+
+def year_phrase(year):
+    """« за 2025 год», « с 2025 года» or '' for the shortage messages."""
+    value = (year or '').rstrip('+')
+    if not value.isdigit():
+        return ''
+    return f' с {value} года' if year.endswith('+') else f' за {value} год'
+
+
+def from_bank(number, count, variants, ids, rng, level=None, exclude=(), source='', year=''):
+    """Random tasks of the bank (of one difficulty, exam source and year if asked), none repeated anywhere."""
+    found = by_year(by_source(pool().filter(topic__number=number).exclude(pk__in=exclude), source), year)
     if level:
         found = found.filter(difficulty=level)
     found = list(found.values_list('pk', flat=True))
     need = count * variants
     if len(found) < need:
-        what = (f' уровня «{LEVELS[level]}»' if level else '') + (' из выбранного источника' if source else '')
+        what = ((f' уровня «{LEVELS[level]}»' if level else '') + (' из выбранного источника' if source else '')
+                + (year_phrase(year)))
         raise ComposeError(f'Для № {number} в банке {len(found)} задач{what} с ответом, а нужно {need} (без повторов).')
     return rng.sample(found, need)
 

@@ -90,3 +90,7 @@
 .kr-number.is-short { border-color: #c33c47; }
 .kr-number.is-short [data-bank-count] { color: #c33c47; font-weight: 600; }
 [data-summary].is-short { color: #c33c47; }
+.kr-variant-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.kr-like-variant { display: flex; align-items: center; gap: 8px; margin: 0; }
+.kr-like-variant label { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); white-space: nowrap; }
+.kr-like-variant input { width: 64px; padding: 6px 8px; }

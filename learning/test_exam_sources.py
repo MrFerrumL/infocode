@@ -26,6 +26,13 @@ class ClassifyTests(TestCase):
         for (label, text), code in cases.items():
             self.assertEqual(exam_sources.classify(label, text), code, (label, text))
 
+    def test_years(self):
+        cases = {('ЕГЭ-2024', ''): 2024, ('Апробация 04.03.26', ''): 2026, ('Основная волна 2022', ''): 2022,
+                 ('Демоверсия 2027', ''): 2027, ('', '(ЕГЭ-2025) Сколько чисел больше 2024?'): 2025,
+                 ('Л. Шастин', 'Найдите 2024-е число'): None, ('', 'Числа 12.05.24 и 2023'): None}
+        for (label, text), year in cases.items():
+            self.assertEqual(exam_sources.year_of(label, text), year, (label, text))
+
     def test_level_follows_the_source(self):
         task = Task(difficulty='hard')
         self.assertTrue(exam_sources.apply(task, 'demo'))
@@ -62,6 +69,8 @@ class CommandTests(TestCase):
         call_command('classify_exam_sources', stdout=StringIO())
         self.assertEqual(self.states(), [('demo', 'ege', 'medium'), ('approbation', 'ege', 'hard'), ('', 'easy', ''),
                                          ('statgrad', 'grave', '')])  # the teacher's choice stays
+        years = dict(Task.objects.values_list('pk', 'exam_year'))
+        self.assertEqual([years[t.pk] for t in (self.demo, self.bracket, self.author, self.manual)], [2026, 2026, None, 2025])
         call_command('classify_exam_sources', '--revert', stdout=StringIO())
         self.assertEqual(self.states(), before)
 
@@ -78,7 +87,9 @@ class TeacherSortingTests(TestCase):
         self.task = Task.objects.create(topic=topic, title='Простая', statement='Условие один', answer='1', difficulty='medium',
                                         published=True, in_catalog=True)
         self.official = Task.objects.create(topic=topic, title='С экзамена', statement='Условие два', answer='2', difficulty='ege',
-                                            original_difficulty='hard', exam_source='main', published=True, in_catalog=True)
+                                            original_difficulty='hard', exam_source='main', exam_year=2024, published=True, in_catalog=True)
+        self.recent = Task.objects.create(topic=topic, title='Свежая', statement='Условие три', answer='3', difficulty='ege',
+                                          exam_source='demo', exam_year=2026, published=True, in_catalog=True)
 
     def test_classify_endpoint(self):
         url = f'/teacher/tasks/{self.task.pk}/classify/'
@@ -120,5 +131,32 @@ class TeacherSortingTests(TestCase):
         with patch.object(kr_client, 'tests_of', return_value=[]):
             page = self.client.get('/teacher/kr/')
         self.assertContains(page, 'id="kr-bank"')
-        self.assertContains(page, '[5, "ege", "main", 1]')
+        self.assertContains(page, '[5, "ege", "main", 2024, 1]')
         self.assertContains(page, 'data-bank-count')
+
+    def test_year_filters(self):
+        self.client.force_login(self.teacher)
+        for params, shown, hidden in [({'year': '2026'}, 'Свежая', 'С экзамена'), ({'year': '2024'}, 'С экзамена', 'Свежая'),
+                                      ({'year': '2025+'}, 'Свежая', 'С экзамена')]:
+            page = self.client.get('/teacher/kr/tasks/', params)
+            self.assertContains(page, shown)
+            self.assertNotContains(page, hidden)
+            self.assertNotContains(page, 'Простая')  # no known year
+        page = self.client.get('/catalog/', {'year': '2026'})
+        self.assertContains(page, 'Свежая')
+        self.assertNotContains(page, 'С экзамена')
+        self.assertContains(page, '2024 и новее')
+
+    def test_builder_by_year(self):
+        from unittest.mock import patch
+        from . import kr_client
+        self.client.force_login(self.teacher)
+        with patch.object(kr_client, 'tests_of', return_value=[]):
+            reply = self.client.post('/teacher/kr/', {'subject': 'inf', 'title': 'КР', 'variants': '1', 'duration': '45',
+                                                      'year': '2025+', 'n5': '1', 'src5': 'bank'})
+            self.assertRedirects(reply, '/teacher/kr/draft/', fetch_redirect_response=False)
+            self.assertEqual(self.client.session['kr_draft']['variants'], [[self.recent.pk]])
+            self.assertContains(self.client.get('/teacher/kr/draft/'), 'год: 2025 и новее')
+            page = self.client.post('/teacher/kr/', {'subject': 'inf', 'title': 'КР', 'variants': '2', 'duration': '45',
+                                                     'year': '2026', 'n5': '1', 'src5': 'bank'})
+        self.assertContains(page, 'Для № 5 в банке 1 задач за 2026 год')
