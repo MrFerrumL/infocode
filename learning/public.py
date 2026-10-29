@@ -1,4 +1,4 @@
-"""Pages visible without signing in: landing, contacts and robots.txt."""
+"""Pages visible without signing in: landing, contacts, privacy policy and robots.txt."""
 from django.conf import settings
 from django.http import HttpResponse
 from django.shortcuts import render
@@ -27,6 +27,11 @@ def contacts(request):
 
 
 @require_GET
+def privacy(request):
+    return render(request, 'public/privacy.html', {'contact': contact_details()})
+
+
+@require_GET
 def robots_txt(request):
-    lines = ['User-agent: *', 'Allow: /$', 'Allow: /contacts/', 'Allow: /login/', 'Allow: /register/', 'Disallow: /']
+    lines = ['User-agent: *', 'Allow: /$', 'Allow: /contacts/', 'Allow: /privacy/', 'Allow: /login/', 'Allow: /register/', 'Disallow: /']
     return HttpResponse('\n'.join(lines) + '\n', content_type='text/plain; charset=utf-8')

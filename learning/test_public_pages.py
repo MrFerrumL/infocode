@@ -47,3 +47,25 @@ class PublicPagesTests(TestCase):
         self.assertContains(self.client.get('/'), '<meta name="google-site-verification" content="abc123-token">')
         with self.settings(GOOGLE_SITE_VERIFICATION=''):
             self.assertNotContains(self.client.get('/'), 'google-site-verification')
+
+    def test_privacy_policy_is_public_and_linked_from_the_entry_pages(self):
+        page = self.client.get('/privacy/')
+        self.assertEqual(page.status_code, 200)
+        self.assertTemplateUsed(page, 'public/privacy.html')
+        self.assertContains(page, 'Политика конфиденциальности')
+        self.assertContains(page, 'ФИПИ')
+        self.assertNotContains(page, 'type="password"')
+        self.assertIn('Allow: /privacy/', self.client.get('/robots.txt').content.decode())
+        for url in ('/', '/contacts/', '/login/', '/register/'):
+            self.assertContains(self.client.get(url), 'href="/privacy/"', msg_prefix=url)
+
+    @override_settings(SITE_OWNER_NAME='Тестовый Преподаватель')
+    def test_privacy_names_the_owner_only_when_configured(self):
+        self.assertContains(self.client.get('/privacy/'), 'Тестовый Преподаватель')
+        with self.settings(SITE_OWNER_NAME=''):
+            self.assertNotContains(self.client.get('/privacy/'), 'Владелец и преподаватель')
+
+    def test_login_page_says_what_it_asks_for(self):
+        page = self.client.get('/login/')
+        self.assertContains(page, 'Инфокод — закрытая учебная платформа преподавателя')
+        self.assertContains(page, 'href="/contacts/"')

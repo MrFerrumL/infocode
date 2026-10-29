@@ -64,6 +64,7 @@ urlpatterns = [
     path('teacher/students/<int:pk>/password/', accounts.reset_student_password, name='student_password_reset'),
     path('', public.home, name='dashboard'),
     path('contacts/', public.contacts, name='contacts'),
+    path('privacy/', public.privacy, name='privacy'),
     path('robots.txt', public.robots_txt, name='robots_txt'),
     path('catalog/', v.catalog, name='catalog'),
     path('catalog/<int:pk>/similar/', similar_views.similar, name='similar_tasks'),

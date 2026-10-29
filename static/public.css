@@ -19,3 +19,9 @@
   .public-grid{grid-template-columns:1fr}
   .public-actions .button{flex:1}
 }
+.public-doc{display:grid;gap:14px;max-width:760px;margin-bottom:32px}
+.public-doc .panel{background:var(--paper,white)}
+.public-doc h2{font-size:19px;margin-bottom:8px}
+.public-doc p:last-child,.public-doc ul:last-child{margin-bottom:0}
+.public-doc ul{margin:0 0 12px;padding-left:20px}
+.public-doc code{font-size:.92em}
