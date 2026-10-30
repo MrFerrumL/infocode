@@ -1,5 +1,9 @@
 {
     email {$ACME_EMAIL}
+    # HTTP/1.1 and HTTP/2 only: HTTP/3 runs over UDP, which many VPNs and proxies drop, and the browser then stalls before it falls back.
+    servers {
+        protocols h1 h2
+    }
 }
 
 {$APP_DOMAIN} {
