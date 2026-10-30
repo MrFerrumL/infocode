@@ -522,3 +522,20 @@ from .schedule_models import ScheduleEvent, ScheduleOccurrence, ScheduleReminder
 from .collection_models import Collection, CollectionItem
 from .similar_models import TaskSimilarity, TaskVector
 from .coverage_models import GroupTopicMark
+
+
+class KrDraft(models.Model):
+    """A КР draft the teacher keeps between visits; the session holds the one being edited (see learning/kr_views.py)."""
+    owner = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='kr_drafts')
+    title = models.CharField('Название', max_length=160)
+    data = models.JSONField('Содержимое черновика')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ['-updated_at', '-pk']
+        verbose_name = 'черновик КР'
+        verbose_name_plural = 'черновики КР'
+
+    def __str__(self):
+        return self.title

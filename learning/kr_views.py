@@ -5,13 +5,13 @@ from urllib.parse import urljoin
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db.models import Case, Count, IntegerField, Q, Value, When
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
 from django.utils.dateparse import parse_datetime
 from . import kr_client, ocr, semantic_search
 from .kr_api import LEVELS, MAX_PER_NUMBER, MAX_VARIANTS, MAX_PICKED, SOURCES, ComposeError, available, by_source, by_year, from_bank, pool, year_choices, year_title
-from .models import Task
+from .models import KrDraft, Task
 from .exam_sources import OFFICIAL, apply as apply_source
 from .similar_tasks import by_vector
 from .subjects import SUBJECTS, current as current_subject, using
@@ -75,8 +75,8 @@ def teacher_kr(request):
             except ComposeError as exc:
                 error = str(exc)
             else:
-                request.session[DRAFT] = {'subject': subject, 'title': form['title'], 'group': form['group'], 'duration': form['duration'],
-                                          'level': form['level'], 'source': form['source'], 'year': form['year'], 'variants': variants}
+                _save_draft(request, {'subject': subject, 'title': form['title'], 'group': form['group'], 'duration': form['duration'],
+                                      'level': form['level'], 'source': form['source'], 'year': form['year'], 'variants': variants})
                 return redirect('teacher_kr_draft')
     tests, unavailable = [], ''
     if kr_client.enabled():
@@ -96,6 +96,7 @@ def teacher_kr(request):
         'enabled': kr_client.enabled(), 'pupils_url': absolute(request, kr_client.pupils_url()), 'new_code': request.GET.get('new', ''),
         'max_per_number': MAX_PER_NUMBER, 'max_variants': MAX_VARIANTS, 'picked': ','.join(map(str, picked)),
         'bank': {'rows': bank, 'official': sorted(OFFICIAL)},
+        'saved_drafts': _saved_drafts(request), 'open_draft': (request.session.get(DRAFT) or {}).get('saved_id'),
         'levels': LEVELS.items(), 'has_draft': bool(request.session.get(DRAFT)), 'source_choices': SOURCE_CHOICES.items(), 'year_choices': years,
         'meaning_on': semantic_search.available(), 'photo_on': ocr.available(),
         'nav': 'teacher', 'workspace_section': 'works',
@@ -144,14 +145,63 @@ def kr_tasks(request):
 DRAFT = 'kr_draft'
 
 
-def compose_draft(subject, plan, variants, level, source='', year=''):
+def _save_draft(request, draft):
+    """Keep the draft in the database as well, so the teacher can leave it and come back; draft['saved_id'] ties the two."""
+    row = KrDraft.objects.filter(pk=draft['saved_id'], owner=request.user).first() if draft.get('saved_id') else None
+    row = row or KrDraft(owner=request.user)
+    row.title = draft['title'][:160]
+    row.data = {k: v for k, v in draft.items() if k != 'saved_id'}
+    row.save()
+    draft['saved_id'] = row.pk
+    request.session[DRAFT] = draft
+    return row
+
+
+def _forget_draft(request):
+    """The draft was sent or thrown away: drop the session copy and the saved one."""
+    draft = request.session.pop(DRAFT, None) or {}
+    if draft.get('saved_id'):
+        KrDraft.objects.filter(pk=draft['saved_id'], owner=request.user).delete()
+
+
+def _saved_drafts(request):
+    rows = []
+    for row in KrDraft.objects.filter(owner=request.user):
+        variants = row.data.get('variants') or []
+        rows.append({'pk': row.pk, 'title': row.title, 'variants': len(variants), 'tasks': sum(len(v) for v in variants),
+                     'per_variant': len(variants[0]) if variants else 0, 'updated': row.updated_at})
+    return rows
+
+
+@staff_required
+@require_POST
+def kr_draft_open(request, pk):
+    """Take a saved draft back into editing."""
+    row = get_object_or_404(KrDraft, pk=pk, owner=request.user)
+    request.session[DRAFT] = {**row.data, 'saved_id': row.pk}
+    return redirect('teacher_kr_draft')
+
+
+@staff_required
+@require_POST
+def kr_draft_delete(request, pk):
+    row = get_object_or_404(KrDraft, pk=pk, owner=request.user)
+    if (request.session.get(DRAFT) or {}).get('saved_id') == row.pk:
+        request.session.pop(DRAFT, None)
+    messages.success(request, f'Черновик «{row.title}» удалён.')
+    row.delete()
+    return redirect('teacher_kr')
+
+
+def compose_draft(subject, plan, variants, level, source='', year='', exclude=(), fill=False):
     """Variants as lists of task ids, ordered by ЕГЭ number; the same sources as the КР API."""
     rng = random.SystemRandom()
     result = [[] for _ in range(variants)]
     with using(subject):
         for row in plan:
             if row['source'] == 'bank':
-                chosen = from_bank(row['number'], row['count'], variants, row['ids'], rng, level or None, source=source, year=year)
+                chosen = from_bank(row['number'], row['count'], variants, row['ids'], rng, level or None, exclude=exclude,
+                                   source=source, year=year, fill=fill)
             else:
                 chosen = SOURCES[row['source']](row['number'], row['count'], variants, row['ids'], rng, level or None)
             for v in range(variants):
@@ -250,19 +300,19 @@ def teacher_kr_draft(request):
                                .values_list('pk', flat=True))
                 draft['variants'] = [[i for i in ids if i not in drop] for ids in draft['variants']]
             elif action == 'discard':
-                del request.session[DRAFT]
+                _forget_draft(request)
                 return redirect('teacher_kr')
             elif action == 'send':
                 if not all(draft['variants']):
                     raise ComposeError('В каждом варианте должна быть хотя бы одна задача.')
                 made = kr_client.create(request.user, draft['title'], draft['group'], draft['subject'], [], len(draft['variants']),
                                         draft['duration'], exact=draft['variants'])
-                del request.session[DRAFT]
+                _forget_draft(request)
                 messages.success(request, f'КР «{made["test"]["title"]}» отправлена и открыта. Код для учеников: {made["code"]}.')
                 return redirect(f'{reverse("teacher_kr")}?subject={draft["subject"]}&new={made["code"]}')
         except (ComposeError, kr_client.KrError) as exc:
             messages.error(request, str(exc))
-        request.session[DRAFT] = draft
+        _save_draft(request, draft)
         return redirect(f'{reverse("teacher_kr_draft")}#v{max(v, 0) + 1}')
     with using(draft['subject']):
         tasks = {t.pk: t for t in Task.all_objects.filter(pk__in={i for ids in draft['variants'] for i in ids})
@@ -406,9 +456,9 @@ def similar_variant(request, pk):
         lacking += f' Задач без текста условия, подобранных случайно по номеру: {guessed}.'
     title = f'Похожий на «{variant.title}»'[:160]
     if request.POST.get('to') == 'kr':
-        request.session[DRAFT] = {'subject': variant.subject, 'title': title, 'group': group.title if group else '',
-                                  'duration': min(variant.duration, 300), 'level': level if level in LEVELS else '',
-                                  'source': source if source in SOURCE_CHOICES else '', 'year': year, 'variants': sets}
+        _save_draft(request, {'subject': variant.subject, 'title': title, 'group': group.title if group else '',
+                              'duration': min(variant.duration, 300), 'level': level if level in LEVELS else '',
+                              'source': source if source in SOURCE_CHOICES else '', 'year': year, 'variants': sets})
         messages.success(request, f'Черновик КР: {count} вар., в каждом задачи, похожие на «{variant.title}».{lacking}')
         return redirect('teacher_kr_draft')
     publish = request.POST.get('publish') == '1'

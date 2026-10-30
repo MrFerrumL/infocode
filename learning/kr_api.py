@@ -164,13 +164,22 @@ def year_phrase(year):
     return f' с {value} года' if year.endswith('+') else f' за {value} год'
 
 
-def from_bank(number, count, variants, ids, rng, level=None, exclude=(), source='', year=''):
-    """Random tasks of the bank (of one difficulty, exam source and year if asked), none repeated anywhere."""
-    found = by_year(by_source(pool().filter(topic__number=number).exclude(pk__in=exclude), source), year)
+def from_bank(number, count, variants, ids, rng, level=None, exclude=(), source='', year='', fill=False):
+    """Random tasks of the bank (of one difficulty, exam source and year if asked), none repeated anywhere.
+    With fill=True a number with too few tasks of that source or year gets the rest from the whole bank (the level stays)."""
+    base = pool().filter(topic__number=number).exclude(pk__in=exclude)
+    found = by_year(by_source(base, source), year)
     if level:
-        found = found.filter(difficulty=level)
+        found, base = found.filter(difficulty=level), base.filter(difficulty=level)
     found = list(found.values_list('pk', flat=True))
     need = count * variants
+    if len(found) < need and fill and (source or year):
+        taken = set(found)
+        spare = [pk for pk in base.values_list('pk', flat=True) if pk not in taken]
+        if len(found) + len(spare) >= need:
+            picked = found + rng.sample(spare, need - len(found))
+            rng.shuffle(picked)  # the official ones are spread over the variants, not piled into the first
+            return picked
     if len(found) < need:
         what = ((f' уровня «{LEVELS[level]}»' if level else '') + (' из выбранного источника' if source else '')
                 + (year_phrase(year)))

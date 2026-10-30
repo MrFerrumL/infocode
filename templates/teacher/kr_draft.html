@@ -5,7 +5,7 @@
 {% include 'layout/work_tabs.html' %}
 <a class="back-link" href="{% url 'teacher_kr' %}">← КР без регистрации</a>
 <div class="page-heading"><div><div class="eyebrow">ЧЕРНОВИК КР · {{ draft.subject|upper }}</div><h1>{{ draft.title }}<span class="accent">.</span></h1>
-<p>{% if draft.group %}{{ draft.group }} · {% endif %}{{ variants|length }} вар. · {{ draft.duration }} мин · уровень: {{ level_title }}{% if year_title %} · год: {{ year_title }}{% endif %}. Проверьте задачи: уберите лишние, замените или добавьте свои — и отправьте КР ученикам.</p></div>
+<p>{% if draft.group %}{{ draft.group }} · {% endif %}{{ variants|length }} вар. · {{ draft.duration }} мин · уровень: {{ level_title }}{% if year_title %} · год: {{ year_title }}{% endif %}. Проверьте задачи: уберите лишние, замените или добавьте свои — и отправьте КР ученикам. Черновик сохраняется сам: к нему можно вернуться со страницы «КР».</p></div>
   <form method="post" class="kr-draft-send">{% csrf_token %}
     <button class="button secondary" name="action" value="discard" onclick="return confirm('Удалить черновик?')">Удалить черновик</button>
     <button class="button" name="action" value="send">Отправить в КР и открыть →</button>

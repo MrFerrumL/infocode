@@ -94,3 +94,11 @@
 .kr-like-variant { display: flex; align-items: center; gap: 8px; margin: 0; }
 .kr-like-variant label { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); white-space: nowrap; }
 .kr-like-variant input { width: 64px; padding: 6px 8px; }
+
+.kr-saved { margin-bottom: 22px; }
+.kr-saved-row { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line); }
+.kr-saved-row > div { flex: 1; min-width: 0; }
+.kr-saved-row strong { display: block; overflow-wrap: anywhere; }
+.kr-saved-row small { color: var(--muted); }
+.kr-saved-row form { margin: 0; }
+.kr-saved-row.is-open strong { color: var(--purple); }
