@@ -13,6 +13,12 @@
 </div>
 
 <section class="panel kr-draft-tools">
+  <form method="post" class="kr-inline kr-meta">{% csrf_token %}
+    <label>Название<input name="title" value="{{ draft.title }}" maxlength="160" required></label>
+    <label>Группа<input name="group" value="{{ draft.group }}" maxlength="120" placeholder="Например, Пара 03"></label>
+    <label>Время, мин<input type="number" name="duration" value="{{ draft.duration }}" min="5" max="300" required></label>
+    <button class="button secondary small" name="action" value="meta">Сохранить</button>
+  </form>
   <form method="post" class="kr-inline">{% csrf_token %}
     <label>Номер во всех вариантах
       <select name="number">{% for n in all_numbers %}<option value="{{ n }}">№ {{ n }}</option>{% endfor %}</select></label>

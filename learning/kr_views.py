@@ -299,6 +299,11 @@ def teacher_kr_draft(request):
                     drop = set(Task.all_objects.filter(topic__number=number, pk__in={i for ids in draft['variants'] for i in ids})
                                .values_list('pk', flat=True))
                 draft['variants'] = [[i for i in ids if i not in drop] for ids in draft['variants']]
+            elif action == 'meta':
+                draft['title'] = request.POST.get('title', '').strip()[:160] or draft['title']
+                draft['group'] = request.POST.get('group', '').strip()[:120]
+                draft['duration'] = _int(request.POST.get('duration'), draft['duration'], 5, 300)
+                messages.success(request, 'Название, группа и время сохранены.')
             elif action == 'discard':
                 _forget_draft(request)
                 return redirect('teacher_kr')

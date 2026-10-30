@@ -73,6 +73,16 @@ class SavedDraftTests(TestCase):
             self.client.post('/teacher/kr/draft/', {'action': 'send'})
         self.assertEqual(KrDraft.objects.count(), 0)
 
+    def test_title_group_and_time_can_be_changed(self):
+        self.build()
+        self.client.post('/teacher/kr/draft/', {'action': 'meta', 'title': 'Новое название', 'group': 'Пара 03', 'duration': '120'})
+        row = KrDraft.objects.get()
+        self.assertEqual((row.title, row.data['group'], row.data['duration']), ('Новое название', 'Пара 03', 120))
+        self.assertContains(self.client.get('/teacher/kr/draft/'), 'value="Пара 03"')
+        self.client.post('/teacher/kr/draft/', {'action': 'meta', 'title': '', 'group': '', 'duration': '9999'})
+        row.refresh_from_db()
+        self.assertEqual((row.title, row.data['group'], row.data['duration']), ('Новое название', '', 300))
+
     def test_drafts_are_private_to_their_teacher(self):
         self.build()
         row = KrDraft.objects.get()
@@ -149,3 +159,14 @@ class MakeDraftsCommandTests(TestCase):
     def test_dry_run_saves_nothing(self):
         self.run_plan([{'title': 'КР А', 'numbers': {'5': 1}, 'variants': 2}], '--dry-run')
         self.assertEqual(KrDraft.objects.count(), 0)
+
+    def test_scarce_official_tasks_are_shared_between_drafts_of_one_number(self):
+        # №17 has 10 official tasks; two drafts of 2 tasks x 4 variants need 8 each: five official for each, not 8 and 2.
+        self.run_plan([{'title': 'КР А', 'numbers': {'17': 2}, 'variants': 4}, {'title': 'КР Б', 'numbers': {'17': 2}, 'variants': 4}])
+        sources = dict(Task.objects.values_list('pk', 'exam_source'))
+        counts = []
+        for title in ('КР А', 'КР Б'):
+            ids = [i for v in KrDraft.objects.get(title=title).data['variants'] for i in v]
+            self.assertEqual(len(ids), 8)
+            counts.append(sum(sources[i] == 'demo' for i in ids))
+        self.assertEqual(counts, [5, 5])
