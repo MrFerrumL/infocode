@@ -24,7 +24,7 @@ from .models import Topic, Task, Practice, Bookmark, Variant, ExamAttempt, ExamA
 from .security import form_token, claim_submission
 from .services import check_answer, create_variant, finish_attempt, expire_attempts, check_task_answer
 from . import game_groups, answer_cells, ocr, semantic_search
-from .sources import KINDS, SITES
+from .sources import BANK_SORTS, KINDS, SITES, bank_of, bank_order
 
 staff_required = user_passes_test(lambda u: u.is_active and u.is_staff)
 
@@ -80,6 +80,7 @@ def dashboard(request):
 
 
 CATALOG_SORTS = [('', 'По умолчанию'), ('asc', 'По номеру: с первой задачи'), ('desc', 'По номеру: с последней'),
+                 *[(value, label) for value, (_, _, label) in BANK_SORTS.items()],
                  ('easy', 'Сначала простые'), ('hard', 'Сначала сложные')]
 
 
@@ -175,7 +176,8 @@ def catalog(request):
     qs = by_year(qs, year)
     years = sorted(set(Task.objects.filter(published=True, in_catalog=True).exclude(exam_year=None)
                        .values_list('exam_year', flat=True)), reverse=True)
-    site = request.GET.get('site', '')
+    # КЕГЭ or K. Polyakov in their own numbering, from the first task or from the last, shows only that bank.
+    site = bank_of(request.GET.get('sort', '')) or request.GET.get('site', '')
     if site in SITES and site:
         qs = qs.filter(source_system=site)
     elif site == 'own':
@@ -211,10 +213,11 @@ def catalog(request):
     rank = Case(*[When(difficulty=value, then=Value(i)) for i, (value, _) in enumerate(Task.LEVELS)], output_field=IntegerField())
     bank = Case(When(source_system='kompege', then=Value(0)), When(source_system='polyakov', then=Value(1)), default=Value(2), output_field=IntegerField())
     polyakov_first = Case(When(source_system__in=['polyakov', 'infocode-phys'], then=F('external_id')), default=Value(0), output_field=IntegerField())
-    order = {'asc': [bank, F('external_id').asc(nulls_last=True), 'id'],
+    order = ({value: bank_order(value) for value in BANK_SORTS} | {
+             'asc': [bank, F('external_id').asc(nulls_last=True), 'id'],
              'desc': [bank, F('external_id').desc(nulls_last=True), '-id'],
              'easy': [rank, bank, polyakov_first, F('external_id').desc(nulls_last=True), '-id'],
-             'hard': [rank.desc(), bank, polyakov_first, F('external_id').desc(nulls_last=True), '-id']}.get(
+             'hard': [rank.desc(), bank, polyakov_first, F('external_id').desc(nulls_last=True), '-id']}).get(
         sort, [bank, polyakov_first, F('external_id').desc(nulls_last=True), '-id'])
     if meaning:
         order_by = [Case(*[When(pk=pk, then=Value(i)) for i, pk in enumerate(meaning)], default=Value(len(meaning)), output_field=IntegerField())]

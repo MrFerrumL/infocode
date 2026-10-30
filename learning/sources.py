@@ -5,6 +5,25 @@ KOMPEGE prints a short note above each task ("Демоверсия 2027", "Ос�
 """
 import re
 
+# One bank in its own numbering, from the first task or from the last: КЕГЭ by the task's number on kompege.ru,
+# K. Polyakov by his numbers («14.1», «14.2»…). Choosing one also limits the list to that bank.
+BANK_SORTS = {'kompege_asc': ('kompege', False, 'КЕГЭ: с первой задачи'), 'kompege_desc': ('kompege', True, 'КЕГЭ: с последней задачи'),
+              'polyakov_asc': ('polyakov', False, 'К. Поляков: с первой задачи'),
+              'polyakov_desc': ('polyakov', True, 'К. Поляков: с последней задачи')}
+
+
+def bank_of(sort):
+    """The source system a bank sort limits the list to, '' for any other sort."""
+    return BANK_SORTS[sort][0] if sort in BANK_SORTS else ''
+
+
+def bank_order(sort):
+    """order_by arguments of a bank sort (tasks without a source number go last)."""
+    from django.db.models import F
+    reverse = BANK_SORTS[sort][1]
+    return [F('external_id').desc(nulls_last=True) if reverse else F('external_id').asc(nulls_last=True), '-id' if reverse else 'id']
+
+
 # Task.source_system → site shown in the catalogue filter. New banks (K. Polyakov, Yandex) add a line here.
 SITES = {'kompege': 'КЕГЭ', 'polyakov': 'К. Поляков', 'fipi': 'ФИПИ', 'yandex': 'Яндекс', 'infocode-gen': 'Инфокод · генератор', '': 'Свои задачи'}
 

@@ -89,7 +89,8 @@
                                           mode: (picker.querySelector('[data-photo-mode]') || {}).value || '',
                                           level: picker.querySelector('[data-filter-level]').value,
                                           source: picker.querySelector('[data-filter-source]').value,
-                                          year: picker.querySelector('[data-filter-year]').value});
+                                          year: picker.querySelector('[data-filter-year]').value,
+                                          sort: picker.querySelector('[data-filter-sort]').value});
       list.innerHTML = '<p class="muted">Загружаем задачи…</p>';
       try {
         const response = await fetch(`${picker.dataset.url}&${params}`, {headers: {'X-Requested-With': 'XMLHttpRequest'}});
@@ -97,7 +98,7 @@
       } catch { list.innerHTML = '<p class="muted">Нет связи с сервером.</p>'; }
       render();
     };
-    picker.querySelectorAll('[data-filter-number], [data-filter-level], [data-filter-source], [data-filter-year]').forEach(el => el.addEventListener('change', () => load()));
+    picker.querySelectorAll('[data-filter-number], [data-filter-level], [data-filter-source], [data-filter-year], [data-filter-sort]').forEach(el => el.addEventListener('change', () => load()));
     picker.querySelector('[data-filter-go]').addEventListener('click', () => load());
     picker.querySelector('[data-filter-q]').addEventListener('keydown', event => {
       if (event.key === 'Enter') { event.preventDefault(); load(); }

@@ -13,6 +13,7 @@ from . import kr_client, ocr, semantic_search
 from .kr_api import LEVELS, MAX_PER_NUMBER, MAX_VARIANTS, MAX_PICKED, SOURCES, ComposeError, available, by_source, by_year, from_bank, pool, year_choices, year_title
 from .models import KrDraft, Task
 from .exam_sources import OFFICIAL, apply as apply_source
+from .sources import BANK_SORTS, bank_of, bank_order
 from .similar_tasks import by_vector
 from .subjects import SUBJECTS, current as current_subject, using
 from .task_generators import REGISTRY
@@ -95,7 +96,7 @@ def teacher_kr(request):
         'form': form, 'rows': rows, 'error': error, 'tests': tests, 'unavailable': unavailable,
         'enabled': kr_client.enabled(), 'pupils_url': absolute(request, kr_client.pupils_url()), 'new_code': request.GET.get('new', ''),
         'max_per_number': MAX_PER_NUMBER, 'max_variants': MAX_VARIANTS, 'picked': ','.join(map(str, picked)),
-        'bank': {'rows': bank, 'official': sorted(OFFICIAL)},
+        'bank': {'rows': bank, 'official': sorted(OFFICIAL)}, 'bank_sorts': _bank_sorts(),
         'saved_drafts': _saved_drafts(request), 'open_draft': (request.session.get(DRAFT) or {}).get('saved_id'),
         'levels': LEVELS.items(), 'has_draft': bool(request.session.get(DRAFT)), 'source_choices': SOURCE_CHOICES.items(), 'year_choices': years,
         'meaning_on': semantic_search.available(), 'photo_on': ocr.available(),
@@ -137,6 +138,9 @@ def kr_tasks(request):
             tasks = tasks.filter(Q(pk=int(query)) | Q(external_id=int(query)))
         elif query:
             tasks = tasks.filter(Q(statement__icontains=query[:100]) | Q(title__icontains=query[:100]) | Q(subtopic__icontains=query[:100]))
+        sort = request.GET.get('sort', '')
+        if ranked is None and sort in BANK_SORTS:  # КЕГЭ or K. Polyakov in their own numbering, from the first task or the last
+            tasks = tasks.filter(source_system=bank_of(sort)).order_by('topic__number', *bank_order(sort))
         page = Paginator(tasks, 8).get_page(request.GET.get('page'))
         cards = list(page.object_list.prefetch_related('content_blocks'))
     return render(request, 'teacher/kr_tasks.html', {'page': page, 'cards': cards})
@@ -328,6 +332,7 @@ def teacher_kr_draft(request):
         'draft': draft, 'variants': variants, 'max_variants': MAX_VARIANTS, 'numbers': numbers, 'all_numbers': range(1, NUMBERS[draft['subject']] + 1),
         'level_title': LEVELS.get(draft.get('level'), 'любой'), 'year_title': year_title(draft.get('year', '')), 'nav': 'teacher', 'workspace_section': 'works',
         'levels': LEVELS.items(), 'source_choices': SOURCE_CHOICES.items(), 'year_choices': year_choices_of(draft['subject']),
+        'bank_sorts': _bank_sorts(),
         'meaning_on': semantic_search.available(), 'photo_on': ocr.available(),
         'current_route': 'teacher_kr', 'picker_url': f'{reverse("teacher_kr_tasks")}?subject={draft["subject"]}'})
 
@@ -375,6 +380,10 @@ def classify_task(request, pk):
 
 
 MAX_SIMILAR = 10
+
+
+def _bank_sorts():
+    return [(value, label) for value, (_, _, label) in BANK_SORTS.items()]
 
 
 def _year(value):
