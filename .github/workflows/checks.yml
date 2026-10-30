@@ -1,4 +1,4 @@
-name: Application checks
+name: Проверки приложения
 on:
   push:
   pull_request:
@@ -6,6 +6,7 @@ permissions:
   contents: read
 jobs:
   tests:
+    name: Тесты (${{ matrix.database }})
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -39,19 +40,19 @@ jobs:
       - run: python manage.py check
       - run: python manage.py makemigrations --check --dry-run
       - run: python manage.py test learning --noinput
-      - name: Validate deployment configuration
+      - name: Проверка конфигурации развёртывания
         env:
           APP_DOMAIN: ege.example.org
           ACME_EMAIL: ci@example.org
           SECRET_KEY: build-check-not-a-production-secret-00000000000000000000000
         run: docker compose -f compose.production.yaml config --quiet
-      - name: Build and validate the production image
+      - name: Сборка и проверка образа для сервера
         if: matrix.database == 'sqlite'
         run: |
           docker build --build-arg REQUIREMENTS=requirements-postgres.txt -t infocode-check .
           docker run --rm -e SECRET_KEY=build-check-not-a-production-secret-00000000000000000000000 -e ALLOWED_HOSTS=ege.example.org infocode-check python manage.py check --deploy --fail-level WARNING
           APP_DOMAIN=ege.example.org ACME_EMAIL=ci@example.org docker run --rm -e APP_DOMAIN -e ACME_EMAIL -v "$PWD/deploy/Caddyfile:/etc/caddy/Caddyfile:ro" caddy:2-alpine caddy validate --config /etc/caddy/Caddyfile
-      - name: Start the production app, migrations and maintenance
+      - name: Запуск приложения, миграций и обслуживания
         if: matrix.database == 'sqlite'
         env:
           APP_DOMAIN: ege.example.org
@@ -62,7 +63,7 @@ jobs:
           docker compose -f compose.production.yaml up --no-build -d --wait --wait-timeout 120 db web maintenance
           docker compose -f compose.production.yaml exec -T web python deploy/healthcheck.py
           docker compose -f compose.production.yaml exec -T web python manage.py check_content --strict
-      - name: Clean up the CI-only containers
+      - name: Очистка тестовых контейнеров
         if: always() && matrix.database == 'sqlite'
         env:
           APP_DOMAIN: ege.example.org
