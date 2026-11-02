@@ -31,6 +31,10 @@ class Command(BaseCommand):
             raise CommandError('Store the backup outside MEDIA_ROOT.')
         target.parent.mkdir(parents=True, exist_ok=True)
         data = io.StringIO()
+        # PostgreSQL cannot upgrade an existing transaction's isolation after
+        # queries or inside a savepoint. Refuse an unsafe snapshot explicitly.
+        if connection.vendor == 'postgresql' and connection.in_atomic_block:
+            raise CommandError('Run backup_platform outside an existing database transaction.')
         with transaction.atomic():
             if connection.vendor == 'postgresql':
                 with connection.cursor() as cursor:

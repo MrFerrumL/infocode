@@ -10,6 +10,29 @@ from django.utils import timezone
 active_actor = ContextVar('platform_actor', default=None)
 
 
+class HeadResponseMiddleware:
+    """Keep GET headers but never send a HEAD body to the WSGI server.
+
+    Waitress does not discard application output for HEAD. Sending that output
+    corrupts a reverse proxy's persistent connection: the next response starts
+    with the previous page's HTML instead of an HTTP status line.
+    """
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        response = self.get_response(request)
+        if request.method == 'HEAD':
+            if response.streaming:
+                # Do not read files/generators. Their registered close callbacks
+                # remain on the response; FileResponse also clears file_to_stream
+                # so WSGI file_wrapper cannot bypass this empty iterable.
+                response.streaming_content = ()
+            else:
+                response.content = b''
+        return response
+
+
 class TemporaryPasswordMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response

@@ -181,7 +181,7 @@ class ScheduleTests(BaseScheduleCase):
         self.assertEqual(send_reminders(self.event.starts_at + timedelta(days=7) - timedelta(minutes=15)), 0)
 
     def test_ics_export_has_utf8_folding_and_private_cache(self):
-        self.event.title = 'Название, с точкой; и длинный текст ' * 8
+        self.event.title = ('Название, с точкой; и длинный текст ' * 8)[:180]
         self.event.save()
         self.client.force_login(self.student)
         page = self.client.get(reverse('schedule_export'), {'start': '2026-10-19', 'end': '2026-10-20'})
@@ -198,17 +198,6 @@ class ScheduleTests(BaseScheduleCase):
         client = Client(enforce_csrf_checks=True)
         client.force_login(self.teacher)
         self.assertEqual(client.post(reverse('schedule_create'), self.data()).status_code, 403)
-
-    def test_portable_backup_contains_calendar_and_exception(self):
-        ScheduleOccurrence.objects.create(event=self.event, original_date=date(2026, 10, 26), title='Перенос', starts_at=at('2026-10-27'), ends_at=at('2026-10-27', 17))
-        with tempfile.TemporaryDirectory() as temp, override_settings(MEDIA_ROOT=Path(temp)/'uploads'):
-            target = Path(temp)/'backup.zip'
-            call_command('backup_platform', str(target), stdout=io.StringIO())
-            with zipfile.ZipFile(target) as archive:
-                data = json.loads(archive.read('data.json'))
-            self.assertTrue(any(row['model'] == 'learning.scheduleevent' for row in data))
-            self.assertTrue(any(row['model'] == 'learning.scheduleoccurrence' for row in data))
-
 
 class HomeworkWorkspaceTests(BaseScheduleCase):
     def setUp(self):

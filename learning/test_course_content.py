@@ -188,7 +188,9 @@ class CourseContentTests(TestCase):
         self.client.force_login(self.student)
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
-        response.close()
+        # The test client's streaming wrapper closes the response while safely
+        # suspending request_finished connection cleanup inside TestCase.
+        b''.join(response.streaming_content)
         group = StudyGroup.objects.create(title='Закрытый', teacher=self.teacher)
         self.course.group = group
         self.course.save()
@@ -209,7 +211,6 @@ class CourseContentTests(TestCase):
         response = self.client.get(f'/files/course-block/{a.pk}/', HTTP_RANGE='bytes=2-5')
         self.assertEqual(response.status_code, 206)
         self.assertEqual(b''.join(response.streaming_content), b'2345')
-        response.close()
         for block, seconds in [(a, 12), (b, 30)]:
             url = f'/learn/{self.step.pk}/position/?block={block.pk}'
             self.assertEqual(self.client.post(url, {'seconds': seconds}).status_code, 200)

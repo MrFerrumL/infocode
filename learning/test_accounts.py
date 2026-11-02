@@ -9,7 +9,7 @@ from unittest.mock import patch
 from django.contrib.auth.models import User
 from django.db import DatabaseError
 from django.core.management import call_command, CommandError
-from django.test import TestCase, Client, SimpleTestCase
+from django.test import TestCase, TransactionTestCase, Client, SimpleTestCase
 from django.urls import reverse
 from django.utils import timezone
 
@@ -131,7 +131,7 @@ class AccountTests(TestCase):
         self.assertEqual(page.json(), {'status': 'unavailable'})
 
 
-class BackupPublicationTests(TestCase):
+class BackupPublicationTests(TransactionTestCase):
     def test_large_media_is_streamed_and_existing_backup_is_not_overwritten(self):
         with tempfile.TemporaryDirectory() as directory:
             folder = Path(directory)

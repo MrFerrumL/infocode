@@ -418,7 +418,8 @@ def reorder(request):
         ids=[int(i) for i in request.POST.getlist('ids')]
     except ValueError:
         raise PermissionDenied
-    rows={obj.pk:obj for obj in qs.select_for_update()}
+    # Lock siblings themselves, not nullable joined course/section parents.
+    rows={obj.pk:obj for obj in qs.select_for_update(of=('self',))}
     if len(ids)!=len(set(ids)) or set(ids)!=set(rows):
         return JsonResponse({'error':'Состав изменился. Обновите страницу.'},status=409)
     for n,pk in enumerate(ids,1):

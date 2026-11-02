@@ -1,0 +1,11 @@
+[Unit]
+Description=Проверка Инфокода каждую минуту
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=60s
+AccuracySec=5s
+Unit=infocode-watchdog.service
+
+[Install]
+WantedBy=timers.target

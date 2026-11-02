@@ -285,7 +285,9 @@ def lesson_editor(request, section_pk, pk=None):
 def step_editor(request, lesson_pk, pk=None):
     from .content_editor import block_formset, content_signature, legacy_content
     lesson = get_object_or_404(Lesson, pk=lesson_pk, section__course__in=editable_courses(request.user))
-    step = get_object_or_404(Step.objects.select_for_update(), pk=pk, lesson=lesson) if pk else Step(lesson=lesson, position=(lesson.steps.aggregate(n=Max('position'))['n'] or 0)+1)
+    # Parent archive filters include nullable outer joins. PostgreSQL must lock
+    # the edited step only, not the nullable side of those joins.
+    step = get_object_or_404(Step.objects.select_for_update(of=('self',)), pk=pk, lesson=lesson) if pk else Step(lesson=lesson, position=(lesson.steps.aggregate(n=Max('position'))['n'] or 0)+1)
     editor_version = step.edit_version
     blocks_mode = request.method != 'POST' or 'blocks-TOTAL_FORMS' in request.POST
     old_content = content_signature(list(step.content_blocks.values())) if pk and step.use_blocks else content_signature(legacy_content(step))

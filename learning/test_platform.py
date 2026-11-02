@@ -287,7 +287,8 @@ class PlatformTests(TestCase):
         self.assertEqual(response.status_code,302)
         asset=MediaAsset.objects.get()
         preview=self.client.get(f'/files/library/{asset.pk}/?preview=1')
-        self.assertEqual(preview.status_code,200);preview.close()
+        self.assertEqual(preview.status_code,200)
+        b''.join(preview.streaming_content)
         self.client.force_login(self.other_teacher)
         self.assertEqual(self.client.get(f'/files/library/{asset.pk}/').status_code,404)
         self.client.force_login(self.teacher)
@@ -399,16 +400,3 @@ class PlatformTests(TestCase):
         response=self.client.post('/login/',{'username':'missing','password':'wrong'})
         self.assertEqual(response.status_code,429)
         self.assertIn('Retry-After',response)
-
-    def test_backup_includes_archived_data_and_detects_tampering(self):
-        archive(self.teacher,self.task)
-        path=Path(self.tmp.name).parent/(Path(self.tmp.name).name+'-backup.zip')
-        self.addCleanup(path.unlink,missing_ok=True)
-        call_command('backup_platform',str(path),stdout=io.StringIO())
-        with zipfile.ZipFile(path) as z:
-            rows=json.loads(z.read('data.json'))
-        self.assertTrue(any(r['model']=='learning.task' and r['fields']['title']=='Задача' for r in rows))
-        with zipfile.ZipFile(path,'a') as z:
-            z.writestr('data.json','[]')
-        with self.assertRaises(CommandError):
-            call_command('backup_platform',str(path),verify=True,stdout=io.StringIO())

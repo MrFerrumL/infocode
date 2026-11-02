@@ -9,6 +9,7 @@ jobs:
     name: Тесты (${{ matrix.database }})
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         database: [sqlite, postgresql]
     services:
@@ -39,6 +40,10 @@ jobs:
       - run: python -m pip install -r requirements-postgres.txt
       - run: python manage.py check
       - run: python manage.py makemigrations --check --dry-run
+      - name: Проверка сценариев выпуска
+        run: |
+          bash -n deploy/release.sh
+          python -m compileall -q deploy
       - run: python manage.py test learning --noinput
       - name: Проверка конфигурации развёртывания
         env:

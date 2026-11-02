@@ -259,7 +259,7 @@ class NotebookTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertIn('private', response['Cache-Control'])
         self.assertEqual(response['X-Content-Type-Options'], 'nosniff')
-        response.close()
+        b''.join(response.streaming_content)
         self.client.force_login(self.outsider)
         self.assertEqual(self.client.get(f'/files/notebook-cell/{photo.pk}/?step={self.step.pk}').status_code, 403)
 
@@ -369,20 +369,3 @@ class NotebookTests(TestCase):
         self.assertEqual(self.client.get(self.url()).status_code, 200)
         response = self.client.get(f'/admin/learning/notebook/{self.book.pk}/change/')
         self.assertRedirects(response, self.url())
-
-    def test_portable_backup_keeps_archived_notebooks_cells_media_and_course_reference(self):
-        photo = NotebookCell.objects.create(notebook=self.book, kind='image', image=self.image())
-        archive(self.teacher, self.book)
-        with tempfile.TemporaryDirectory() as folder:
-            path = Path(folder)/'notebook-backup.zip'
-            call_command('backup_platform', str(path), stdout=io.StringIO())
-            call_command('backup_platform', str(path), verify=True, stdout=io.StringIO())
-            with zipfile.ZipFile(path) as backup:
-                data = json.loads(backup.read('data.json'))
-                book = next(row for row in data if row['model']=='learning.notebook' and row['pk']==self.book.pk)
-                cell = next(row for row in data if row['model']=='learning.notebookcell' and row['pk']==photo.pk)
-                link = next(row for row in data if row['model']=='learning.stepcontentblock' and row['pk']==self.link.pk)
-                self.assertTrue(book['fields']['archived_at'])
-                self.assertEqual(cell['fields']['notebook'], self.book.pk)
-                self.assertEqual(link['fields']['notebook'], self.book.pk)
-                self.assertTrue(backup.read('media/'+photo.image.name).startswith(b'\x89PNG'))

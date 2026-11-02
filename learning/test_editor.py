@@ -85,7 +85,7 @@ class EditorTests(TestCase):
         r = self.client.get(f'/files/block/{file.pk}/')
         self.assertEqual(r.status_code, 200)
         self.assertIn('attachment;', r['Content-Disposition'])
-        r.close()
+        b''.join(r.streaming_content)
 
     def test_solution_snapshot_frozen_and_locked_before_exam_submission(self):
         block = TaskBlock.objects.create(task=self.task, purpose='solution', kind='file', text='Секретный файл', file=SimpleUploadedFile('answer.py', b'print(42)'))
@@ -103,7 +103,6 @@ class EditorTests(TestCase):
         attempt.save()
         r = self.client.get(url)
         self.assertEqual(b''.join(r.streaming_content), b'print(42)')
-        r.close()
 
     def test_block_order_is_independent_for_condition_and_solution(self):
         first = TaskBlock.objects.create(task=self.task, purpose='statement', kind='text', text='Первый', position=1)

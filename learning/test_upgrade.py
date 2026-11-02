@@ -79,7 +79,7 @@ class UpgradeTests(TestCase):
         self.assertEqual(response.status_code,200)
         self.assertEqual(response['Content-Type'],'image/png')
         self.assertIn('inline',response['Content-Disposition'])
-        response.close()
+        b''.join(response.streaming_content)
 
     def test_empty_published_task_rejected(self):
         self.client.force_login(self.teacher)

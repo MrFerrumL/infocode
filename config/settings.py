@@ -61,6 +61,7 @@ SESSION_COOKIE_SAMESITE = 'Lax'
 LOGIN_RATE_LIMIT = int(os.environ.get('LOGIN_RATE_LIMIT', '12'))
 LOGIN_RATE_WINDOW = 900
 MIDDLEWARE.insert(0, 'learning.middleware.RequestLogMiddleware')
+MIDDLEWARE.insert(1, 'learning.middleware.HeadResponseMiddleware')
 MIDDLEWARE.insert(MIDDLEWARE.index('django.contrib.auth.middleware.AuthenticationMiddleware') + 1, 'learning.middleware.LoginThrottleMiddleware')
 MIDDLEWARE.insert(MIDDLEWARE.index('learning.middleware.LoginThrottleMiddleware') + 1, 'learning.middleware.TemporaryPasswordMiddleware')
 TEMPLATES[0]['OPTIONS']['context_processors'].append('learning.context_processors.platform_context')

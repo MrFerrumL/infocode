@@ -1,0 +1,17 @@
+[Unit]
+Description=Проверка доступности Инфокода и ограниченное восстановление
+After=docker.service network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/infocode/deploy/watch_service.py
+TimeoutStartSec=110
+StateDirectory=infocode-watchdog
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/infocode-watchdog
