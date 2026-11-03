@@ -55,9 +55,11 @@ def topic_stats(user):
     solved = set(Practice.objects.filter(user=user, correct=True).values_list('task_id', flat=True))
     # Aggregation does not apply Meta.ordering; PostgreSQL otherwise returns arbitrary topic order.
     topics = list(Topic.objects.annotate(total=Count('tasks', filter=Q(tasks__published=True, tasks__in_catalog=True, tasks__archived_at=None))).order_by('number'))
-    task_map = dict(Task.objects.filter(published=True, in_catalog=True).values_list('id', 'topic_id'))
+    # Solved tasks per topic counted by the database, not by loading every task of the catalogue.
+    per_topic = dict(Task.objects.filter(published=True, in_catalog=True, pk__in=Practice.objects.filter(user=user, correct=True).values('task_id'))
+                     .order_by().values_list('topic_id').annotate(n=Count('pk')))
     for topic in topics:
-        topic.solved = sum(1 for pk in solved if task_map.get(pk) == topic.id)
+        topic.solved = per_topic.get(topic.id, 0)
         topic.percent = round(topic.solved / topic.total * 100) if topic.total else 0
     return topics, solved
 

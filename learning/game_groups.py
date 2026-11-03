@@ -31,14 +31,13 @@ def grouped_follow_up():
 
 
 def fold_follow_ups(qs):
-    """Replace grouped 20/21 tasks in a filtered queryset by their 19 card."""
+    """Ids of a filtered queryset with the grouped 20/21 tasks replaced by their 19 card, as a subquery.
+
+    The database does the folding: the ids never travel through Python and back as a list of tens of thousands."""
     hidden = qs.filter(grouped_follow_up())
-    keys = set(hidden.values_list('source_system', 'external_id'))
-    ids = set(qs.exclude(grouped_follow_up()).values_list('id', flat=True))
-    if keys:
-        partners = Task.objects.filter(published=True, in_catalog=True, topic__number=FIRST, external_id__in={k[1] for k in keys})
-        ids |= {pk for pk, system, ident in partners.values_list('id', 'source_system', 'external_id') if (system, ident) in keys}
-    return ids
+    partners = Task.objects.filter(published=True, in_catalog=True, topic__number=FIRST).filter(
+        Exists(hidden.filter(source_system=OuterRef('source_system'), external_id=OuterRef('external_id'))))
+    return Task.objects.filter(Q(pk__in=qs.exclude(grouped_follow_up()).values('pk')) | Q(pk__in=partners.values('pk'))).values('pk')
 
 
 def attach_follow_ups(tasks, user):

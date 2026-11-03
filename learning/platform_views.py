@@ -328,8 +328,10 @@ def import_tasks(request):
     return render(request, 'platform/import.html', {'batch': batch, 'nav': 'teacher'})
 
 
-@staff_required
-def duplicates(request):
+DUPLICATES_KEPT = 600  # seconds the found groups are shown again without a new search
+
+
+def duplicate_groups():
     from .services import normalize
     groups = {}
     for t in Task.objects.prefetch_related('content_blocks').select_related('topic'):
@@ -339,7 +341,18 @@ def duplicates(request):
             continue
         key = hashlib.sha256(json.dumps([t.topic_id, content], ensure_ascii=False).encode()).hexdigest()
         groups.setdefault(key, []).append(t)
-    return render(request, 'platform/duplicates.html', {'groups': [v for v in groups.values() if len(v)>1], 'nav': 'teacher'})
+    return [v for v in groups.values() if len(v)>1]
+
+
+@staff_required
+def duplicates(request):
+    """The search reads every task, so it takes seconds: the result is kept for ten minutes; ?fresh=1 searches again."""
+    from django.core.cache import cache
+    groups = None if request.GET.get('fresh') else cache.get('platform-duplicates')
+    if groups is None:
+        groups = duplicate_groups()
+        cache.set('platform-duplicates', groups, DUPLICATES_KEPT)
+    return render(request, 'platform/duplicates.html', {'groups': groups, 'nav': 'teacher'})
 
 
 def editor_path(user, path):

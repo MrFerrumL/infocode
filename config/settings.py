@@ -35,6 +35,8 @@ USE_TZ = True
 STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+STORAGES = {'default': {'BACKEND': 'django.core.files.storage.FileSystemStorage'},
+            'staticfiles': {'BACKEND': 'learning.static_storage.HashedStaticStorage'}}
 MEDIA_ROOT = BASE_DIR / 'uploads'
 MEDIA_ROOT = Path(os.environ.get('MEDIA_ROOT', str(MEDIA_ROOT)))
 MEDIA_URL = '/protected-media/'

@@ -20,7 +20,7 @@ class TopicOrderingTests(TestCase):
     def test_grouped_topic_query_explicitly_orders_numbers(self):
         with CaptureQueriesContext(connection) as queries:
             topics, solved = topic_stats(self.student)
-        grouped = [query['sql'] for query in queries if 'GROUP BY' in query['sql'] and 'learning_topic' in query['sql']]
+        grouped = [query['sql'] for query in queries if 'GROUP BY' in query['sql'] and 'FROM "learning_topic"' in query['sql']]
         self.assertEqual(len(grouped), 1)
         self.assertIn('ORDER BY', grouped[0].upper())
         self.assertEqual([topic.number for topic in topics], list(range(1, 28)))
