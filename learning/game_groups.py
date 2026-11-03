@@ -33,11 +33,12 @@ def grouped_follow_up():
 def fold_follow_ups(qs):
     """Ids of a filtered queryset with the grouped 20/21 tasks replaced by their 19 card, as a subquery.
 
-    The database does the folding: the ids never travel through Python and back as a list of tens of thousands."""
+    The database does the folding: the ids never travel through Python and back as a list of tens of thousands. One UNION
+    in a single IN is read once by PostgreSQL; two IN subqueries joined by OR were checked row by row (a second instead of 0.1)."""
     hidden = qs.filter(grouped_follow_up())
     partners = Task.objects.filter(published=True, in_catalog=True, topic__number=FIRST).filter(
-        Exists(hidden.filter(source_system=OuterRef('source_system'), external_id=OuterRef('external_id'))))
-    return Task.objects.filter(Q(pk__in=qs.exclude(grouped_follow_up()).values('pk')) | Q(pk__in=partners.values('pk'))).values('pk')
+        Exists(hidden.filter(source_system=OuterRef('source_system'), external_id=OuterRef('external_id')))).order_by().values('pk')
+    return Task.objects.filter(pk__in=qs.exclude(grouped_follow_up()).order_by().values('pk').union(partners)).values('pk')
 
 
 def attach_follow_ups(tasks, user):
