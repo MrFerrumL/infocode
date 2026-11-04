@@ -44,6 +44,9 @@
 .kr-chips:empty { display: none; }
 .kr-chip { border: 1px solid var(--purple); background: var(--soft, #f1eeff); color: var(--purple); border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 600; }
 .kr-pick-list { display: grid; gap: 10px; }
+.kr-pick-status { margin: 8px 0 0; min-height: 20px; color: var(--purple); font-weight: 600; }
+.kr-pick-status.is-bad { color: #d64545; }
+.kr-pick-card header small.kr-in-draft { color: var(--purple); font-weight: 600; }
 .kr-pick-card { border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; background: var(--paper, #fff); }
 .kr-pick-card header { display: flex; align-items: center; gap: 12px; }
 .kr-pick-card header > div { flex: 1; display: grid; }

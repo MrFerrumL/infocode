@@ -23,7 +23,7 @@ FIPI_DOWN = 'Сайт ФИПИ сейчас не отвечает — ответ
 from .models import Topic, Task, Practice, Bookmark, Variant, ExamAttempt, ExamAnswer, Section, Lesson, LessonProgress, LessonFile, VariantItem, TaskBlock, Course, Step, StudentAssignment
 from .security import form_token, claim_submission
 from .services import check_answer, create_variant, finish_attempt, expire_attempts, check_task_answer
-from . import game_groups, answer_cells, ocr, semantic_search
+from . import game_groups, answer_cells, ocr, semantic_search, seventeen
 from .sources import BANK_SORTS, KINDS, SITES, bank_of, bank_order
 
 staff_required = user_passes_test(lambda u: u.is_active and u.is_staff)
@@ -208,6 +208,11 @@ def catalog(request):
         qs = qs.filter(pk__in=meaning)
     elif query and mode:
         qs = by_words(qs)  # a word or two: no meaning to compare, an ordinary search does better
+    # № 17: pairs, triples or quadruples (the task's subtopic, learning/seventeen.py); the buttons show how many each has now.
+    pattern = request.GET.get('tuple', '')
+    tuple_counts = dict(qs.filter(topic__number=17).order_by().values_list('subtopic').annotate(n=Count('pk', distinct=True))) if number == '17' else {}
+    if pattern in seventeen.KINDS:
+        qs = qs.filter(topic__number=17, subtopic=seventeen.SUBTOPICS[pattern])
     # A 19–21 group is one card: grouped 20/21 tasks are answered inside their 19 card.
     # By default each bank keeps its own order: KOMPEGE newest first (demo, retake, main wave…),
     # K. Polyakov from his first task (17.1, 17.2…), own tasks last. 'asc'/'desc' sort by source number.
@@ -235,7 +240,16 @@ def catalog(request):
         topic.folded = topic.number in game_groups.FOLLOW_UPS and game_groups.active()
     params = request.GET.copy()
     params.pop('page', None)
-    return render(request, 'catalog.html', {'levels': Task.LEVELS, 'topics': topics, 'page': page, 'number': number, 'difficulty': difficulty, 'query': query, 'mode': mode, 'meaning_on': semantic_search.available(), 'photo_on': ocr.available(), 'state': state, 'sort': sort, 'sorts': CATALOG_SORTS, 'kind': kind, 'kinds': KINDS, 'exam': exam, 'exam_sources': Task.EXAM_SOURCES, 'year': year,
+    tuple_chips = []
+    if number == '17':
+        for value, label in [('', 'Любой перебор'), *seventeen.CHOICES]:
+            link = params.copy()
+            link.pop('tuple', None)
+            if value:
+                link['tuple'] = value
+            count = sum(tuple_counts.values()) if not value else tuple_counts.get(seventeen.SUBTOPICS[value], 0)
+            tuple_chips.append({'label': label, 'url': '?' + link.urlencode(), 'on': value == (pattern if pattern in seventeen.KINDS else ''), 'count': count})
+    return render(request, 'catalog.html', {'tuple': pattern if pattern in seventeen.KINDS else '', 'tuple_chips': tuple_chips, 'levels': Task.LEVELS, 'topics': topics, 'page': page, 'number': number, 'difficulty': difficulty, 'query': query, 'mode': mode, 'meaning_on': semantic_search.available(), 'photo_on': ocr.available(), 'state': state, 'sort': sort, 'sorts': CATALOG_SORTS, 'kind': kind, 'kinds': KINDS, 'exam': exam, 'exam_sources': Task.EXAM_SOURCES, 'year': year,
         'year_choices': [(str(y), str(y)) for y in years] + [(f'{y}+', f'{y} и новее') for y in years[1:]], 'site': site,
         'sites': [(key or 'own', name) for key, name in SITES.items() if Task.objects.filter(published=True, in_catalog=True, source_system=key).exists()], 'params': params.urlencode(), 'nav': 'catalog'})
 

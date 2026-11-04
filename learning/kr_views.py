@@ -5,6 +5,7 @@ from urllib.parse import urljoin
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db.models import Case, Count, IntegerField, Q, Value, When
+from django.http import JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.http import require_POST
@@ -14,6 +15,7 @@ from .kr_api import LEVELS, MAX_PER_NUMBER, MAX_VARIANTS, MAX_PICKED, SOURCES, C
 from .models import KrDraft, Task
 from .exam_sources import OFFICIAL, apply as apply_source
 from .sources import BANK_SORTS, bank_of, bank_order
+from . import seventeen
 from .similar_tasks import by_vector
 from .subjects import SUBJECTS, current as current_subject, using
 from .task_generators import REGISTRY
@@ -68,8 +70,18 @@ def teacher_kr(request):
     error = ''
     if request.method == 'POST' and kr_client.enabled():
         plan = [r for r in rows if r['count']]
+        if request.POST.get('manual'):
+            # By hand: the variants start empty and are filled in the editor; tasks picked in the catalogue go to variant 1.
+            by_hand = sorted(dict.fromkeys(i for i in picked if i in picked_numbers), key=lambda i: (picked_numbers[i], picked.index(i)))
+            _save_draft(request, {'subject': subject, 'title': form['title'], 'group': form['group'], 'duration': form['duration'],
+                                  'level': form['level'], 'source': form['source'], 'year': form['year'],
+                                  'variants': [by_hand] + [[] for _ in range(form['variants'] - 1)]})
+            messages.info(request, (f'Выбранные задачи ({len(by_hand)}) лежат в варианте 1. ' if by_hand else 'Варианты пока пустые. ')
+                          + 'Добавляйте задачи кнопкой «🔍 Из каталога» в каждом варианте'
+                          + ('; или нажмите «Собрать по этому» в варианте 1, и остальные станут похожими на него.' if by_hand else '.'))
+            return redirect('teacher_kr_draft')
         if not plan:
-            error = 'Укажите, сколько задач взять хотя бы по одному номеру.'
+            error = 'Укажите, сколько задач взять хотя бы по одному номеру или нажмите «Собрать вручную».'
         else:
             try:
                 variants = compose_draft(subject, plan, form['variants'], form['level'], form['source'], form['year'])
@@ -99,6 +111,7 @@ def teacher_kr(request):
         'bank': {'rows': bank, 'official': sorted(OFFICIAL)}, 'bank_sorts': _bank_sorts(),
         'saved_drafts': _saved_drafts(request), 'open_draft': (request.session.get(DRAFT) or {}).get('saved_id'),
         'levels': LEVELS.items(), 'has_draft': bool(request.session.get(DRAFT)), 'source_choices': SOURCE_CHOICES.items(), 'year_choices': years,
+        'tuple_choices': seventeen.CHOICES,
         'meaning_on': semantic_search.available(), 'photo_on': ocr.available(),
         'nav': 'teacher', 'workspace_section': 'works',
         'current_route': 'teacher_kr'})
@@ -129,6 +142,9 @@ def kr_tasks(request):
         if source in SOURCE_CHOICES:
             tasks = by_source(tasks, source)
         tasks = by_year(tasks, year)
+        pattern = request.GET.get('tuple', '')  # № 17: pairs, triples or quadruples (learning/seventeen.py)
+        if pattern in seventeen.KINDS:
+            tasks = tasks.filter(topic__number=17, subtopic=seventeen.SUBTOPICS[pattern])
         ranked = semantic_search.rank(query, tasks, limit=40) if query and meaning and not query.isdigit() else None
         if ranked is not None:
             # By meaning (words or a photo's text): the closest tasks first.
@@ -143,6 +159,13 @@ def kr_tasks(request):
             tasks = tasks.filter(source_system=bank_of(sort)).order_by('topic__number', *bank_order(sort))
         page = Paginator(tasks, 8).get_page(request.GET.get('page'))
         cards = list(page.object_list.prefetch_related('content_blocks'))
+    if request.GET.get('draft'):  # the draft's picker marks the tasks that are already in its variants
+        taken = {}
+        for number_of, ids in enumerate((request.session.get(DRAFT) or {}).get('variants', []), 1):
+            for pk in ids:
+                taken.setdefault(pk, []).append(number_of)
+        for card in cards:
+            card.in_variants = taken.get(card.pk, [])
     return render(request, 'teacher/kr_tasks.html', {'page': page, 'cards': cards})
 
 
@@ -247,6 +270,7 @@ def teacher_kr_draft(request):
         messages.info(request, 'Черновика КР нет — соберите его заново.')
         return redirect('teacher_kr')
     if request.method == 'POST':
+        ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'  # the catalogue picker adds tasks without leaving the page
         action = request.POST.get('action', '')
         v, at = _int(request.POST.get('v'), -1, -1, len(draft['variants']) - 1), _int(request.POST.get('i'), -1, -1, 99)
         number = _int(request.POST.get('number'), 0, 0, NUMBERS[draft['subject']])
@@ -320,8 +344,12 @@ def teacher_kr_draft(request):
                 messages.success(request, f'КР «{made["test"]["title"]}» отправлена и открыта. Код для учеников: {made["code"]}.')
                 return redirect(f'{reverse("teacher_kr")}?subject={draft["subject"]}&new={made["code"]}')
         except (ComposeError, kr_client.KrError) as exc:
+            if ajax:  # the picker stays open and shows the reason itself
+                return JsonResponse({'ok': False, 'error': str(exc)})
             messages.error(request, str(exc))
         _save_draft(request, draft)
+        if ajax:
+            return JsonResponse({'ok': True, 'variant': v + 1, 'count': len(draft['variants'][v]) if v >= 0 else 0})
         return redirect(f'{reverse("teacher_kr_draft")}#v{max(v, 0) + 1}')
     with using(draft['subject']):
         tasks = {t.pk: t for t in Task.all_objects.filter(pk__in={i for ids in draft['variants'] for i in ids})
@@ -332,6 +360,7 @@ def teacher_kr_draft(request):
         'draft': draft, 'variants': variants, 'max_variants': MAX_VARIANTS, 'numbers': numbers, 'all_numbers': range(1, NUMBERS[draft['subject']] + 1),
         'level_title': LEVELS.get(draft.get('level'), 'любой'), 'year_title': year_title(draft.get('year', '')), 'nav': 'teacher', 'workspace_section': 'works',
         'levels': LEVELS.items(), 'source_choices': SOURCE_CHOICES.items(), 'year_choices': year_choices_of(draft['subject']),
+        'tuple_choices': seventeen.CHOICES,
         'bank_sorts': _bank_sorts(),
         'meaning_on': semantic_search.available(), 'photo_on': ocr.available(),
         'current_route': 'teacher_kr', 'picker_url': f'{reverse("teacher_kr_tasks")}?subject={draft["subject"]}'})

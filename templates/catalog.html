@@ -11,8 +11,13 @@
   <a class="{% if not number %}selected{% endif %}" href="{% url 'catalog' %}">Все</a>
   {% for topic in topics %}{% if not topic.folded %}<a class="{% if number == topic.number|stringformat:'s' %}selected{% endif %}" {% if number == topic.number|stringformat:'s' %}aria-current="page"{% endif %} title="{{ topic.title }}" href="?number={{ topic.number }}">{{ topic.chip }}</a>{% endif %}{% endfor %}
 </div>
+{% if tuple_chips %}<div class="topic-strip tuple-strip" role="group" aria-label="Перебор в задачах № 17">
+  <span class="muted">Перебор:</span>
+  {% for chip in tuple_chips %}<a class="{% if chip.on %}selected{% endif %}" {% if chip.on %}aria-current="true"{% endif %} href="{{ chip.url }}">{{ chip.label }} · {{ chip.count }}</a>{% endfor %}
+</div>{% endif %}
 <form class="filters" method="get">
-  <input type="hidden" name="number" value="{{ number }}">
+  <input type="hidden" name="number" value="{{ number }}">{% if tuple %}
+  <input type="hidden" name="tuple" value="{{ tuple }}">{% endif %}
   <label class="search-label"><span class="sr-only">Поиск</span><input name="q" value="{{ query }}" placeholder="{% if meaning_on %}Слова, условие целиком или ID — или вставьте фото (Ctrl+V){% else %}Название, текст или ID задания{% endif %}" data-photo-target></label>
   {% if meaning_on %}<label><span class="sr-only">Как искать</span><select name="mode" data-photo-mode><option value="">По словам</option><option value="meaning" {% if mode == 'meaning' %}selected{% endif %}>По смыслу</option></select></label>{% endif %}
   {% if photo_on %}<span class="photo-search" data-photo-search data-url="{% url 'search_photo' %}"><button type="button" class="button secondary" data-photo-pick title="Найти похожие задачи по фото условия">📷 По фото</button><input type="file" accept="image/*" data-photo-file hidden><small class="photo-status" data-photo-status role="status"></small></span>{% endif %}

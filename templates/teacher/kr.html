@@ -102,6 +102,7 @@
       <select data-filter-level aria-label="Уровень"><option value="">Все уровни</option>{% for code, title in levels %}<option value="{{ code }}">{{ title }}</option>{% endfor %}</select>
       <select data-filter-source aria-label="Источник"><option value="">Все источники</option>{% for code, title in source_choices %}<option value="{{ code }}">{{ title }}</option>{% endfor %}</select>
       <select data-filter-year aria-label="Год выпуска"><option value="">Все годы</option>{% for code, title in year_choices %}<option value="{{ code }}">{{ title }}</option>{% endfor %}</select>
+      <select data-filter-tuple aria-label="Перебор в № 17"><option value="">№ 17: любой перебор</option>{% for code, title in tuple_choices %}<option value="{{ code }}">№ 17: {{ title }}</option>{% endfor %}</select>
       <select data-filter-sort aria-label="Порядок"><option value="">Сначала новые</option>{% for code, title in bank_sorts %}<option value="{{ code }}">{{ title }}</option>{% endfor %}</select>
       <input type="search" data-filter-q data-photo-target placeholder="ID, слова, условие целиком или фото (Ctrl+V)" aria-label="Поиск задачи">
       {% if meaning_on %}<select data-photo-mode aria-label="Как искать"><option value="">По словам</option><option value="meaning">По смыслу</option></select>{% endif %}
@@ -111,7 +112,9 @@
     <div class="kr-pick-list" data-pick-list><p class="muted">Загружаем задачи…</p></div>
   </section>
 
-  <div class="kr-submit"><span class="muted" data-summary></span><button class="button">Собрать черновик →</button></div>
+  <div class="kr-submit"><span class="muted" data-summary></span>
+    <button class="button secondary" name="manual" value="1" title="Пустые варианты, в которые вы сами добавляете задачи из каталога; выбранные выше задачи попадут в вариант 1">Собрать вручную →</button>
+    <button class="button">Собрать черновик →</button></div>
 </form>
 {% endif %}
 {% endblock %}

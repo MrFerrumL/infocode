@@ -3,7 +3,7 @@ import json
 from pathlib import Path
 from django.core.management.base import BaseCommand, CommandError
 from django.db.models import Prefetch, Q
-from learning import embeddings, ocr
+from learning import embeddings, ocr, seventeen
 from learning.models import Task, TaskBlock, TaskVector
 
 
@@ -40,6 +40,10 @@ class Command(BaseCommand):
             if not text:
                 skipped += 1
                 continue
+            if task.topic.number == 17 and task.topic.subject == 'inf' and not task.subtopic:  # a new № 17 task: pairs, triples or quadruples
+                mark = seventeen.subtopic_for(task, text)
+                if mark:
+                    Task.all_objects.filter(pk=task.pk).update(subtopic=mark)
             digest = embeddings.digest(text)
             if not row or row.digest != digest or row.vector is None:
                 todo.append((task.pk, text, digest))

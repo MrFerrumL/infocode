@@ -93,6 +93,41 @@ class SavedDraftTests(TestCase):
             self.assertNotContains(self.client.get('/teacher/kr/'), 'КР № 1')
         self.assertEqual(KrDraft.objects.count(), 1)
 
+    def test_variants_can_be_built_by_hand(self):
+        build = lambda data: self.client.post('/teacher/kr/', {'subject': 'inf', 'title': 'Вручную', 'variants': '3', 'duration': '45', **data})  # noqa: E731
+        with patch.object(kr_client, 'tests_of', return_value=[]):
+            self.assertContains(build({}), 'Собрать вручную')  # no counts: the error points to the manual way
+            self.assertEqual(KrDraft.objects.count(), 0)
+            self.assertRedirects(build({'manual': '1'}), '/teacher/kr/draft/', fetch_redirect_response=False)
+        self.assertEqual(KrDraft.objects.get().data['variants'], [[], [], []])
+        task = Task.objects.filter(topic__number=17).first()
+        self.client.post('/teacher/kr/draft/', {'action': 'add', 'v': '1', 'task': str(task.pk)})  # the editor fills a variant from the catalogue
+        self.assertEqual(KrDraft.objects.get().data['variants'], [[], [task.pk], []])
+        self.client.post('/teacher/kr/draft/', {'action': 'send'})
+        self.assertEqual(KrDraft.objects.count(), 1)  # an empty variant is not sent
+        self.assertContains(self.client.get('/teacher/kr/draft/'), 'В каждом варианте должна быть хотя бы одна задача')
+
+    def test_the_picker_adds_without_leaving_and_marks_what_is_taken(self):
+        self.build()
+        ajax = {'HTTP_X_REQUESTED_WITH': 'XMLHttpRequest'}
+        task = Task.objects.filter(topic__number=8).order_by('-pk').first()  # the picker lists the newest first
+        reply = self.client.post('/teacher/kr/draft/', {'action': 'add', 'v': '0', 'task': str(task.pk)}, **ajax)
+        self.assertEqual(reply.status_code, 200)  # an answer for the page, not a redirect back to the draft
+        self.assertEqual(reply.json(), {'ok': True, 'variant': 1, 'count': len(KrDraft.objects.get().data['variants'][0])})
+        self.assertIn(task.pk, KrDraft.objects.get().data['variants'][0])
+        again = self.client.post('/teacher/kr/draft/', {'action': 'add', 'v': '0', 'task': str(task.pk)}, **ajax).json()
+        self.assertFalse(again['ok'])
+        self.assertIn('уже есть', again['error'])  # the reason goes to the picker, not to a message of the next page
+        self.assertContains(self.client.get('/teacher/kr/tasks/?number=8&draft=1'), 'уже в варианте: 1')
+        self.assertNotContains(self.client.get('/teacher/kr/tasks/?number=8'), 'уже в варианте')  # only the draft's picker marks them
+
+    def test_tasks_picked_in_the_catalogue_start_variant_one(self):
+        seventeen, five = Task.objects.filter(topic__number=17).first(), Task.objects.filter(topic__number=5).first()
+        with patch.object(kr_client, 'tests_of', return_value=[]):
+            self.client.post('/teacher/kr/', {'subject': 'inf', 'title': 'Вручную', 'variants': '2', 'duration': '45', 'manual': '1',
+                                              'picked': f'{seventeen.pk},{five.pk},{seventeen.pk},999999'})
+        self.assertEqual(KrDraft.objects.get().data['variants'], [[five.pk, seventeen.pk], []])  # by number, once, only real tasks
+
 
 class MakeDraftsCommandTests(TestCase):
     def setUp(self):

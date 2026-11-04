@@ -5,6 +5,7 @@
     <span class="kr-pick-num">{{ task.topic.number }}</span>
     <div><strong>{{ task.title }}</strong>
       <small>ID {{ task.pk }}{% if task.source_label %} · {{ task.source_label }}{% endif %}{% if task.subtopic %} · {{ task.subtopic }}{% endif %}</small>
+      {% if task.in_variants %}<small class="kr-in-draft">✓ уже в варианте: {{ task.in_variants|join:", " }}</small>{% endif %}
       {% include 'partials/task_classify.html' %}</div>
     <button type="button" class="button secondary small" data-pick="{{ task.pk }}" data-number="{{ task.topic.number }}" data-label="№ {{ task.topic.number }} · ID {{ task.pk }}">+ В КР</button>
   </header>

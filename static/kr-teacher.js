@@ -36,7 +36,7 @@
         r.classList.toggle('is-short', lacking);
         if (lacking) short.push(`№ ${number} (есть ${have}, нужно ${count * variants})`);
       });
-      summary.textContent = !total ? 'Укажите число задач хотя бы для одного номера.'
+      summary.textContent = !total ? 'Укажите число задач хотя бы для одного номера или соберите варианты вручную.'
         : short.length ? `Не хватает задач с этим уровнем, источником и годом: ${short.join(', ')}. Уменьшите число, выберите «Любой» или «Генератор».`
         : `В каждом варианте ${total} задач, всего вариантов: ${variants}.`;
       summary.classList.toggle('is-short', short.length > 0);
@@ -47,8 +47,10 @@
       rows.forEach(r => { const input = r.querySelector('input'); if (!input.disabled) input.value = button.dataset.fill; });
       update();
     }));
-    builder.addEventListener('submit', () => {
-      const button = builder.querySelector('.kr-submit button');
+    builder.addEventListener('submit', event => {
+      // A disabled button sends nothing, so «Собрать вручную» (it is told apart by its value) is left alone.
+      if (event.submitter && event.submitter.name === 'manual') return;
+      const button = builder.querySelector('.kr-submit button:not([name=manual])');
       button.disabled = true;
       button.textContent = 'Собираем варианты…';
     });
@@ -90,6 +92,7 @@
                                           level: picker.querySelector('[data-filter-level]').value,
                                           source: picker.querySelector('[data-filter-source]').value,
                                           year: picker.querySelector('[data-filter-year]').value,
+                                          tuple: picker.querySelector('[data-filter-tuple]').value,
                                           sort: picker.querySelector('[data-filter-sort]').value});
       list.innerHTML = '<p class="muted">Загружаем задачи…</p>';
       try {
@@ -98,7 +101,13 @@
       } catch { list.innerHTML = '<p class="muted">Нет связи с сервером.</p>'; }
       render();
     };
-    picker.querySelectorAll('[data-filter-number], [data-filter-level], [data-filter-source], [data-filter-year], [data-filter-sort]').forEach(el => el.addEventListener('change', () => load()));
+    // Pairs, triples and quadruples exist only in № 17: choosing one shows that number, leaving № 17 drops the choice.
+    // These listeners come first so that the search below already sees the corrected filters.
+    const numberFilter = picker.querySelector('[data-filter-number]');
+    const tupleFilter = picker.querySelector('[data-filter-tuple]');
+    tupleFilter.addEventListener('change', () => { if (tupleFilter.value) numberFilter.value = '17'; });
+    numberFilter.addEventListener('change', () => { if (numberFilter.value !== '17') tupleFilter.value = ''; });
+    picker.querySelectorAll('[data-filter-number], [data-filter-level], [data-filter-source], [data-filter-year], [data-filter-tuple], [data-filter-sort]').forEach(el => el.addEventListener('change', () => load()));
     picker.querySelector('[data-filter-go]').addEventListener('click', () => load());
     picker.querySelector('[data-filter-q]').addEventListener('keydown', event => {
       if (event.key === 'Enter') { event.preventDefault(); load(); }
