@@ -1,4 +1,4 @@
-/* Seasonal decorations: Halloween (leaves, bats), winter (snow) and New Year (garland, snow).
+/* Seasonal decorations: autumn (falling leaves), Halloween (leaves, bats), winter (snow) and New Year (garland, snow).
    The calendar picks one (learning/seasons.py); each visitor can switch it in the top bar menu, the choice is kept in the browser.
    Nothing moves during exams or with "reduce motion". */
 (() => {
@@ -7,11 +7,11 @@
   const exam = document.querySelector('[data-station]');
   if (exam) return;
   const KEY = 'infocode-season';
-  const CHOICES = [['halloween', '🎃', 'Хеллоуин'], ['winter', '❄', 'Зима'], ['newyear', '🎄', 'Новый год'], ['none', '✕', 'Без украшений']];
+  const CHOICES = [['autumn', '🍁', 'Осень'], ['halloween', '🎃', 'Хеллоуин'], ['winter', '❄', 'Зима'], ['newyear', '🎄', 'Новый год'], ['none', '✕', 'Без украшений']];
   const read = key => { try { return localStorage.getItem(key); } catch { return null; } };
   const write = value => { try { localStorage.setItem(KEY, value); } catch { /* private mode */ } };
   const calm = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const byCalendar = (body.className.match(/\bseason-(halloween|winter|newyear)\b/) || [])[1] || 'none';
+  const byCalendar = (body.className.match(/\bseason-(autumn|halloween|winter|newyear)\b/) || [])[1] || 'none';
   // Earlier versions had a plain on/off switch.
   const legacyOff = read('infocode-season-fx') === 'off' || read('infocode-snow') === 'off';
   let season = CHOICES.some(c => c[0] === read(KEY)) ? read(KEY) : (legacyOff ? 'none' : byCalendar);
@@ -19,6 +19,10 @@
   let canvas = null, frame = 0, garland = null;
   const particles = () => {
     const w = innerWidth, h = innerHeight, r = Math.random;
+    if (season === 'autumn') {  // plenty of maple and oak leaves, some big and slow, some small and quick
+      return Array.from({length: Math.min(34, Math.round(w / 40))}, () => ({kind: 'leaf', x: r() * w, y: r() * h, s: .4 + r() * .7,
+        d: r() * Math.PI * 2, size: 16 + r() * 14, glyph: ['🍂', '🍁', '🍂', '🍁', '🍃'][Math.floor(r() * 5)]}));
+    }
     if (season === 'halloween') {
       const leaves = Array.from({length: Math.min(22, Math.round(w / 70))}, () => ({kind: 'leaf', x: r() * w, y: r() * h, s: .35 + r() * .5,
         d: r() * Math.PI * 2, size: 14 + r() * 10, glyph: r() < .5 ? '🍂' : '🍁'}));
@@ -66,7 +70,7 @@
             ctx.globalAlpha = .55; ctx.fillStyle = colour;
             ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
           } else {
-            ctx.globalAlpha = p.kind === 'bat' ? .5 : .6;
+            ctx.globalAlpha = p.kind === 'bat' ? .5 : (season === 'autumn' ? .8 : .6);
             ctx.save(); ctx.translate(p.x, p.y);
             if (p.kind === 'leaf') ctx.rotate(Math.sin(p.d) * .8);
             ctx.font = `${p.size}px "Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif`;
@@ -85,7 +89,7 @@
     if (canvas) canvas.remove();
     if (garland) garland.remove();
     canvas = garland = null;
-    body.classList.remove('season-fx-on', 'season-halloween', 'season-winter', 'season-newyear');
+    body.classList.remove('season-fx-on', 'season-autumn', 'season-halloween', 'season-winter', 'season-newyear');
   };
 
   const apply = () => {
@@ -106,7 +110,7 @@
     startMotion();
   };
 
-  // Top bar menu: 🎃 / ❄ / 🎄 / ✕
+  // Top bar menu: 🍁 / 🎃 / ❄ / 🎄 / ✕
   const host = document.querySelector('.topbar-tools') || document.querySelector('.public-top nav');
   if (host) {
     const wrap = document.createElement('div');

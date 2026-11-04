@@ -4,17 +4,20 @@ from learning.seasons import current_season, season_for
 
 
 class SeasonTests(TestCase):
-    """Halloween, winter and New Year decorations follow the calendar unless SITE_SEASON forces one."""
+    """Autumn, Halloween, winter and New Year decorations follow the calendar unless SITE_SEASON forces one."""
 
     def test_calendar(self):
+        self.assertEqual(season_for(date(2026, 9, 1)), 'autumn')
+        self.assertEqual(season_for(date(2026, 10, 14)), 'autumn')
         self.assertEqual(season_for(date(2026, 10, 18)), 'halloween')
         self.assertEqual(season_for(date(2026, 11, 2)), 'halloween')
-        self.assertEqual(season_for(date(2026, 11, 3)), 'winter')
+        self.assertEqual(season_for(date(2026, 11, 3)), 'autumn')  # no New Year look before December
+        self.assertEqual(season_for(date(2026, 11, 30)), 'autumn')
         self.assertEqual(season_for(date(2026, 12, 1)), 'newyear')
         self.assertEqual(season_for(date(2027, 1, 14)), 'newyear')
         self.assertEqual(season_for(date(2027, 1, 15)), 'winter')
         self.assertEqual(season_for(date(2027, 3, 1)), '')
-        self.assertEqual(season_for(date(2027, 10, 14)), '')
+        self.assertEqual(season_for(date(2027, 8, 31)), '')
 
     def test_setting_and_page(self):
         with self.settings(SITE_SEASON='newyear'):
@@ -22,8 +25,12 @@ class SeasonTests(TestCase):
             page = self.client.get('/')
             self.assertContains(page, 'season-newyear')
             self.assertContains(page, 'season.js')
+        with self.settings(SITE_SEASON='autumn'):
+            self.assertEqual(current_season(date(2026, 12, 20)), 'autumn')
+            self.assertContains(self.client.get('/'), 'season-autumn')
         with self.settings(SITE_SEASON='none'):
             self.assertEqual(current_season(), '')
             self.assertNotContains(self.client.get('/'), 'season-newyear')  # no default; visitors can still pick one
         with self.settings(SITE_SEASON='auto'):
             self.assertEqual(current_season(date(2026, 10, 31)), 'halloween')
+            self.assertEqual(current_season(date(2026, 11, 4)), 'autumn')
