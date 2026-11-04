@@ -1,17 +1,17 @@
 """Seasonal look of the site (SITE_SEASON): a light decoration over the usual style.
 
 auto (default) follows the calendar:
-  autumn    — 1 September … 14 October, 3 November … 30 November
+  blue      — 1 September … 14 October, 3 November … 30 November: a dark-blue autumn (the colours of the test platform's night look)
   halloween — 15 October … 2 November
   newyear   — 1 December … 14 January
   winter    — 15 January … end of February
-SITE_SEASON=autumn|halloween|winter|newyear forces one; none (or empty) means no default decoration.
+SITE_SEASON=blue|autumn|halloween|winter|newyear forces one («autumn» is the warm orange autumn); none (or empty) means no default decoration.
 Each visitor can switch the look in the top bar menu (static/season.js); the choice stays in the browser.
 """
 from django.conf import settings
 from django.utils import timezone
 
-SEASONS = ('autumn', 'halloween', 'winter', 'newyear')
+SEASONS = ('blue', 'autumn', 'halloween', 'winter', 'newyear')
 
 
 def season_for(day):
@@ -23,7 +23,7 @@ def season_for(day):
     if month in (1, 2):
         return 'winter'
     if month in (9, 10, 11):
-        return 'autumn'
+        return 'blue'
     return ''
 
 
