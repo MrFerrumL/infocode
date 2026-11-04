@@ -1,6 +1,7 @@
 """«КР без регистрации» in the teacher workspace: build a КР from the bank, get its code, open its live page."""
 import random
 import re
+from copy import deepcopy
 from urllib.parse import urljoin
 from django.contrib import messages
 from django.core.paginator import Paginator
@@ -211,6 +212,44 @@ def kr_draft_open(request, pk):
 
 @staff_required
 @require_POST
+def kr_draft_copy(request, pk):
+    """A saved draft once more under a new name, opened for editing: another КР from the same variants."""
+    row = get_object_or_404(KrDraft, pk=pk, owner=request.user)
+    title = f'{row.title} (копия)'[:160]
+    copy = KrDraft.objects.create(owner=request.user, title=title, data={**deepcopy(row.data), 'title': title})
+    request.session[DRAFT] = {**copy.data, 'saved_id': copy.pk}
+    messages.success(request, f'Создана копия черновика «{row.title}». Правьте её — исходный черновик не изменится.')
+    return redirect('teacher_kr_draft')
+
+
+@staff_required
+@require_POST
+def copy_kr(request):
+    """A КР that was already made becomes a new draft with the same variants, to change and send as another КР."""
+    test_id = _int(request.POST.get('test'), 0, 0, 2_000_000_000)
+    try:
+        source = kr_client.variants_of(request.user, test_id)
+    except kr_client.KrError as exc:
+        messages.error(request, str(exc))
+        return redirect('teacher_kr')
+    subject = source.get('subject') if source.get('subject') in NUMBERS else 'inf'
+    with using(subject):  # tasks that left the bank since (hidden, no answer) cannot be taken again
+        valid = set(pool().filter(pk__in={i for ids in source['variants'] for i in ids}).values_list('pk', flat=True))
+    variants = [[i for i in ids if i in valid] for ids in source['variants']]
+    lost = sum(len(ids) for ids in source['variants']) - sum(len(ids) for ids in variants)
+    if not any(variants):
+        messages.error(request, 'Задачи этой КР больше нельзя взять из банка, копия не получилась.')
+        return redirect('teacher_kr')
+    title = f'{source["title"]} (копия)'[:160]
+    _save_draft(request, {'subject': subject, 'title': title, 'group': source.get('group', ''), 'duration': _int(source.get('duration'), 45, 5, 300),
+                          'level': '', 'source': '', 'year': '', 'variants': variants})
+    messages.success(request, f'КР «{source["title"]}» скопирована в черновик: вариантов {len(variants)}.'
+                              + (f' Задач, которых больше нет в банке, не перенесено: {lost}.' if lost else '') + ' Правьте и отправляйте как новую КР.')
+    return redirect('teacher_kr_draft')
+
+
+@staff_required
+@require_POST
 def kr_draft_delete(request, pk):
     row = get_object_or_404(KrDraft, pk=pk, owner=request.user)
     if (request.session.get(DRAFT) or {}).get('saved_id') == row.pk:
@@ -317,6 +356,13 @@ def teacher_kr_draft(request):
                 if task_id in draft['variants'][v]:
                     raise ComposeError('Эта задача уже есть в варианте.')
                 _place(draft, v, task_id, at if action == 'put' and 0 <= at < len(draft['variants'][v]) else None)
+            elif action == 'copy_variant' and v >= 0:
+                # A variant once more right after itself: the quick way to a second variant is to copy and swap its tasks.
+                if len(draft['variants']) >= MAX_VARIANTS:
+                    raise ComposeError(f'Вариантов может быть не больше {MAX_VARIANTS}.')
+                draft['variants'].insert(v + 1, list(draft['variants'][v]))
+                messages.success(request, f'Вариант {v + 1} скопирован: это вариант {v + 2}. Замените в нём задачи.')
+                v += 1
             elif action == 'add_random' and v >= 0 and number:
                 _place(draft, v, _other(draft, number))
             elif action == 'add_number' and number:

@@ -24,6 +24,7 @@
   {% for d in saved_drafts %}<div class="kr-saved-row{% if d.pk == open_draft %} is-open{% endif %}">
     <div><strong>{{ d.title }}</strong><small>{{ d.variants }} вар. · по {{ d.per_variant }} задач · изменён {{ d.updated|date:'d.m H:i' }}{% if d.pk == open_draft %} · сейчас открыт{% endif %}</small></div>
     <form method="post" action="{% url 'kr_draft_open' d.pk %}">{% csrf_token %}<button class="button small">Редактировать</button></form>
+    <form method="post" action="{% url 'kr_draft_copy' d.pk %}">{% csrf_token %}<button class="button secondary small" title="Новый черновик с теми же вариантами">Копировать</button></form>
     <form method="post" action="{% url 'kr_draft_delete' d.pk %}" onsubmit="return confirm('Удалить черновик «{{ d.title|escapejs }}»?')">{% csrf_token %}<button class="button secondary small">Удалить</button></form>
   </div>{% endfor %}
 </section>{% endif %}
@@ -36,7 +37,8 @@
     <div class="kr-test-head">
       <div><h3>{{ test.title }}</h3><p class="muted">{% if test.group %}{{ test.group }} · {% endif %}{{ test.subject_title }} · {{ test.variants }} вар. по {{ test.tasks }} задач · {{ test.duration }} мин · собрана {{ test.created|date:'d.m H:i' }}</p></div>
       <div class="kr-test-actions"><a class="button secondary" href="{% url 'teacher_kr_open' %}?to=test:{{ test.id }}" target="_blank" rel="noopener">Варианты и ответы ↗</a>
-        <form method="post" action="{% url 'teacher_kr_again' %}">{% csrf_token %}<input type="hidden" name="test" value="{{ test.id }}"><button class="button secondary">Провести ещё раз</button></form></div>
+        <form method="post" action="{% url 'teacher_kr_again' %}">{% csrf_token %}<input type="hidden" name="test" value="{{ test.id }}"><button class="button secondary">Провести ещё раз</button></form>
+        <form method="post" action="{% url 'teacher_kr_copy' %}">{% csrf_token %}<input type="hidden" name="test" value="{{ test.id }}"><button class="button secondary" title="Новый черновик с теми же вариантами: поправьте его и отправьте как новую КР">Копировать в черновик</button></form></div>
     </div>
     {% for s in test.sessions %}
     <div class="kr-session{% if s.closed %} is-closed{% endif %}">

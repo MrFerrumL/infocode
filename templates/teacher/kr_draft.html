@@ -37,6 +37,8 @@
         <label>≈ Похожих вариантов<input type="number" name="count" value="{% if variants|length > 1 %}{{ variants|length|add:'-1' }}{% else %}3{% endif %}" min="1" max="{{ max_variants|add:'-1' }}"></label>
         <button class="button secondary small" name="action" value="like_variant"{% if variants|length > 1 %} onclick="return confirm('Остальные варианты заменятся похожими на вариант {{ v.number }}. Продолжить?')"{% endif %}>Собрать по этому</button>
       </form>{% endif %}
+      {% if v.tasks and variants|length < max_variants %}<form method="post" class="kr-copy-variant">{% csrf_token %}<input type="hidden" name="v" value="{{ v.index }}">
+        <button class="button secondary small" name="action" value="copy_variant" title="Следующим вариантом станет копия этого: замените в ней задачи">⧉ Копировать вариант</button></form>{% endif %}
       <span class="pill">{{ v.tasks|length }} задач</span></div></div>
   {% for task in v.tasks %}
   <article class="kr-pick-card kr-draft-task">

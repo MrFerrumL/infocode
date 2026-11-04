@@ -114,6 +114,38 @@ class SavedDraftTests(TestCase):
         self.assertEqual(KrDraft.objects.count(), 1)  # an empty variant is not sent
         self.assertContains(self.client.get('/teacher/kr/draft/'), 'В каждом варианте должна быть хотя бы одна задача')
 
+    def test_a_draft_a_variant_and_a_sent_kr_can_be_copied(self):
+        self.build('Исходная')
+        row = KrDraft.objects.get()
+        # a draft: a new row with its own name, opened for editing; the original is untouched
+        self.assertRedirects(self.client.post(f'/teacher/kr/drafts/{row.pk}/copy/'), '/teacher/kr/draft/', fetch_redirect_response=False)
+        copy = KrDraft.objects.exclude(pk=row.pk).get()
+        self.assertEqual((copy.title, copy.data['variants']), ('Исходная (копия)', row.data['variants']))
+        self.assertEqual(self.client.session['kr_draft']['saved_id'], copy.pk)
+        self.client.post('/teacher/kr/draft/', {'action': 'remove', 'v': '0', 'i': '0'})
+        row.refresh_from_db()
+        self.assertEqual(len(row.data['variants'][0]), 3)  # editing the copy leaves the original as it was
+        self.client.force_login(self.other)
+        self.assertEqual(self.client.post(f'/teacher/kr/drafts/{row.pk}/copy/').status_code, 404)
+        self.client.force_login(self.teacher)
+        # a variant: the copy comes right after it
+        self.client.post(f'/teacher/kr/drafts/{copy.pk}/open/')
+        before = KrDraft.objects.get(pk=copy.pk).data['variants']
+        self.client.post('/teacher/kr/draft/', {'action': 'copy_variant', 'v': '0'})
+        after = KrDraft.objects.get(pk=copy.pk).data['variants']
+        self.assertEqual((len(after), after[1], after[2]), (4, before[0], before[1]))
+        # a КР that was already sent: its variants come back from the КР platform as a new draft; lost tasks are left out
+        ids = [t.pk for t in Task.objects.filter(topic__number=5)[:3]]
+        Task.objects.filter(pk=ids[2]).update(published=False)
+        source = {'title': 'Старая КР', 'group': 'Пара 07', 'subject': 'inf', 'duration': 90, 'variants': [[ids[0], ids[2]], [ids[1], 987654]]}
+        with patch.object(kr_client, 'variants_of', return_value=source):
+            reply = self.client.post('/teacher/kr/copy/', {'test': '12'})
+        self.assertRedirects(reply, '/teacher/kr/draft/', fetch_redirect_response=False)
+        made = KrDraft.objects.get(title='Старая КР (копия)')
+        self.assertEqual((made.data['variants'], made.data['group'], made.data['duration']), ([[ids[0]], [ids[1]]], 'Пара 07', 90))
+        with patch.object(kr_client, 'variants_of', side_effect=kr_client.KrError('Такой КР нет.')):
+            self.assertRedirects(self.client.post('/teacher/kr/copy/', {'test': '13'}), '/teacher/kr/', fetch_redirect_response=False)
+
     def test_the_picker_adds_without_leaving_and_marks_what_is_taken(self):
         self.build()
         ajax = {'HTTP_X_REQUESTED_WITH': 'XMLHttpRequest'}

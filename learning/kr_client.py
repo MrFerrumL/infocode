@@ -47,6 +47,11 @@ def tests_of(user):
     return _call('api/tests/?' + urllib.parse.urlencode({'teacher': user.username}))['tests']
 
 
+def variants_of(user, test_id):
+    """One of the teacher's tests with the task ids of its variants: {'title', 'group', 'subject', 'duration', 'variants'}."""
+    return _call(f'api/tests/{int(test_id)}/variants/?' + urllib.parse.urlencode({'teacher': user.username}))
+
+
 def create(user, title, group, subject, plan, variants, duration, level=None, exact=None):
     """Build a КР on the test platform and open it; returns {'test': ..., 'code': ...}.
     `exact` = [[task ids], …] sends variants already put together here (then `plan` is not used)."""
