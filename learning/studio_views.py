@@ -63,7 +63,8 @@ def task_bank(request):
     query = request.GET.get('q', '').strip()[:200]
     tasks = Task.objects.select_related('topic')
     if query:
-        tasks = tasks.filter(Q(title__icontains=query) | Q(tags__icontains=query) | Q(subtopic__icontains=query) | ((Q(pk=int(query)) | Q(external_id=int(query))) if query.isdigit() else Q(pk__isnull=True)))
+        from .word_search import search  # every word anywhere in the task, also in the words kept with a picture condition
+        tasks = search(tasks, query)
     level = request.GET.get('difficulty', '')
     status = request.GET.get('status', '')
     number = request.GET.get('topic', '')

@@ -16,7 +16,7 @@ from .kr_api import LEVELS, MAX_PER_NUMBER, MAX_VARIANTS, MAX_PICKED, SOURCES, C
 from .models import KrDraft, Task
 from .exam_sources import OFFICIAL, apply as apply_source
 from .sources import BANK_SORTS, bank_of, bank_order
-from . import seventeen
+from . import seventeen, word_search
 from .similar_tasks import by_vector
 from .subjects import SUBJECTS, current as current_subject, using
 from .task_generators import REGISTRY
@@ -153,8 +153,8 @@ def kr_tasks(request):
             tasks = tasks.filter(pk__in=ranked).order_by(order)
         elif query.isdigit():
             tasks = tasks.filter(Q(pk=int(query)) | Q(external_id=int(query)))
-        elif query:
-            tasks = tasks.filter(Q(statement__icontains=query[:100]) | Q(title__icontains=query[:100]) | Q(subtopic__icontains=query[:100]))
+        elif query:  # every word anywhere in the task, also in the words kept with a picture condition
+            tasks = word_search.search(tasks, query)
         sort = request.GET.get('sort', '')
         if ranked is None and sort in BANK_SORTS:  # КЕГЭ or K. Polyakov in their own numbering, from the first task or the last
             tasks = tasks.filter(source_system=bank_of(sort)).order_by('topic__number', *bank_order(sort))

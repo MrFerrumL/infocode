@@ -24,6 +24,14 @@ body.season-autumn { background-image: radial-gradient(1100px 480px at 8% -8%, v
 .season-autumn .button:not(.secondary):hover { box-shadow: 0 0 0 3px rgba(234, 88, 12, .25); }
 .season-autumn .eyebrow::before { content: '🍂 '; }
 
+/* Rain: a dark-blue rainy autumn, chosen from the top bar menu only (the calendar never picks it): cool light, slanted drops */
+body.season-rain { background-image: radial-gradient(1100px 480px at 8% -8%, rgba(59, 130, 246, .20), transparent 62%), radial-gradient(900px 420px at 100% 0%, rgba(30, 64, 175, .18), transparent 60%), radial-gradient(800px 380px at 50% 112%, rgba(14, 165, 233, .14), transparent 65%); background-attachment: fixed; }
+.season-rain .sidebar { background-image: linear-gradient(180deg, rgba(30, 58, 138, .30), transparent 320px); }
+.season-rain .brand::after { content: '🌧'; font-size: .5em; margin-left: .3em; align-self: flex-start; }
+.season-rain .eyebrow::before { content: '💧 '; }
+.season-rain .button:not(.secondary):hover { box-shadow: 0 0 0 3px rgba(59, 130, 246, .28); }
+.season-rain .snow-toggle[aria-pressed="true"] { border-color: #3b82f6; color: #3b82f6; }
+
 /* Winter: frost */
 body.season-winter { background-image: radial-gradient(1100px 480px at 8% -8%, var(--frost-a), transparent 62%), radial-gradient(900px 420px at 100% 0%, var(--frost-b), transparent 60%); background-attachment: fixed; }
 .season-winter .sidebar { background-image: linear-gradient(180deg, var(--frost-side), transparent 280px); }
@@ -61,7 +69,7 @@ body.season-halloween { background-image: radial-gradient(1100px 480px at 8% -8%
 @media (prefers-reduced-motion: reduce) { .season-garland span { animation: none !important; } }
 @media print { #season-fx, .snow-toggle, .season-garland, [class*="season-"] .brand::after, .season-halloween .main-shell::before, .season-autumn .main-shell::before { display: none !important; } body[class*="season-"] { background-image: none; } }
 
-/* The picker in the top bar: 🍁 / 🎃 / ❄ / 🎄 / ✕ */
+/* The picker in the top bar: 🍁 / 🌧 / 🎃 / ❄ / 🎄 / ✕ */
 .season-picker { position: relative; display: inline-flex; }
 .season-menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 60; min-width: 230px; display: grid; gap: 2px; padding: 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--paper, #fff); box-shadow: 0 12px 30px rgba(30, 20, 60, .14); }
 .season-menu[hidden] { display: none; }

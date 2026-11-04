@@ -44,6 +44,14 @@
 .kr-chips:empty { display: none; }
 .kr-chip { border: 1px solid var(--purple); background: var(--soft, #f1eeff); color: var(--purple); border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 600; }
 .kr-pick-list { display: grid; gap: 10px; }
+.kr-modes { display: flex; align-items: center; gap: 16px; padding: 14px 16px; margin: 4px 0 14px; border: 1px dashed var(--line); border-radius: 14px; }
+.kr-modes > div { flex: 1; display: grid; gap: 4px; }
+.kr-modes .button { flex: none; }
+@media (max-width: 720px) { .kr-modes { flex-direction: column; align-items: stretch; } }
+.kr-pick-targets { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 10px 0 0; }
+.kr-pick-targets[hidden] { display: none; }
+.kr-target { padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: transparent; color: var(--ink); font: inherit; font-size: 14px; cursor: pointer; }
+.kr-target[aria-pressed="true"] { background: var(--purple); border-color: var(--purple); color: #fff; font-weight: 600; }
 .kr-pick-status { margin: 8px 0 0; min-height: 20px; color: var(--purple); font-weight: 600; }
 .kr-pick-status.is-bad { color: #d64545; }
 .kr-pick-card header small.kr-in-draft { color: var(--purple); font-weight: 600; }

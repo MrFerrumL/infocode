@@ -64,6 +64,11 @@
     <div class="kr-subject">{% for code, title in subject_choices %}<a href="?subject={{ code }}" class="{% if code == subject_code %}active{% endif %}">{{ title }}</a>{% endfor %}</div></div>
   <input type="hidden" name="subject" value="{{ subject_code }}">
   {% if error %}<div class="notice error">{{ error }}</div>{% endif %}
+  <div class="kr-modes">
+    <div><strong>Хотите выбрать задачи сами?</strong>
+      <span class="muted">«Собрать вручную» откроет редактор с пустыми вариантами: в каждый вариант задачи добавляются из каталога («🔍 Из каталога») с теми же фильтрами, что в каталоге, и сразу в несколько вариантов. Ниже можно, наоборот, задать число задач по номерам, и они подберутся сами.</span></div>
+    <button class="button" name="manual" value="1">Собрать вручную →</button>
+  </div>
   <div class="kr-fields">
     <label>Название<input name="title" value="{{ form.title }}" maxlength="160" required></label>
     <label>Группа<input name="group" value="{{ form.group }}" maxlength="120" placeholder="Например, Пара 03"></label>

@@ -7,7 +7,7 @@
   const exam = document.querySelector('[data-station]');
   if (exam) return;
   const KEY = 'infocode-season';
-  const CHOICES = [['autumn', '🍁', 'Осень'], ['halloween', '🎃', 'Хеллоуин'], ['winter', '❄', 'Зима'], ['newyear', '🎄', 'Новый год'], ['none', '✕', 'Без украшений']];
+  const CHOICES = [['autumn', '🍁', 'Осень'], ['rain', '🌧', 'Дождливая осень (синяя)'], ['halloween', '🎃', 'Хеллоуин'], ['winter', '❄', 'Зима'], ['newyear', '🎄', 'Новый год'], ['none', '✕', 'Без украшений']];
   const read = key => { try { return localStorage.getItem(key); } catch { return null; } };
   const write = value => { try { localStorage.setItem(KEY, value); } catch { /* private mode */ } };
   const calm = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -19,6 +19,11 @@
   let canvas = null, frame = 0, garland = null;
   const particles = () => {
     const w = innerWidth, h = innerHeight, r = Math.random;
+    if (season === 'rain') {  // thin slanted drops and a few wet leaves; the calendar never picks it, a visitor does
+      const drops = Array.from({length: Math.min(120, Math.round(w / 10))}, () => ({kind: 'drop', x: r() * (w + 100), y: r() * h, len: 8 + r() * 12, s: 8 + r() * 8, o: .25 + r() * .3}));
+      const leaves = Array.from({length: Math.min(6, Math.round(w / 200))}, () => ({kind: 'leaf', x: r() * w, y: r() * h, s: .4 + r() * .5, d: r() * Math.PI * 2, size: 16 + r() * 8, glyph: '🍂'}));
+      return drops.concat(leaves);
+    }
     if (season === 'autumn') {  // plenty of maple and oak leaves, some big and slow, some small and quick
       return Array.from({length: Math.min(34, Math.round(w / 40))}, () => ({kind: 'leaf', x: r() * w, y: r() * h, s: .4 + r() * .7,
         d: r() * Math.PI * 2, size: 16 + r() * 14, glyph: ['🍂', '🍁', '🍂', '🍁', '🍃'][Math.floor(r() * 5)]}));
@@ -58,6 +63,12 @@
         const w = innerWidth, h = innerHeight;
         ctx.clearRect(0, 0, w, h);
         for (const p of items) {
+          if (p.kind === 'drop') {
+            p.y += p.s; p.x -= p.s * .28;
+            if (p.y > h + 10) { p.y = -20; p.x = Math.random() * (w + 100); }
+            ctx.globalAlpha = p.o; ctx.strokeStyle = colour; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + p.len * .28, p.y - p.len); ctx.stroke();
+            continue;
+          }
           p.d += .01;
           if (p.kind === 'bat') {
             p.x += p.s; p.y += Math.sin(p.d * 3) * .6;
@@ -89,7 +100,7 @@
     if (canvas) canvas.remove();
     if (garland) garland.remove();
     canvas = garland = null;
-    body.classList.remove('season-fx-on', 'season-autumn', 'season-halloween', 'season-winter', 'season-newyear');
+    body.classList.remove('season-fx-on', 'season-rain', 'season-autumn', 'season-halloween', 'season-winter', 'season-newyear');
   };
 
   const apply = () => {
@@ -110,7 +121,7 @@
     startMotion();
   };
 
-  // Top bar menu: 🍁 / 🎃 / ❄ / 🎄 / ✕
+  // Top bar menu: 🍁 / 🌧 / 🎃 / ❄ / 🎄 / ✕
   const host = document.querySelector('.topbar-tools') || document.querySelector('.public-top nav');
   if (host) {
     const wrap = document.createElement('div');

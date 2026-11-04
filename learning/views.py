@@ -23,7 +23,7 @@ FIPI_DOWN = 'Сайт ФИПИ сейчас не отвечает — ответ
 from .models import Topic, Task, Practice, Bookmark, Variant, ExamAttempt, ExamAnswer, Section, Lesson, LessonProgress, LessonFile, VariantItem, TaskBlock, Course, Step, StudentAssignment
 from .security import form_token, claim_submission
 from .services import check_answer, create_variant, finish_attempt, expire_attempts, check_task_answer
-from . import game_groups, answer_cells, ocr, semantic_search, seventeen
+from . import game_groups, answer_cells, ocr, semantic_search, seventeen, word_search
 from .sources import BANK_SORTS, KINDS, SITES, bank_of, bank_order
 
 staff_required = user_passes_test(lambda u: u.is_active and u.is_staff)
@@ -186,8 +186,8 @@ def catalog(request):
         qs = qs.filter(source_system='')
     query = request.GET.get('q', '').strip()
     mode = 'meaning' if request.GET.get('mode') == 'meaning' and semantic_search.available() else ''
-    def by_words(qs):
-        return qs.filter(Q(title__icontains=query) | Q(tags__icontains=query) | Q(subtopic__icontains=query) | Q(statement__icontains=query) | Q(content_blocks__text__icontains=query, content_blocks__purpose='statement') | ((Q(id=int(query)) | Q(external_id=int(query))) if query.isdigit() else Q(pk__isnull=True))).distinct()
+    def by_words(qs):  # every word anywhere in the task, including the words kept with a picture condition (learning/word_search.py)
+        return word_search.search(qs, query)
     if query and not mode:
         qs = by_words(qs)
     state = request.GET.get('state', '')
