@@ -83,6 +83,13 @@ class SavedDraftTests(TestCase):
         row.refresh_from_db()
         self.assertEqual((row.title, row.data['group'], row.data['duration']), ('Новое название', '', 300))
 
+    def test_send_uses_current_metadata_without_separate_save(self):
+        self.build()
+        with patch.object(kr_client, 'create', return_value={'test': {'title': 'Новая КР'}, 'code': 'AB12CD'}) as create:
+            self.client.post('/teacher/kr/draft/', {'action': 'send', 'title': 'Новая КР', 'group': 'Группа', 'duration': '120'})
+        self.assertEqual(create.call_args.args[1:3], ('Новая КР', 'Группа'))
+        self.assertEqual(create.call_args.args[6], 120)
+
     def test_drafts_are_private_to_their_teacher(self):
         self.build()
         row = KrDraft.objects.get()

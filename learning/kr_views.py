@@ -336,6 +336,10 @@ def teacher_kr_draft(request):
                 _forget_draft(request)
                 return redirect('teacher_kr')
             elif action == 'send':
+                if 'duration' in request.POST:
+                    draft['title'] = request.POST.get('title', '').strip()[:160] or draft['title']
+                    draft['group'] = request.POST.get('group', '').strip()[:120]
+                    draft['duration'] = _int(request.POST.get('duration'), draft['duration'], 5, 300)
                 if not all(draft['variants']):
                     raise ComposeError('В каждом варианте должна быть хотя бы одна задача.')
                 made = kr_client.create(request.user, draft['title'], draft['group'], draft['subject'], [], len(draft['variants']),
